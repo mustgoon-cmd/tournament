@@ -1,0 +1,5 @@
+{
+  "name": "Tournament Management System",
+  "description": "A comprehensive tournament management platform for registration configuration, project scheduling, and bracket generation.",
+  "requestFramePermissions": []
+}
