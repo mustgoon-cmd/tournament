@@ -423,11 +423,21 @@ export interface TeamRecord {
   creator_phone?: string;
   leader: string;
   leader_phone: string;
+  liaison_name?: string;
+  liaison_phone?: string;
   coach_name?: string;
   coach_phone?: string;
   coaches?: {
     name: string;
     phone: string;
+  }[];
+  logo_url?: string;
+  flag_url?: string;
+  uniforms?: {
+    id: string;
+    name?: string;
+    primary_color_name: string;
+    image_url: string;
   }[];
   member_count: number;
   members?: {
