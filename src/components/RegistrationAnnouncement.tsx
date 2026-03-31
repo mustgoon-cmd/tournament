@@ -35,6 +35,7 @@ import {
   getMatchFormatGroupByValue,
   getMatchFormatOption,
 } from '../constants';
+import { TablePagination } from './TablePagination';
 
 type AnnouncementTab = 'projects' | 'multi_event_stats';
 
@@ -77,6 +78,8 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
   const [projectTypeSearch, setProjectTypeSearch] = useState('');
   const [projectStatusSearch, setProjectStatusSearch] = useState('');
   const [participantSearch, setParticipantSearch] = useState('');
+  const [projectsPage, setProjectsPage] = useState(1);
+  const [projectsPageSize, setProjectsPageSize] = useState(10);
   
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [editingProject, setEditingProject] = useState<any | null>(null);
@@ -178,6 +181,9 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
       p.type.toLowerCase().includes(projectTypeSearch.toLowerCase()) &&
       (projectStatusSearch === '' || (projectStatusSearch === 'PUBLIC' ? p.is_public : !p.is_public))
     );
+    const totalPages = Math.max(1, Math.ceil(filteredProjects.length / projectsPageSize));
+    const currentPage = Math.min(projectsPage, totalPages);
+    const pagedProjects = filteredProjects.slice((currentPage - 1) * projectsPageSize, currentPage * projectsPageSize);
 
     return (
       <div className="space-y-6">
@@ -220,23 +226,28 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
 
         {/* Project Table */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="max-w-full overflow-x-auto">
           <table className="w-full text-left border-collapse">
+            <colgroup>
+              <col className="w-[160px]" />
+              <col className="w-[100px]" />
+              <col className="w-[80px]" />
+              <col className="w-[90px]" />
+              <col className="w-[280px]" />
+            </colgroup>
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">项目名称</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">简称</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">代码标识</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">项目类型</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">确认人数</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">关联报名项目ID</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">公示状态</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">操作</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">项目类型</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">确认人数</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">公示状态</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right whitespace-nowrap">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProjects.map(p => (
+              {pagedProjects.map(p => (
                 <React.Fragment key={p.id}>
-                  <tr className="hover:bg-slate-50/50 transition-colors group">
+                  <tr className="hover:bg-slate-50 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {p.type === 'team' && (
@@ -247,14 +258,17 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                         <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
                           <Trophy className="w-4 h-4" />
                         </div>
-                        <span className="text-sm font-bold text-slate-900">{p.name}</span>
+                        <div className="min-w-0">
+                          <span className="block text-sm font-bold text-slate-900 whitespace-nowrap">{p.name}</span>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+                            <span className="whitespace-nowrap">{p.short_name || '--'}</span>
+                            <span className="whitespace-nowrap font-mono">{p.code || '--'}</span>
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{p.short_name || '--'}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600 font-mono">{p.code || '--'}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{p.type === 'team' ? '团体项目' : '单项项目'}</td>
-                    <td className="px-6 py-4 text-center text-sm font-bold text-indigo-600 font-mono">{p.current_count}</td>
-                    <td className="px-6 py-4 text-xs text-slate-400 font-mono">{p.id}</td>
+                    <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{p.type === 'team' ? '团体项目' : '单项项目'}</td>
+                    <td className="px-6 py-4 text-center text-sm font-bold text-indigo-600 font-mono whitespace-nowrap">{p.current_count}</td>
                     <td className="px-6 py-4 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
                         p.is_public ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'
@@ -262,8 +276,8 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                         {p.is_public ? '正在公示' : '未公示'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex flex-nowrap items-center justify-end gap-2">
                         {p.type === 'team' && (
                           <button 
                             onClick={() => {
@@ -281,22 +295,24 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                               }
                               setConfiguringTeamEvent(configProject);
                             }}
-                            className="text-emerald-600 hover:text-emerald-700 text-[10px] font-bold bg-emerald-50 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-600 transition-all hover:text-emerald-700"
                           >
-                            <Settings className="w-3 h-3" />
+                            <Settings className="w-4 h-4" />
                             单项管理
                           </button>
                         )}
                         <button 
                           onClick={() => setEditingProject(p)}
-                          className="text-blue-600 hover:text-blue-700 text-[10px] font-bold bg-blue-50 px-3 py-1.5 rounded-lg transition-all"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
                         >
+                          <Edit3 className="w-4 h-4" />
                           编辑
                         </button>
                         <button 
                           onClick={() => setSelectedProject(p)}
-                          className="text-indigo-600 hover:text-indigo-700 text-[10px] font-bold bg-indigo-50 px-3 py-1.5 rounded-lg transition-all"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-600 transition-all hover:text-indigo-700"
                         >
+                          <Users className="w-4 h-4" />
                           选手清单
                         </button>
                         <button 
@@ -315,7 +331,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                   </tr>
                   {p.type === 'team' && expandedProjects.has(p.id) && (
                     <tr className="bg-slate-50/30">
-                      <td colSpan={8} className="px-6 py-4">
+                      <td colSpan={5} className="px-6 py-4">
                         <div className="pl-14">
                           <h4 className="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">包含单项</h4>
                           {p.team_events && p.team_events.length > 0 ? (
@@ -342,6 +358,19 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
               ))}
             </tbody>
           </table>
+          </div>
+          <TablePagination
+            total={filteredProjects.length}
+            page={currentPage}
+            pageSize={projectsPageSize}
+            onPageChange={setProjectsPage}
+            onPageSizeChange={(size) => {
+              setProjectsPageSize(size);
+              setProjectsPage(1);
+            }}
+            itemLabel="个项目"
+            compact
+          />
         </div>
       </div>
     );
@@ -1736,30 +1765,32 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                   <Save className="w-4 h-4" />
                   保存配置
                 </button>
-                <button 
-                  onClick={() => {
-                    if (configuringTeamEvent.isNew) {
-                      if (!configuringTeamEvent.name) {
-                        alert('请输入项目名称');
-                        return;
+                {(configuringTeamEvent.isNew || configuringTeamEvent.type === 'single') && (
+                  <button 
+                    onClick={() => {
+                      if (configuringTeamEvent.isNew) {
+                        if (!configuringTeamEvent.name) {
+                          alert('请输入项目名称');
+                          return;
+                        }
+                        const newProject = { ...configuringTeamEvent };
+                        delete newProject.isNew;
+                        setEstablishedProjects(prev => [newProject, ...prev]);
+                        alert('项目创建成功并已导入选手信息');
+                      } else {
+                        setEstablishedProjects(prev => prev.map(p => p.id === configuringTeamEvent.id ? configuringTeamEvent : p));
                       }
-                      const newProject = { ...configuringTeamEvent };
-                      delete newProject.isNew;
-                      setEstablishedProjects(prev => [newProject, ...prev]);
-                      alert('项目创建成功并已导入选手信息');
-                    } else {
-                      setEstablishedProjects(prev => prev.map(p => p.id === configuringTeamEvent.id ? configuringTeamEvent : p));
-                    }
-                    if (!expandedProjects.has(configuringTeamEvent.id)) {
-                      toggleExpand(configuringTeamEvent.id);
-                    }
-                    setConfiguringTeamEvent(null);
-                  }}
-                  className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {configuringTeamEvent.isNew ? '创建并导入' : '生成对阵表'}
-                </button>
+                      if (!expandedProjects.has(configuringTeamEvent.id)) {
+                        toggleExpand(configuringTeamEvent.id);
+                      }
+                      setConfiguringTeamEvent(null);
+                    }}
+                    className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {configuringTeamEvent.isNew ? '创建并导入' : '生成对阵表'}
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>

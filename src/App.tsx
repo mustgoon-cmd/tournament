@@ -43,7 +43,9 @@ import {
   Menu,
   Megaphone,
   Bell,
-  ArrowLeft
+  ArrowLeft,
+  Upload,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -224,6 +226,109 @@ type SingleMatchRuleRow = {
   forfeitPointsPerGame: number;
   createdAt: string;
 };
+
+type TeamBattleOutcomeMethod = '胜场制' | '总分制';
+type TeamBattleEndStrategy = 'play-all' | 'finish-running' | 'stop-immediately';
+type TeamBattleSingleMatchRuleMode = 'global' | 'per-match';
+
+type TeamBattleRuleRow = {
+  id: string;
+  ruleName: string;
+  outcomeMethod: TeamBattleOutcomeMethod;
+  totalMatches: number;
+  matchesToWin: number | null;
+  singleMatchRuleMode: TeamBattleSingleMatchRuleMode;
+  singleMatchRuleId: string;
+  perMatchSingleMatchRuleIds: string[];
+  endStrategy: TeamBattleEndStrategy;
+  createdAt: string;
+};
+
+type OfficialStatus = 'pending' | 'approved' | 'rejected' | 'disabled';
+type OfficialSource = 'mini-program' | 'admin';
+
+type OfficialCertificate = {
+  id: string;
+  sport: string;
+  certificateName: string;
+  level: string;
+  certificateNo: string;
+  issuer: string;
+  issueDate: string;
+  expireDate: string;
+};
+
+type TechnicalOfficialRow = {
+  id: string;
+  name: string;
+  avatar: string;
+  gender: '男' | '女';
+  phone: string;
+  region: string;
+  organization: string;
+  realName: string;
+  idType: '身份证' | '护照' | '港澳居民来往内地通行证';
+  idNumber: string;
+  certificates: OfficialCertificate[];
+  status: OfficialStatus;
+  source: OfficialSource;
+  reviewRemark: string;
+  createdAt: string;
+};
+
+type RegistrationTemplateFieldType = 'text' | 'phone' | 'date' | 'select';
+type RegistrationTemplateFieldSource = 'profile' | 'custom';
+type RegistrationTemplateProfileKey =
+  | 'player_name'
+  | 'id_type'
+  | 'id_number'
+  | 'phone'
+  | 'gender'
+  | 'birth_date'
+  | 'region';
+
+type RegistrationTemplateField = {
+  id: string;
+  label: string;
+  source: RegistrationTemplateFieldSource;
+  profileKey?: RegistrationTemplateProfileKey;
+  fieldType: RegistrationTemplateFieldType;
+  required: boolean;
+  editable: boolean;
+  enabled: boolean;
+  placeholder: string;
+  options: string[];
+};
+
+type RegistrationTemplateRow = {
+  id: string;
+  name: string;
+  description: string;
+  updatedAt: string;
+  fields: RegistrationTemplateField[];
+};
+
+type RegistrationTemplatePageMode = 'list' | 'editor';
+type TargetListMemberRow = {
+  id: string;
+  playerName: string;
+  phone: string;
+  idType: '身份证' | '护照' | '港澳居民来往内地通行证';
+  idNumber: string;
+  updatedAt: string;
+};
+
+type TargetListRow = {
+  id: string;
+  name: string;
+  description: string;
+  updatedAt: string;
+  members: TargetListMemberRow[];
+};
+
+type TargetListPageMode = 'list' | 'manage';
+type TargetListEditorMode = 'create' | 'edit' | null;
+type TargetListMemberEditorMode = 'create' | 'edit' | null;
 
 const DEFAULT_TOURNAMENT: TournamentListItem = {
   id: 'T001',
@@ -413,8 +518,468 @@ const SINGLE_MATCH_RULES: SingleMatchRuleRow[] = [
   },
 ];
 
+const TEAM_BATTLE_RULES: TeamBattleRuleRow[] = [
+  {
+    id: 'TBR001',
+    ruleName: '5场3胜（分出胜负后已开赛继续）',
+    outcomeMethod: '胜场制',
+    totalMatches: 5,
+    matchesToWin: 3,
+    singleMatchRuleMode: 'global',
+    singleMatchRuleId: 'SMR001',
+    perMatchSingleMatchRuleIds: ['SMR001', 'SMR001', 'SMR001', 'SMR001', 'SMR001'],
+    endStrategy: 'finish-running',
+    createdAt: '2026-03-24 10:18:22',
+  },
+  {
+    id: 'TBR002',
+    ruleName: '5场3胜（打满全部比赛）',
+    outcomeMethod: '胜场制',
+    totalMatches: 5,
+    matchesToWin: 3,
+    singleMatchRuleMode: 'per-match',
+    singleMatchRuleId: 'SMR001',
+    perMatchSingleMatchRuleIds: ['SMR001', 'SMR002', 'SMR001', 'SMR002', 'SMR001'],
+    endStrategy: 'play-all',
+    createdAt: '2026-03-18 15:42:08',
+  },
+  {
+    id: 'TBR003',
+    ruleName: '3场总分制团体对抗',
+    outcomeMethod: '总分制',
+    totalMatches: 3,
+    matchesToWin: null,
+    singleMatchRuleMode: 'global',
+    singleMatchRuleId: 'SMR003',
+    perMatchSingleMatchRuleIds: ['SMR003', 'SMR003', 'SMR003'],
+    endStrategy: 'play-all',
+    createdAt: '2026-03-10 09:36:15',
+  },
+];
+
+const TECHNICAL_OFFICIALS: TechnicalOfficialRow[] = [
+  {
+    id: 'OFF001',
+    name: '李晨',
+    avatar: '',
+    gender: '男',
+    phone: '13800138000',
+    region: '广东省 深圳市',
+    organization: '深圳市羽毛球协会',
+    realName: '李晨',
+    idType: '身份证',
+    idNumber: '440301199203154512',
+    certificates: [
+      {
+        id: 'CERT001',
+        sport: '羽毛球',
+        certificateName: '羽毛球裁判员证',
+        level: '一级',
+        certificateNo: 'SZ-U-2026-001',
+        issuer: '深圳市羽毛球协会',
+        issueDate: '2024-05-20',
+        expireDate: '2028-05-19',
+      },
+    ],
+    status: 'approved',
+    source: 'mini-program',
+    reviewRemark: '资料完整，审核通过。',
+    createdAt: '2026-03-18 10:12:08',
+  },
+  {
+    id: 'OFF002',
+    name: '王静',
+    avatar: '',
+    gender: '女',
+    phone: '13900139001',
+    region: '广东省 广州市',
+    organization: '广州市羽毛球运动中心',
+    realName: '王静',
+    idType: '身份证',
+    idNumber: '440106199507267124',
+    certificates: [
+      {
+        id: 'CERT002',
+        sport: '羽毛球',
+        certificateName: '羽毛球裁判员证',
+        level: '二级',
+        certificateNo: 'GZ-U-2025-118',
+        issuer: '广州市羽毛球协会',
+        issueDate: '2025-01-16',
+        expireDate: '2029-01-15',
+      },
+      {
+        id: 'CERT003',
+        sport: '乒乓球',
+        certificateName: '技术代表培训证书',
+        level: '培训合格',
+        certificateNo: 'TR-2025-008',
+        issuer: '广东省羽毛球协会',
+        issueDate: '2025-06-03',
+        expireDate: '2028-06-02',
+      },
+    ],
+    status: 'pending',
+    source: 'mini-program',
+    reviewRemark: '待核对证书编号与手机号归属。',
+    createdAt: '2026-03-26 09:20:16',
+  },
+  {
+    id: 'OFF003',
+    name: '陈楠',
+    avatar: '',
+    gender: '男',
+    phone: '13700137002',
+    region: '广东省 东莞市',
+    organization: '东莞市羽协裁判委员会',
+    realName: '陈楠',
+    idType: '护照',
+    idNumber: 'EJ9483721',
+    certificates: [
+      {
+        id: 'CERT004',
+        sport: '羽毛球',
+        certificateName: '羽毛球裁判员证',
+        level: '一级',
+        certificateNo: 'DG-U-2023-077',
+        issuer: '东莞市羽毛球协会',
+        issueDate: '2023-09-12',
+        expireDate: '2027-09-11',
+      },
+    ],
+    status: 'rejected',
+    source: 'mini-program',
+    reviewRemark: '实名信息与证书姓名不一致，请重新提交。',
+    createdAt: '2026-03-21 14:08:43',
+  },
+  {
+    id: 'OFF004',
+    name: '赵婷',
+    avatar: '',
+    gender: '女',
+    phone: '13600136003',
+    region: '广东省 珠海市',
+    organization: '珠海市羽毛球协会',
+    realName: '赵婷',
+    idType: '身份证',
+    idNumber: '440402198811062226',
+    certificates: [
+      {
+        id: 'CERT005',
+        sport: '羽毛球',
+        certificateName: '羽毛球裁判员证',
+        level: '国家级',
+        certificateNo: 'ZH-N-2022-015',
+        issuer: '中国羽协',
+        issueDate: '2022-04-10',
+        expireDate: '2027-04-09',
+      },
+    ],
+    status: 'disabled',
+    source: 'admin',
+    reviewRemark: '暂停使用。',
+    createdAt: '2026-03-05 08:40:20',
+  },
+];
+
+const REGISTRATION_TEMPLATE_PROFILE_FIELDS: Array<{
+  key: RegistrationTemplateProfileKey;
+  label: string;
+  fieldType: RegistrationTemplateFieldType;
+  placeholder: string;
+  options: string[];
+}> = [
+  {
+    key: 'player_name',
+    label: '选手姓名',
+    fieldType: 'text',
+    placeholder: '从选手档案自动带出',
+    options: [],
+  },
+  {
+    key: 'id_type',
+    label: '证件类型',
+    fieldType: 'select',
+    placeholder: '从选手档案自动带出',
+    options: ['身份证', '护照', '港澳居民来往内地通行证'],
+  },
+  {
+    key: 'id_number',
+    label: '证件号码',
+    fieldType: 'text',
+    placeholder: '从选手档案自动带出',
+    options: [],
+  },
+  {
+    key: 'phone',
+    label: '手机号',
+    fieldType: 'phone',
+    placeholder: '从选手档案自动带出',
+    options: [],
+  },
+  {
+    key: 'gender',
+    label: '性别',
+    fieldType: 'select',
+    placeholder: '从选手档案自动带出',
+    options: ['男', '女'],
+  },
+  {
+    key: 'birth_date',
+    label: '出生日期',
+    fieldType: 'date',
+    placeholder: '从选手档案自动带出',
+    options: [],
+  },
+  {
+    key: 'region',
+    label: '所属地区',
+    fieldType: 'text',
+    placeholder: '从选手档案自动带出',
+    options: [],
+  },
+];
+
+const createProfileTemplateField = (profileKey: RegistrationTemplateProfileKey): RegistrationTemplateField => {
+  const fieldMeta =
+    REGISTRATION_TEMPLATE_PROFILE_FIELDS.find((item) => item.key === profileKey) ??
+    REGISTRATION_TEMPLATE_PROFILE_FIELDS[0];
+
+  return {
+    id: `RTF${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+    label: fieldMeta.label,
+    source: 'profile',
+    profileKey,
+    fieldType: fieldMeta.fieldType,
+    required: ['player_name', 'id_type', 'id_number'].includes(profileKey),
+    editable: profileKey !== 'id_number',
+    enabled: true,
+    placeholder: fieldMeta.placeholder,
+    options: fieldMeta.options,
+  };
+};
+
+const createCustomTemplateField = (): RegistrationTemplateField => ({
+  id: `RTF${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+  label: '自定义字段',
+  source: 'custom',
+  fieldType: 'text',
+  required: false,
+  editable: true,
+  enabled: true,
+  placeholder: '请输入',
+  options: [],
+});
+
+const REGISTRATION_TEMPLATES: RegistrationTemplateRow[] = [
+  {
+    id: 'TMP001',
+    name: '通用个人报名模板',
+    description: '适用于标准个人报名场景，优先复用选手档案中的实名与联系方式。',
+    updatedAt: '2026-03-29 15:20:18',
+    fields: [
+      createProfileTemplateField('player_name'),
+      createProfileTemplateField('id_type'),
+      createProfileTemplateField('id_number'),
+      createProfileTemplateField('phone'),
+      {
+        id: 'TMP001-F001',
+        label: '紧急联系人',
+        source: 'custom',
+        fieldType: 'text',
+        required: true,
+        editable: true,
+        enabled: true,
+        placeholder: '请输入紧急联系人姓名',
+        options: [],
+      },
+      {
+        id: 'TMP001-F002',
+        label: '紧急联系电话',
+        source: 'custom',
+        fieldType: 'phone',
+        required: true,
+        editable: true,
+        enabled: true,
+        placeholder: '请输入紧急联系电话',
+        options: [],
+      },
+    ],
+  },
+  {
+    id: 'TMP002',
+    name: '青少年赛事报名模板',
+    description: '适用于青少年参赛报名，支持在实名资料基础上补充监护人信息。',
+    updatedAt: '2026-03-27 10:48:06',
+    fields: [
+      createProfileTemplateField('player_name'),
+      createProfileTemplateField('gender'),
+      createProfileTemplateField('birth_date'),
+      createProfileTemplateField('id_type'),
+      createProfileTemplateField('id_number'),
+      {
+        id: 'TMP002-F001',
+        label: '监护人姓名',
+        source: 'custom',
+        fieldType: 'text',
+        required: true,
+        editable: true,
+        enabled: true,
+        placeholder: '请输入监护人姓名',
+        options: [],
+      },
+      {
+        id: 'TMP002-F002',
+        label: '监护人手机号',
+        source: 'custom',
+        fieldType: 'phone',
+        required: true,
+        editable: true,
+        enabled: true,
+        placeholder: '请输入监护人手机号',
+        options: [],
+      },
+    ],
+  },
+  {
+    id: 'TMP003',
+    name: '团体赛报名模板',
+    description: '适用于团体项目报名，除实名信息外补充队内角色与服装尺码。',
+    updatedAt: '2026-03-22 18:36:55',
+    fields: [
+      createProfileTemplateField('player_name'),
+      createProfileTemplateField('id_type'),
+      createProfileTemplateField('id_number'),
+      createProfileTemplateField('phone'),
+      {
+        id: 'TMP003-F001',
+        label: '队内角色',
+        source: 'custom',
+        fieldType: 'select',
+        required: true,
+        editable: true,
+        enabled: true,
+        placeholder: '请选择',
+        options: ['主力队员', '替补队员', '兼项队员'],
+      },
+      {
+        id: 'TMP003-F002',
+        label: '球衣尺码',
+        source: 'custom',
+        fieldType: 'select',
+        required: false,
+        editable: true,
+        enabled: true,
+        placeholder: '请选择',
+        options: ['S', 'M', 'L', 'XL', 'XXL'],
+      },
+    ],
+  },
+];
+
+const TARGET_LISTS: TargetListRow[] = [
+  {
+    id: 'TL001',
+    name: '城市公开赛邀请清单',
+    description: '用于邀请赛与定向开放赛事的优先报名选手集合。',
+    updatedAt: '2026-03-30 18:22:10',
+    members: [
+      {
+        id: 'TLM001',
+        playerName: '张晨',
+        phone: '13800138000',
+        idType: '身份证',
+        idNumber: '440301199503154512',
+        updatedAt: '2026-03-30 18:22:10',
+      },
+      {
+        id: 'TLM002',
+        playerName: '李思雨',
+        phone: '13900139001',
+        idType: '身份证',
+        idNumber: '440303199809264326',
+        updatedAt: '2026-03-28 09:13:06',
+      },
+      {
+        id: 'TLM003',
+        playerName: '王子豪',
+        phone: '13700137002',
+        idType: '护照',
+        idNumber: 'EJ9483721',
+        updatedAt: '2026-03-27 16:52:40',
+      },
+    ],
+  },
+  {
+    id: 'TL002',
+    name: '违规限制清单',
+    description: '用于限制存在违规历史或禁赛记录的选手参与报名。',
+    updatedAt: '2026-03-26 11:45:28',
+    members: [
+      {
+        id: 'TLM004',
+        playerName: '陈浩',
+        phone: '13600136003',
+        idType: '身份证',
+        idNumber: '440106199102081234',
+        updatedAt: '2026-03-26 11:45:28',
+      },
+      {
+        id: 'TLM005',
+        playerName: '刘佳雯',
+        phone: '13500135004',
+        idType: '身份证',
+        idNumber: '440307200102184522',
+        updatedAt: '2026-03-24 09:08:16',
+      },
+    ],
+  },
+  {
+    id: 'TL003',
+    name: '青少年预选通过清单',
+    description: '用于青少年赛事中，预选通过选手的正式报名资格验证。',
+    updatedAt: '2026-03-22 14:30:20',
+    members: [
+      {
+        id: 'TLM006',
+        playerName: '赵一鸣',
+        phone: '18800188005',
+        idType: '身份证',
+        idNumber: '440111201207094214',
+        updatedAt: '2026-03-22 14:30:20',
+      },
+      {
+        id: 'TLM007',
+        playerName: '林可欣',
+        phone: '18600186006',
+        idType: '身份证',
+        idNumber: '440112201105186218',
+        updatedAt: '2026-03-21 17:04:55',
+      },
+      {
+        id: 'TLM008',
+        playerName: '周启明',
+        phone: '',
+        idType: '港澳居民来往内地通行证',
+        idNumber: 'H1234567890',
+        updatedAt: '2026-03-20 12:16:33',
+      },
+      {
+        id: 'TLM009',
+        playerName: '许安然',
+        phone: '18500185007',
+        idType: '身份证',
+        idNumber: '440114201006213321',
+        updatedAt: '2026-03-19 18:20:14',
+      },
+    ],
+  },
+];
+
 type ScoreRulePageMode = 'list' | 'editor';
 type SingleMatchRulePageMode = 'list' | 'editor';
+type TeamBattleRulePageMode = 'list' | 'editor';
+type TechnicalOfficialPageMode = 'list' | 'editor';
 
 const createEmptyScoreRule = (): ScoreRuleRow => ({
   id: `SR${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
@@ -451,6 +1016,73 @@ const createEmptySingleMatchRule = (): SingleMatchRuleRow => ({
   createdAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
 });
 
+const createEmptyTeamBattleRule = (): TeamBattleRuleRow => ({
+  id: `TBR${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  ruleName: '',
+  outcomeMethod: '胜场制',
+  totalMatches: 5,
+  matchesToWin: 3,
+  singleMatchRuleMode: 'global',
+  singleMatchRuleId: 'SMR001',
+  perMatchSingleMatchRuleIds: ['SMR001', 'SMR001', 'SMR001', 'SMR001', 'SMR001'],
+  endStrategy: 'finish-running',
+  createdAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+});
+
+const createEmptyTechnicalOfficial = (): TechnicalOfficialRow => ({
+  id: `OFF${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  name: '',
+  avatar: '',
+  gender: '男',
+  phone: '',
+  region: '',
+  organization: '',
+  realName: '',
+  idType: '身份证',
+  idNumber: '',
+  certificates: [
+    {
+      id: `CERT${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      sport: '',
+      certificateName: '',
+      level: '',
+      certificateNo: '',
+      issuer: '',
+      issueDate: '',
+      expireDate: '',
+    },
+  ],
+  status: 'approved',
+  source: 'admin',
+  reviewRemark: '',
+  createdAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+});
+
+const createEmptyRegistrationTemplate = (): RegistrationTemplateRow => ({
+  id: `TMP${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  name: '',
+  description: '',
+  updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+  fields: [createProfileTemplateField('player_name'), createProfileTemplateField('id_type'), createProfileTemplateField('id_number')],
+});
+
+const createEmptyTargetList = (): TargetListRow => ({
+  id: `TL${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  name: '',
+  description: '',
+  updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+  members: [],
+});
+
+const createEmptyTargetListMember = (): TargetListMemberRow => ({
+  id: `TLM${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  playerName: '',
+  phone: '',
+  idType: '身份证',
+  idNumber: '',
+  updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+});
+
 const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
   {
     key: 'tournament',
@@ -460,15 +1092,28 @@ const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
       { key: 'tournament-list', label: '赛事列表' },
       { key: 'match-format', label: '比赛形式' },
       { key: 'group-management', label: '组别管理' },
+      { key: 'target-list', label: '目标清单' },
+      { key: 'registration-template', label: '报名模板' },
     ],
   },
   {
-    key: 'user',
-    label: '用户管理',
-    icon: Users,
+    key: 'official',
+    label: '技术官员',
+    icon: ShieldCheck,
     children: [
-      { key: 'player-management-admin', label: '选手管理' },
-      { key: 'target-list', label: '目标清单' },
+      { key: 'official-list', label: '技术官员列表' },
+      { key: 'official-stats', label: '执裁统计' },
+    ],
+  },
+  {
+    key: 'template',
+    label: '竞赛规则管理',
+    icon: FileText,
+    children: [
+      { key: 'score-rule-template', label: '单局计分规则' },
+      { key: 'single-match-rule-template', label: '单项胜负规则' },
+      { key: 'team-battle-rule-template', label: '团体对抗规则' },
+      { key: 'match-code-rule-template', label: '比赛代码规则' },
     ],
   },
   {
@@ -483,37 +1128,11 @@ const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
     ],
   },
   {
-    key: 'official',
-    label: '技术官员',
-    icon: ShieldCheck,
-    children: [
-      { key: 'official-list', label: '技术官员列表' },
-      { key: 'official-stats', label: '执裁统计' },
-    ],
-  },
-  {
-    key: 'template',
-    label: '模板中心',
-    icon: FileText,
-    children: [
-      { key: 'score-rule-template', label: '单局计分规则' },
-      { key: 'single-match-rule-template', label: '单项胜负规则' },
-      { key: 'team-battle-rule-template', label: '团体对抗规则' },
-      { key: 'registration-template', label: '报名模板' },
-      { key: 'match-code-rule-template', label: '比赛代码规则' },
-    ],
-  },
-  {
-    key: 'workflow',
-    label: '流程管理',
-    icon: Wrench,
-    children: [{ key: 'order-workflow', label: '订单流程' }],
-  },
-  {
     key: 'payment',
-    label: '支付管理',
+    label: '经营管理',
     icon: DollarSign,
     children: [
+      { key: 'order-workflow', label: '订单流程配置' },
       { key: 'payment-rule-config', label: '收款规则配置' },
       { key: 'payment-records', label: '支付记录' },
       { key: 'refund-records', label: '退款记录' },
@@ -531,9 +1150,9 @@ export default function App() {
   const [appPage, setAppPage] = useState<AppPage>('tournament-list');
   const [tournaments, setTournaments] = useState<TournamentListItem[]>(TOURNAMENT_LIST);
   const [adminActiveMenu, setAdminActiveMenu] = useState('tournament-list');
-  const [expandedAdminMenus, setExpandedAdminMenus] = useState<string[]>(['tournament', 'user', 'venue', 'official', 'template', 'workflow', 'payment', 'system']);
+  const [expandedAdminMenus, setExpandedAdminMenus] = useState<string[]>(['tournament']);
   const [adminSidebarCollapsed, setAdminSidebarCollapsed] = useState(false);
-  const [prototypeMode, setPrototypeMode] = useState(true);
+  const [prototypeMode, setPrototypeMode] = useState(false);
   const [tournamentListPage, setTournamentListPage] = useState(1);
   const [tournamentListPageSize, setTournamentListPageSize] = useState(10);
   const [tournamentKeywordDraft, setTournamentKeywordDraft] = useState('');
@@ -556,6 +1175,43 @@ export default function App() {
   const [singleMatchRules, setSingleMatchRules] = useState<SingleMatchRuleRow[]>(SINGLE_MATCH_RULES);
   const [singleMatchRulePageMode, setSingleMatchRulePageMode] = useState<SingleMatchRulePageMode>('list');
   const [singleMatchRuleDraft, setSingleMatchRuleDraft] = useState<SingleMatchRuleRow>(SINGLE_MATCH_RULES[0]);
+  const [teamBattleRuleSearchDraft, setTeamBattleRuleSearchDraft] = useState('');
+  const [teamBattleRuleSearchQuery, setTeamBattleRuleSearchQuery] = useState('');
+  const [teamBattleRulePage, setTeamBattleRulePage] = useState(1);
+  const [teamBattleRulePageSize, setTeamBattleRulePageSize] = useState(10);
+  const [teamBattleRules, setTeamBattleRules] = useState<TeamBattleRuleRow[]>(TEAM_BATTLE_RULES);
+  const [teamBattleRulePageMode, setTeamBattleRulePageMode] = useState<TeamBattleRulePageMode>('list');
+  const [teamBattleRuleDraft, setTeamBattleRuleDraft] = useState<TeamBattleRuleRow>(TEAM_BATTLE_RULES[0]);
+  const [technicalOfficialStatusFilter, setTechnicalOfficialStatusFilter] = useState<'all' | OfficialStatus>('all');
+  const [technicalOfficialSearchDraft, setTechnicalOfficialSearchDraft] = useState('');
+  const [technicalOfficialSearchQuery, setTechnicalOfficialSearchQuery] = useState('');
+  const [technicalOfficialPage, setTechnicalOfficialPage] = useState(1);
+  const [technicalOfficialPageSize, setTechnicalOfficialPageSize] = useState(10);
+  const [technicalOfficials, setTechnicalOfficials] = useState<TechnicalOfficialRow[]>(TECHNICAL_OFFICIALS);
+  const [technicalOfficialPageMode, setTechnicalOfficialPageMode] = useState<TechnicalOfficialPageMode>('list');
+  const [technicalOfficialDraft, setTechnicalOfficialDraft] = useState<TechnicalOfficialRow>(TECHNICAL_OFFICIALS[0]);
+  const [registrationTemplateSearchDraft, setRegistrationTemplateSearchDraft] = useState('');
+  const [registrationTemplateSearchQuery, setRegistrationTemplateSearchQuery] = useState('');
+  const [registrationTemplatePage, setRegistrationTemplatePage] = useState(1);
+  const [registrationTemplatePageSize, setRegistrationTemplatePageSize] = useState(10);
+  const [registrationTemplates, setRegistrationTemplates] = useState<RegistrationTemplateRow[]>(REGISTRATION_TEMPLATES);
+  const [registrationTemplatePageMode, setRegistrationTemplatePageMode] = useState<RegistrationTemplatePageMode>('list');
+  const [registrationTemplateDraft, setRegistrationTemplateDraft] = useState<RegistrationTemplateRow>(REGISTRATION_TEMPLATES[0]);
+  const [targetLists, setTargetLists] = useState<TargetListRow[]>(TARGET_LISTS);
+  const [targetListSearchDraft, setTargetListSearchDraft] = useState('');
+  const [targetListSearchQuery, setTargetListSearchQuery] = useState('');
+  const [targetListPage, setTargetListPage] = useState(1);
+  const [targetListPageSize, setTargetListPageSize] = useState(10);
+  const [targetListPageMode, setTargetListPageMode] = useState<TargetListPageMode>('list');
+  const [selectedTargetListId, setSelectedTargetListId] = useState(TARGET_LISTS[0]?.id ?? '');
+  const [targetListEditorMode, setTargetListEditorMode] = useState<TargetListEditorMode>(null);
+  const [targetListDraft, setTargetListDraft] = useState<TargetListRow>(createEmptyTargetList());
+  const [targetListMemberSearchDraft, setTargetListMemberSearchDraft] = useState('');
+  const [targetListMemberSearchQuery, setTargetListMemberSearchQuery] = useState('');
+  const [targetListMemberPage, setTargetListMemberPage] = useState(1);
+  const [targetListMemberPageSize, setTargetListMemberPageSize] = useState(10);
+  const [targetListMemberEditorMode, setTargetListMemberEditorMode] = useState<TargetListMemberEditorMode>(null);
+  const [targetListMemberDraft, setTargetListMemberDraft] = useState<TargetListMemberRow>(createEmptyTargetListMember());
   const [selectedTournamentId, setSelectedTournamentId] = useState(DEFAULT_TOURNAMENT.id);
   const [viewMode, setViewMode] = useState<'basic-info' | 'page-decoration' | 'settings' | 'records' | 'announcement' | 'scheduling' | 'projects' | 'match-management' | 'player-management' | 'schedule-config' | 'referee-management' | 'venue-config'>('basic-info');
   const [recordsInitialTab, setRecordsInitialTab] = useState<'orders' | 'project_summary' | 'participants' | 'teams'>('orders');
@@ -716,6 +1372,106 @@ export default function App() {
     (normalizedSingleMatchRulePage - 1) * singleMatchRulePageSize,
     normalizedSingleMatchRulePage * singleMatchRulePageSize
   );
+  const filteredTeamBattleRules = useMemo(() => {
+    const keyword = teamBattleRuleSearchQuery.trim().toLowerCase();
+    if (!keyword) return teamBattleRules;
+    return teamBattleRules.filter((item) => item.ruleName.toLowerCase().includes(keyword));
+  }, [teamBattleRuleSearchQuery, teamBattleRules]);
+  const teamBattleRuleTotalPages = Math.max(1, Math.ceil(filteredTeamBattleRules.length / teamBattleRulePageSize));
+  const normalizedTeamBattleRulePage = Math.min(teamBattleRulePage, teamBattleRuleTotalPages);
+  const pagedTeamBattleRules = filteredTeamBattleRules.slice(
+    (normalizedTeamBattleRulePage - 1) * teamBattleRulePageSize,
+    normalizedTeamBattleRulePage * teamBattleRulePageSize
+  );
+  const filteredTechnicalOfficials = useMemo(() => {
+    const keyword = technicalOfficialSearchQuery.trim().toLowerCase();
+    return technicalOfficials.filter((item) => {
+      const matchesStatus =
+        technicalOfficialStatusFilter === 'all' || item.status === technicalOfficialStatusFilter;
+      const matchesKeyword =
+        !keyword ||
+        item.name.toLowerCase().includes(keyword) ||
+        item.phone.includes(keyword) ||
+        item.organization.toLowerCase().includes(keyword);
+      return matchesStatus && matchesKeyword;
+    });
+  }, [technicalOfficials, technicalOfficialSearchQuery, technicalOfficialStatusFilter]);
+  const technicalOfficialTotalPages = Math.max(
+    1,
+    Math.ceil(filteredTechnicalOfficials.length / technicalOfficialPageSize)
+  );
+  const normalizedTechnicalOfficialPage = Math.min(technicalOfficialPage, technicalOfficialTotalPages);
+  const pagedTechnicalOfficials = filteredTechnicalOfficials.slice(
+    (normalizedTechnicalOfficialPage - 1) * technicalOfficialPageSize,
+    normalizedTechnicalOfficialPage * technicalOfficialPageSize
+  );
+  const technicalOfficialStatusCounts = useMemo(
+    () => ({
+      all: technicalOfficials.length,
+      pending: technicalOfficials.filter((item) => item.status === 'pending').length,
+      approved: technicalOfficials.filter((item) => item.status === 'approved').length,
+      rejected: technicalOfficials.filter((item) => item.status === 'rejected').length,
+      disabled: technicalOfficials.filter((item) => item.status === 'disabled').length,
+    }),
+    [technicalOfficials]
+  );
+  const selectedRegistrationProfileKeys = registrationTemplateDraft.fields
+    .filter((field): field is RegistrationTemplateField & { profileKey: RegistrationTemplateProfileKey } => Boolean(field.profileKey))
+    .map((field) => field.profileKey);
+  const registrationTemplatePreviewFields = registrationTemplateDraft.fields.filter((field) => field.enabled);
+  const filteredRegistrationTemplates = useMemo(() => {
+    const keyword = registrationTemplateSearchQuery.trim().toLowerCase();
+    if (!keyword) return registrationTemplates;
+    return registrationTemplates.filter(
+      (item) =>
+        item.name.toLowerCase().includes(keyword) ||
+        item.description.toLowerCase().includes(keyword)
+    );
+  }, [registrationTemplateSearchQuery, registrationTemplates]);
+  const registrationTemplateTotalPages = Math.max(
+    1,
+    Math.ceil(filteredRegistrationTemplates.length / registrationTemplatePageSize)
+  );
+  const normalizedRegistrationTemplatePage = Math.min(
+    registrationTemplatePage,
+    registrationTemplateTotalPages
+  );
+  const pagedRegistrationTemplates = filteredRegistrationTemplates.slice(
+    (normalizedRegistrationTemplatePage - 1) * registrationTemplatePageSize,
+    normalizedRegistrationTemplatePage * registrationTemplatePageSize
+  );
+  const filteredTargetLists = useMemo(() => {
+    const keyword = targetListSearchQuery.trim().toLowerCase();
+    if (!keyword) return targetLists;
+    return targetLists.filter((item) => item.name.toLowerCase().includes(keyword));
+  }, [targetListSearchQuery, targetLists]);
+  const targetListTotalPages = Math.max(1, Math.ceil(filteredTargetLists.length / targetListPageSize));
+  const normalizedTargetListPage = Math.min(targetListPage, targetListTotalPages);
+  const pagedTargetLists = filteredTargetLists.slice(
+    (normalizedTargetListPage - 1) * targetListPageSize,
+    normalizedTargetListPage * targetListPageSize
+  );
+  const activeTargetList = targetLists.find((item) => item.id === selectedTargetListId) ?? targetLists[0] ?? null;
+  const filteredTargetListMembers = useMemo(() => {
+    const keyword = targetListMemberSearchQuery.trim().toLowerCase();
+    const members = activeTargetList?.members ?? [];
+    if (!keyword) return members;
+    return members.filter(
+      (item) =>
+        item.playerName.toLowerCase().includes(keyword) ||
+        item.phone.includes(keyword) ||
+        item.idNumber.toLowerCase().includes(keyword)
+    );
+  }, [activeTargetList, targetListMemberSearchQuery]);
+  const targetListMemberTotalPages = Math.max(
+    1,
+    Math.ceil(filteredTargetListMembers.length / targetListMemberPageSize)
+  );
+  const normalizedTargetListMemberPage = Math.min(targetListMemberPage, targetListMemberTotalPages);
+  const pagedTargetListMembers = filteredTargetListMembers.slice(
+    (normalizedTargetListMemberPage - 1) * targetListMemberPageSize,
+    normalizedTargetListMemberPage * targetListMemberPageSize
+  );
 
   const formatTournamentDate = (startTime: string, endTime: string) => {
     const start = startTime.slice(0, 10).replace(/-/g, '.');
@@ -750,6 +1506,430 @@ export default function App() {
     setSingleMatchRuleSearchDraft('');
     setSingleMatchRuleSearchQuery('');
     setSingleMatchRulePage(1);
+  };
+
+  const applyTeamBattleRuleSearch = () => {
+    setTeamBattleRuleSearchQuery(teamBattleRuleSearchDraft);
+    setTeamBattleRulePage(1);
+  };
+
+  const resetTeamBattleRuleSearch = () => {
+    setTeamBattleRuleSearchDraft('');
+    setTeamBattleRuleSearchQuery('');
+    setTeamBattleRulePage(1);
+  };
+
+  const applyTechnicalOfficialSearch = () => {
+    setTechnicalOfficialSearchQuery(technicalOfficialSearchDraft);
+    setTechnicalOfficialPage(1);
+  };
+
+  const applyRegistrationTemplateSearch = () => {
+    setRegistrationTemplateSearchQuery(registrationTemplateSearchDraft);
+    setRegistrationTemplatePage(1);
+  };
+
+  const resetTechnicalOfficialSearch = () => {
+    setTechnicalOfficialSearchDraft('');
+    setTechnicalOfficialSearchQuery('');
+    setTechnicalOfficialStatusFilter('all');
+    setTechnicalOfficialPage(1);
+  };
+
+  const resetRegistrationTemplateSearch = () => {
+    setRegistrationTemplateSearchDraft('');
+    setRegistrationTemplateSearchQuery('');
+    setRegistrationTemplatePage(1);
+  };
+
+  const applyTargetListSearch = () => {
+    setTargetListSearchQuery(targetListSearchDraft);
+    setTargetListPage(1);
+  };
+
+  const resetTargetListSearch = () => {
+    setTargetListSearchDraft('');
+    setTargetListSearchQuery('');
+    setTargetListPage(1);
+  };
+
+  const applyTargetListMemberSearch = () => {
+    setTargetListMemberSearchQuery(targetListMemberSearchDraft);
+    setTargetListMemberPage(1);
+  };
+
+  const resetTargetListMemberSearch = () => {
+    setTargetListMemberSearchDraft('');
+    setTargetListMemberSearchQuery('');
+    setTargetListMemberPage(1);
+  };
+
+  const maskIdNumber = (value: string) => {
+    if (!value) return '未填写';
+    if (value.length <= 7) return `${value.slice(0, 1)}***${value.slice(-1)}`;
+    return `${value.slice(0, 3)}********${value.slice(-4)}`;
+  };
+
+  const getOfficialStatusLabel = (status: OfficialStatus) => {
+    if (status === 'pending') return '待审核';
+    if (status === 'approved') return '已通过';
+    if (status === 'rejected') return '已驳回';
+    return '已停用';
+  };
+
+  const getOfficialStatusClass = (status: OfficialStatus) => {
+    if (status === 'pending') return 'bg-amber-50 text-amber-600 ring-1 ring-amber-100';
+    if (status === 'approved') return 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100';
+    if (status === 'rejected') return 'bg-rose-50 text-rose-600 ring-1 ring-rose-100';
+    return 'bg-slate-100 text-slate-500 ring-1 ring-slate-200';
+  };
+
+  const getOfficialSourceLabel = (source: OfficialSource) => (source === 'admin' ? '后台新建' : '小程序注册');
+
+  const getOfficialCertificateSummary = (official: TechnicalOfficialRow) => {
+    const validCertificates = official.certificates.filter(
+      (item) => item.sport || item.certificateName || item.level || item.certificateNo
+    );
+    if (validCertificates.length === 0) return '未录入证书';
+    if (validCertificates.length === 1) {
+      const first = validCertificates[0];
+      return `${first.sport || '未设项目'} / ${first.level || '未定级'}`;
+    }
+    return `${validCertificates[0].sport || '未设项目'} 等 ${validCertificates.length} 项`;
+  };
+
+  const getRegistrationTemplateProfileFieldMeta = (key: RegistrationTemplateProfileKey) =>
+    REGISTRATION_TEMPLATE_PROFILE_FIELDS.find((item) => item.key === key) ??
+    REGISTRATION_TEMPLATE_PROFILE_FIELDS[0];
+
+  const getRegistrationTemplateFieldTypeLabel = (fieldType: RegistrationTemplateFieldType) => {
+    if (fieldType === 'phone') return '手机号';
+    if (fieldType === 'date') return '日期';
+    if (fieldType === 'select') return '单选';
+    return '单行文本';
+  };
+
+  const openCreateRegistrationTemplate = () => {
+    setRegistrationTemplateDraft(createEmptyRegistrationTemplate());
+    setRegistrationTemplatePageMode('editor');
+  };
+
+  const openEditRegistrationTemplate = (templateId: string) => {
+    const targetTemplate = registrationTemplates.find((item) => item.id === templateId);
+    if (!targetTemplate) return;
+    setRegistrationTemplateDraft(targetTemplate);
+    setRegistrationTemplatePageMode('editor');
+  };
+
+  const duplicateRegistrationTemplate = (templateId: string) => {
+    const targetTemplate = registrationTemplates.find((item) => item.id === templateId);
+    if (!targetTemplate) return;
+    const nextTemplate: RegistrationTemplateRow = {
+      ...targetTemplate,
+      id: `TMP${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      name: `${targetTemplate.name}（复制）`,
+      updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+      fields: targetTemplate.fields.map((field) => ({
+        ...field,
+        id: `RTF${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      })),
+    };
+    setRegistrationTemplates((prev) => [nextTemplate, ...prev]);
+  };
+
+  const addProfileFieldToTemplate = (profileKey: RegistrationTemplateProfileKey) => {
+    setRegistrationTemplateDraft((prev) => {
+      if (prev.fields.some((field) => field.profileKey === profileKey)) return prev;
+      return {
+        ...prev,
+        fields: [...prev.fields, createProfileTemplateField(profileKey)],
+      };
+    });
+  };
+
+  const addCustomFieldToTemplate = () => {
+    setRegistrationTemplateDraft((prev) => ({
+      ...prev,
+      fields: [...prev.fields, createCustomTemplateField()],
+    }));
+  };
+
+  const updateRegistrationTemplateField = (
+    fieldId: string,
+    updater: (field: RegistrationTemplateField) => RegistrationTemplateField
+  ) => {
+    setRegistrationTemplateDraft((prev) => ({
+      ...prev,
+      fields: prev.fields.map((field) => (field.id === fieldId ? updater(field) : field)),
+    }));
+  };
+
+  const moveRegistrationTemplateField = (fieldId: string, direction: 'up' | 'down') => {
+    setRegistrationTemplateDraft((prev) => {
+      const currentIndex = prev.fields.findIndex((field) => field.id === fieldId);
+      if (currentIndex === -1) return prev;
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= prev.fields.length) return prev;
+      const nextFields = [...prev.fields];
+      const [currentField] = nextFields.splice(currentIndex, 1);
+      nextFields.splice(targetIndex, 0, currentField);
+      return {
+        ...prev,
+        fields: nextFields,
+      };
+    });
+  };
+
+  const removeRegistrationTemplateField = (fieldId: string) => {
+    setRegistrationTemplateDraft((prev) => ({
+      ...prev,
+      fields: prev.fields.filter((field) => field.id !== fieldId),
+    }));
+  };
+
+  const deleteRegistrationTemplate = (templateId: string) => {
+    setRegistrationTemplates((prev) => prev.filter((item) => item.id !== templateId));
+  };
+
+  const saveRegistrationTemplate = () => {
+    const normalizedTemplate: RegistrationTemplateRow = {
+      ...registrationTemplateDraft,
+      fields: registrationTemplateDraft.fields,
+      updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+    };
+
+    setRegistrationTemplates((prev) => {
+      const exists = prev.some((item) => item.id === normalizedTemplate.id);
+      if (exists) {
+        return prev.map((item) => (item.id === normalizedTemplate.id ? normalizedTemplate : item));
+      }
+      return [normalizedTemplate, ...prev];
+    });
+    setRegistrationTemplatePageMode('list');
+  };
+
+  const openCreateTargetList = () => {
+    setTargetListDraft(createEmptyTargetList());
+    setTargetListEditorMode('create');
+  };
+
+  const openEditTargetList = (targetListId: string) => {
+    const targetList = targetLists.find((item) => item.id === targetListId);
+    if (!targetList) return;
+    setTargetListDraft(targetList);
+    setTargetListEditorMode('edit');
+  };
+
+  const saveTargetList = () => {
+    const normalizedTargetList: TargetListRow = {
+      ...targetListDraft,
+      updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+    };
+
+    setTargetLists((prev) => {
+      const exists = prev.some((item) => item.id === normalizedTargetList.id);
+      if (exists) {
+        return prev.map((item) => (item.id === normalizedTargetList.id ? normalizedTargetList : item));
+      }
+      return [normalizedTargetList, ...prev];
+    });
+    setSelectedTargetListId(normalizedTargetList.id);
+    setTargetListEditorMode(null);
+  };
+
+  const deleteTargetList = (targetListId: string) => {
+    if (!window.confirm('确认删除这张目标清单吗？删除后清单成员也会一并移除。')) return;
+    setTargetLists((prev) => {
+      const nextLists = prev.filter((item) => item.id !== targetListId);
+      if (selectedTargetListId === targetListId) {
+        setSelectedTargetListId(nextLists[0]?.id ?? '');
+      }
+      if (targetListPageMode === 'manage' && selectedTargetListId === targetListId) {
+        setTargetListPageMode('list');
+      }
+      return nextLists;
+    });
+  };
+
+  const openManageTargetList = (targetListId: string) => {
+    setSelectedTargetListId(targetListId);
+    setTargetListPageMode('manage');
+    setTargetListMemberSearchDraft('');
+    setTargetListMemberSearchQuery('');
+    setTargetListMemberPage(1);
+  };
+
+  const openCreateTargetListMember = () => {
+    setTargetListMemberDraft(createEmptyTargetListMember());
+    setTargetListMemberEditorMode('create');
+  };
+
+  const openEditTargetListMember = (memberId: string) => {
+    const member = activeTargetList?.members.find((item) => item.id === memberId);
+    if (!member) return;
+    setTargetListMemberDraft(member);
+    setTargetListMemberEditorMode('edit');
+  };
+
+  const saveTargetListMember = () => {
+    if (!activeTargetList) return;
+    const normalizedMember: TargetListMemberRow = {
+      ...targetListMemberDraft,
+      updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+    };
+
+    setTargetLists((prev) =>
+      prev.map((item) => {
+        if (item.id !== activeTargetList.id) return item;
+        const exists = item.members.some((member) => member.id === normalizedMember.id);
+        return {
+          ...item,
+          updatedAt: normalizedMember.updatedAt,
+          members: exists
+            ? item.members.map((member) => (member.id === normalizedMember.id ? normalizedMember : member))
+            : [normalizedMember, ...item.members],
+        };
+      })
+    );
+    setTargetListMemberEditorMode(null);
+  };
+
+  const deleteTargetListMember = (memberId: string) => {
+    if (!activeTargetList) return;
+    if (!window.confirm('确认删除这位清单成员吗？')) return;
+    const nextUpdatedAt = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
+    setTargetLists((prev) =>
+      prev.map((item) =>
+        item.id === activeTargetList.id
+          ? {
+              ...item,
+              updatedAt: nextUpdatedAt,
+              members: item.members.filter((member) => member.id !== memberId),
+            }
+          : item
+      )
+    );
+  };
+
+  const clearTargetListMembers = () => {
+    if (!activeTargetList) return;
+    if (!window.confirm(`确认清空「${activeTargetList.name}」里的全部成员吗？`)) return;
+    const nextUpdatedAt = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
+    setTargetLists((prev) =>
+      prev.map((item) =>
+        item.id === activeTargetList.id ? { ...item, updatedAt: nextUpdatedAt, members: [] } : item
+      )
+    );
+    setTargetListMemberPage(1);
+  };
+
+  const importTargetListMembers = () => {
+    if (!activeTargetList) return;
+    const now = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
+    const importedMembers: TargetListMemberRow[] = [
+      {
+        id: `TLM${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+        playerName: '导入选手A',
+        phone: '13900010001',
+        idType: '身份证',
+        idNumber: '440101199603150018',
+        updatedAt: now,
+      },
+      {
+        id: `TLM${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+        playerName: '导入选手B',
+        phone: '13800010002',
+        idType: '护照',
+        idNumber: 'P93821045',
+        updatedAt: now,
+      },
+    ];
+
+    setTargetLists((prev) =>
+      prev.map((item) =>
+        item.id === activeTargetList.id
+          ? {
+              ...item,
+              updatedAt: now,
+              members: [...importedMembers, ...item.members],
+            }
+          : item
+      )
+    );
+  };
+
+  const exportTargetListMembers = () => {
+    if (!activeTargetList) return;
+    const headers = ['选手姓名', '手机号', '证件类型', '证件号码', '最新更新'];
+    const rows = activeTargetList.members.map((member) => [
+      member.playerName,
+      member.phone,
+      member.idType,
+      member.idNumber,
+      member.updatedAt,
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeTargetList.name}-清单成员.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const openCreateTechnicalOfficial = () => {
+    setTechnicalOfficialDraft(createEmptyTechnicalOfficial());
+    setTechnicalOfficialPageMode('editor');
+  };
+
+  const openEditTechnicalOfficial = (officialId: string) => {
+    const targetOfficial = technicalOfficials.find((item) => item.id === officialId);
+    if (!targetOfficial) return;
+    setTechnicalOfficialDraft(targetOfficial);
+    setTechnicalOfficialPageMode('editor');
+  };
+
+  const saveTechnicalOfficial = () => {
+    const normalizedOfficial: TechnicalOfficialRow = {
+      ...technicalOfficialDraft,
+      certificates: technicalOfficialDraft.certificates.filter(
+        (item) =>
+          item.sport ||
+          item.certificateName ||
+          item.level ||
+          item.certificateNo ||
+          item.issuer ||
+          item.issueDate ||
+          item.expireDate
+      ),
+    };
+
+    setTechnicalOfficials((prev) => {
+      const exists = prev.some((item) => item.id === normalizedOfficial.id);
+      if (exists) {
+        return prev.map((item) => (item.id === normalizedOfficial.id ? normalizedOfficial : item));
+      }
+      return [normalizedOfficial, ...prev];
+    });
+    setTechnicalOfficialPageMode('list');
+  };
+
+  const deleteTechnicalOfficial = (officialId: string) => {
+    setTechnicalOfficials((prev) => prev.filter((item) => item.id !== officialId));
+  };
+
+  const updateTechnicalOfficialStatus = (officialId: string, status: OfficialStatus, reviewRemark: string) => {
+    setTechnicalOfficials((prev) =>
+      prev.map((item) => (item.id === officialId ? { ...item, status, reviewRemark } : item))
+    );
+    setTechnicalOfficialDraft((prev) =>
+      prev.id === officialId ? { ...prev, status, reviewRemark } : prev
+    );
   };
 
   const buildScoreRuleSummary = (rule: ScoreRuleRow) => {
@@ -821,6 +2001,37 @@ export default function App() {
   const getSingleMatchRuleForfeitLabel = (rule: SingleMatchRuleRow) =>
     `胜局补偿 ${rule.forfeitWinGames} 局，每局小分补偿 ${rule.forfeitPointsPerGame} 分`;
 
+  const normalizeTeamBattlePerMatchRuleIds = (count: number, currentIds: string[], fallbackId: string) =>
+    Array.from({ length: count }, (_, index) => currentIds[index] ?? fallbackId);
+
+  const getTeamBattleRuleSingleMatchName = (ruleId: string) =>
+    singleMatchRules.find((item) => item.id === ruleId)?.ruleName ?? '未选择规则';
+
+  const getTeamBattleRuleSingleMatchSummary = (rule: TeamBattleRuleRow) => {
+    if (rule.singleMatchRuleMode === 'global') {
+      return `全场统一：${getTeamBattleRuleSingleMatchName(rule.singleMatchRuleId)}`;
+    }
+
+    const names = normalizeTeamBattlePerMatchRuleIds(
+      rule.totalMatches,
+      rule.perMatchSingleMatchRuleIds,
+      rule.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
+    ).map((id, index) => `第${index + 1}场 ${getTeamBattleRuleSingleMatchName(id)}`);
+
+    return `分场设置：${names.join(' / ')}`;
+  };
+
+  const getTeamBattleRuleWinsLabel = (rule: TeamBattleRuleRow) =>
+    rule.outcomeMethod === '胜场制' && rule.matchesToWin
+      ? `${rule.totalMatches}场 / 先胜${rule.matchesToWin}场`
+      : `${rule.totalMatches}场 / 按累计总分判胜`;
+
+  const getTeamBattleRuleStrategyLabel = (strategy: TeamBattleEndStrategy) => {
+    if (strategy === 'play-all') return '打满全部比赛后结束';
+    if (strategy === 'finish-running') return '分出胜负后已开赛场次继续';
+    return '分出胜负后立即结束未完成场次';
+  };
+
   const getSingleMatchRuleGameCount = (rule: SingleMatchRuleRow) =>
     rule.matchFormat === '单局定胜负' ? 1 : Math.max(1, rule.totalGames);
 
@@ -857,6 +2068,51 @@ export default function App() {
       return [normalizedRule, ...prev];
     });
     setSingleMatchRulePageMode('list');
+  };
+
+  const deleteTeamBattleRule = (ruleId: string) => {
+    setTeamBattleRules((prev) => prev.filter((item) => item.id !== ruleId));
+  };
+
+  const openCreateTeamBattleRule = () => {
+    setTeamBattleRuleDraft(createEmptyTeamBattleRule());
+    setTeamBattleRulePageMode('editor');
+  };
+
+  const openEditTeamBattleRule = (ruleId: string) => {
+    const targetRule = teamBattleRules.find((item) => item.id === ruleId);
+    if (!targetRule) return;
+    setTeamBattleRuleDraft(targetRule);
+    setTeamBattleRulePageMode('editor');
+  };
+
+  const saveTeamBattleRule = () => {
+    const existingRule = teamBattleRules.find((item) => item.id === teamBattleRuleDraft.id);
+    const normalizedRule: TeamBattleRuleRow = {
+      ...teamBattleRuleDraft,
+      matchesToWin:
+        teamBattleRuleDraft.outcomeMethod === '胜场制'
+          ? Math.min(teamBattleRuleDraft.matchesToWin || 1, teamBattleRuleDraft.totalMatches)
+          : null,
+      perMatchSingleMatchRuleIds: normalizeTeamBattlePerMatchRuleIds(
+        teamBattleRuleDraft.totalMatches,
+        teamBattleRuleDraft.perMatchSingleMatchRuleIds,
+        teamBattleRuleDraft.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
+      ),
+      createdAt:
+        existingRule?.createdAt ||
+        teamBattleRuleDraft.createdAt ||
+        new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+    };
+
+    setTeamBattleRules((prev) => {
+      const exists = prev.some((item) => item.id === normalizedRule.id);
+      if (exists) {
+        return prev.map((item) => (item.id === normalizedRule.id ? normalizedRule : item));
+      }
+      return [normalizedRule, ...prev];
+    });
+    setTeamBattleRulePageMode('list');
   };
 
   const openTournamentDetail = (tournamentId: string) => {
@@ -1092,7 +2348,10 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                      <button className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
+                      <button
+                        onClick={() => openTournamentDetail(activeTournament.id)}
+                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
+                      >
                         新建赛事
                       </button>
                     </div>
@@ -1258,20 +2517,20 @@ export default function App() {
                               <div className="flex flex-nowrap justify-end gap-2">
                                 <button
                                   onClick={() => openTournamentDetail(tournament.id)}
-                                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                                  className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-600 transition-all hover:text-indigo-700"
                                 >
                                   赛事详情
                                   <ChevronRight className="h-4 w-4" />
                                 </button>
                                 <button
                                   onClick={() => deleteTournament(tournament.id)}
-                                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-500 transition-all hover:bg-rose-50"
+                                  className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                   删除
                                 </button>
                                 <button
-                                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-2xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-600 transition-all hover:bg-amber-50"
+                                  className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-600 transition-all hover:text-amber-700"
                                 >
                                   <AlertCircle className="h-4 w-4" />
                                   赛事取消
@@ -1300,6 +2559,7 @@ export default function App() {
                       setTournamentListPage(1);
                     }}
                     itemLabel="个赛事"
+                    compact
                   />
                 </section>
               </div>
@@ -1352,6 +2612,7 @@ export default function App() {
                       setMatchFormatPage(1);
                     }}
                     itemLabel="个项目"
+                    compact
                   />
                 </section>
               </div>
@@ -1435,14 +2696,14 @@ export default function App() {
                                   <div className="flex flex-nowrap justify-end gap-2">
                                     <button
                                       onClick={() => openEditScoreRule(rule.id)}
-                                      className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
                                     >
                                       <PencilLine className="h-4 w-4" />
                                       编辑
                                     </button>
                                     <button
                                       onClick={() => deleteScoreRule(rule.id)}
-                                      className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-500 transition-all hover:bg-rose-50"
+                                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
                                     >
                                       <Trash2 className="h-4 w-4" />
                                       删除
@@ -1472,6 +2733,7 @@ export default function App() {
                         setScoreRulePage(1);
                       }}
                       itemLabel="条规则"
+                      compact
                     />
                   </section>
                 </div>
@@ -1831,7 +3093,7 @@ export default function App() {
                             <th className="w-[210px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">局间休息</th>
                             <th className="w-[340px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">弃权判定结果</th>
                             <th className="w-[170px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">创建时间</th>
-                            <th className="w-[160px] px-3 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">操作</th>
+                            <th className="sticky right-0 z-10 w-[160px] bg-white px-3 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">操作</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -1876,18 +3138,18 @@ export default function App() {
                                   <p className="text-sm text-slate-600 whitespace-nowrap">{getSingleMatchRuleForfeitLabel(rule)}</p>
                                 </td>
                                 <td className="px-3 py-5 text-sm text-slate-500 whitespace-nowrap">{rule.createdAt}</td>
-                                <td className="px-3 py-5">
+                                <td className="sticky right-0 z-10 bg-white px-3 py-5 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50/60">
                                   <div className="flex justify-end gap-2 whitespace-nowrap">
                                     <button
                                       onClick={() => openEditSingleMatchRule(rule.id)}
-                                      className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
                                     >
                                       <PencilLine className="h-4 w-4" />
                                       编辑
                                     </button>
                                     <button
                                       onClick={() => deleteSingleMatchRule(rule.id)}
-                                      className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-500 transition-all hover:bg-rose-50"
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
                                     >
                                       <Trash2 className="h-4 w-4" />
                                       删除
@@ -1917,6 +3179,7 @@ export default function App() {
                         setSingleMatchRulePage(1);
                       }}
                       itemLabel="条规则"
+                      compact
                     />
                   </section>
                 </div>
@@ -2378,6 +3641,1939 @@ export default function App() {
                           </div>
                         </div>
                       </div>
+                  </section>
+                </div>
+              )
+            ) : adminActiveMenu === 'team-battle-rule-template' ? (
+              teamBattleRulePageMode === 'list' ? (
+                <div className="mx-auto w-full max-w-7xl min-w-0">
+                  <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <Users className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">团体对抗规则</h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            统一维护团体项目中 Tie 的整场对抗方式、获胜条件与比赛结束策略。
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={openCreateTeamBattleRule}
+                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                      >
+                        添加规则
+                      </button>
+                    </div>
+
+                    <div className="border-b border-slate-100 px-8 py-5">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                        <div className="relative min-w-[280px]">
+                          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={teamBattleRuleSearchDraft}
+                            onChange={(event) => setTeamBattleRuleSearchDraft(event.target.value)}
+                            placeholder="检索规则名称"
+                            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </div>
+                        <button
+                          onClick={applyTeamBattleRuleSearch}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          筛选
+                        </button>
+                        <button
+                          onClick={resetTeamBattleRuleSearch}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          重置
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-w-full overflow-x-auto">
+                      <table className="min-w-[1380px] w-full border-collapse text-left">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-white">
+                            <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">规则ID</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">规则名称</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">胜负判定方式</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">总场数/胜利规则</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">单场胜负规则</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">创建时间</th>
+                            <th className="sticky right-0 z-10 bg-white px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
+                              操作
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {pagedTeamBattleRules.length > 0 ? (
+                            pagedTeamBattleRules.map((rule) => (
+                              <tr key={rule.id} className="group align-top transition-colors hover:bg-slate-50/60">
+                                <td className="px-8 py-6 text-sm font-medium text-slate-500 whitespace-nowrap">{rule.id}</td>
+                                <td className="px-6 py-6">
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{rule.ruleName}</p>
+                                    <p className="text-xs text-slate-400 whitespace-nowrap">{getTeamBattleRuleStrategyLabel(rule.endStrategy)}</p>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-6">
+                                  <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 whitespace-nowrap">
+                                    {rule.outcomeMethod}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-6 text-sm font-medium text-slate-700 whitespace-nowrap">
+                                  {getTeamBattleRuleWinsLabel(rule)}
+                                </td>
+                                <td className="px-6 py-6">
+                                  <p
+                                    className="max-w-[340px] truncate text-sm text-slate-600"
+                                    title={getTeamBattleRuleSingleMatchSummary(rule)}
+                                  >
+                                    {getTeamBattleRuleSingleMatchSummary(rule)}
+                                  </p>
+                                </td>
+                                <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{rule.createdAt}</td>
+                                <td className="sticky right-0 z-10 bg-white px-8 py-6 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50/60">
+                                  <div className="flex flex-nowrap justify-end gap-2">
+                                    <button
+                                      onClick={() => openEditTeamBattleRule(rule.id)}
+                                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
+                                    >
+                                      <PencilLine className="h-4 w-4" />
+                                      编辑
+                                    </button>
+                                    <button
+                                      onClick={() => deleteTeamBattleRule(rule.id)}
+                                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      删除
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={7} className="px-8 py-16 text-center text-sm text-slate-500">
+                                暂无符合条件的规则，试试调整检索条件后再查看。
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <TablePagination
+                      total={filteredTeamBattleRules.length}
+                      page={normalizedTeamBattleRulePage}
+                      pageSize={teamBattleRulePageSize}
+                      onPageChange={setTeamBattleRulePage}
+                      onPageSizeChange={(size) => {
+                        setTeamBattleRulePageSize(size);
+                        setTeamBattleRulePage(1);
+                      }}
+                      itemLabel="条规则"
+                      compact
+                    />
+                  </section>
+                </div>
+              ) : (
+                <div className="mx-auto w-full max-w-7xl min-w-0 space-y-6">
+                  <div className="flex items-center justify-between gap-4">
+                    <button
+                      onClick={() => setTeamBattleRulePageMode('list')}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      返回规则列表
+                    </button>
+                    <button
+                      onClick={saveTeamBattleRule}
+                      className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                    >
+                      保存
+                    </button>
+                  </div>
+
+                  <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-8 py-6">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <Users className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">团体对抗规则配置</h3>
+                          <p className="mt-1 text-sm text-slate-500">配置团体项目中 Tie 的判胜方式、单场引用规则和比赛结束策略。</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-8 px-8 py-8">
+                      <label className="block max-w-3xl space-y-2">
+                        <span className="text-sm font-medium text-slate-600">规则名称</span>
+                        <input
+                          value={teamBattleRuleDraft.ruleName}
+                          onChange={(event) =>
+                            setTeamBattleRuleDraft((prev) => ({ ...prev, ruleName: event.target.value }))
+                          }
+                          placeholder="请输入"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                        />
+                      </label>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4 text-indigo-500" />
+                          <p className="text-sm font-semibold text-slate-700">对抗结构</p>
+                        </div>
+                        <div className="space-y-5 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                          <div className="space-y-3 rounded-2xl border border-white bg-white p-5">
+                            <p className="text-sm font-medium text-slate-600">胜负判定方式</p>
+                            <div className="flex flex-wrap gap-3">
+                              {(['胜场制', '总分制'] as const).map((option) => (
+                                <button
+                                  key={option}
+                                  type="button"
+                                  onClick={() =>
+                                    setTeamBattleRuleDraft((prev) => ({
+                                      ...prev,
+                                      outcomeMethod: option,
+                                      matchesToWin:
+                                        option === '胜场制'
+                                          ? prev.matchesToWin ?? Math.ceil(prev.totalMatches / 2)
+                                          : null,
+                                    }))
+                                  }
+                                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                                    teamBattleRuleDraft.outcomeMethod === option
+                                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                      : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  {option}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-sm leading-6 text-slate-500">
+                              {teamBattleRuleDraft.outcomeMethod === '胜场制'
+                                ? '胜场制：以赢得的场次数决定整场 Tie 胜负（如：5场3胜）。'
+                                : '总分制：以整场团体对抗中所有单场累计总得分决定最终胜负。'}
+                            </p>
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">总场数</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={teamBattleRuleDraft.totalMatches}
+                                onChange={(event) =>
+                                  setTeamBattleRuleDraft((prev) => {
+                                    const totalMatches = Number(event.target.value || 1);
+                                    return {
+                                      ...prev,
+                                      totalMatches,
+                                      matchesToWin:
+                                        prev.outcomeMethod === '胜场制'
+                                          ? Math.min(prev.matchesToWin ?? Math.ceil(totalMatches / 2), totalMatches)
+                                          : null,
+                                      perMatchSingleMatchRuleIds: normalizeTeamBattlePerMatchRuleIds(
+                                        totalMatches,
+                                        prev.perMatchSingleMatchRuleIds,
+                                        prev.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
+                                      ),
+                                    };
+                                  })
+                                }
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+
+                            {teamBattleRuleDraft.outcomeMethod === '胜场制' && (
+                              <label className="block space-y-2">
+                                <span className="text-sm font-medium text-slate-600">获胜所需场次</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={teamBattleRuleDraft.totalMatches}
+                                  value={teamBattleRuleDraft.matchesToWin ?? 1}
+                                  onChange={(event) =>
+                                    setTeamBattleRuleDraft((prev) => ({
+                                      ...prev,
+                                      matchesToWin: Number(event.target.value || 1),
+                                    }))
+                                  }
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                />
+                              </label>
+                            )}
+                          </div>
+
+                          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+                            当前规则将按 <span className="font-semibold text-slate-700">{getTeamBattleRuleWinsLabel(teamBattleRuleDraft)}</span> 进行 Tie 判胜。
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Settings2 className="h-4 w-4 text-indigo-500" />
+                          <p className="text-sm font-semibold text-slate-700">单场胜负规则</p>
+                        </div>
+                        <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                          <div className="space-y-4">
+                            <div className="flex flex-wrap gap-3">
+                              {[
+                                { key: 'global', label: '全场统一' },
+                                { key: 'per-match', label: '分场设置' },
+                              ].map((option) => (
+                                <button
+                                  key={option.key}
+                                  type="button"
+                                  onClick={() =>
+                                    setTeamBattleRuleDraft((prev) => ({
+                                      ...prev,
+                                      singleMatchRuleMode: option.key as TeamBattleSingleMatchRuleMode,
+                                      perMatchSingleMatchRuleIds: normalizeTeamBattlePerMatchRuleIds(
+                                        prev.totalMatches,
+                                        prev.perMatchSingleMatchRuleIds,
+                                        prev.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
+                                      ),
+                                    }))
+                                  }
+                                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                                    teamBattleRuleDraft.singleMatchRuleMode === option.key
+                                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                      : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            {teamBattleRuleDraft.singleMatchRuleMode === 'global' ? (
+                              <>
+                                <label className="block max-w-xl space-y-2">
+                                  <span className="text-sm font-medium text-slate-600">关联单项胜负规则</span>
+                                  <select
+                                    value={teamBattleRuleDraft.singleMatchRuleId}
+                                    onChange={(event) =>
+                                      setTeamBattleRuleDraft((prev) => ({
+                                        ...prev,
+                                        singleMatchRuleId: event.target.value,
+                                        perMatchSingleMatchRuleIds: normalizeTeamBattlePerMatchRuleIds(
+                                          prev.totalMatches,
+                                          prev.perMatchSingleMatchRuleIds,
+                                          event.target.value
+                                        ),
+                                      }))
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                  >
+                                    {singleMatchRules.map((rule) => (
+                                      <option key={rule.id} value={rule.id}>
+                                        {rule.ruleName}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <p className="text-sm leading-6 text-slate-500">
+                                  当前 Tie 中的每个单场，统一引用这条单项胜负规则。
+                                </p>
+                              </>
+                            ) : (
+                              <div className="grid gap-4 md:grid-cols-2">
+                                {Array.from({ length: teamBattleRuleDraft.totalMatches }, (_, index) => (
+                                  <label key={`team-battle-match-${index + 1}`} className="block space-y-2">
+                                    <span className="text-sm font-medium text-slate-600">第 {index + 1} 场单项胜负规则</span>
+                                    <select
+                                      value={
+                                        teamBattleRuleDraft.perMatchSingleMatchRuleIds[index] ||
+                                        teamBattleRuleDraft.singleMatchRuleId
+                                      }
+                                      onChange={(event) =>
+                                        setTeamBattleRuleDraft((prev) => {
+                                          const nextIds = [
+                                            ...normalizeTeamBattlePerMatchRuleIds(
+                                              prev.totalMatches,
+                                              prev.perMatchSingleMatchRuleIds,
+                                              prev.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
+                                            ),
+                                          ];
+                                          nextIds[index] = event.target.value;
+                                          return {
+                                            ...prev,
+                                            perMatchSingleMatchRuleIds: nextIds,
+                                          };
+                                        })
+                                      }
+                                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                    >
+                                      {singleMatchRules.map((rule) => (
+                                        <option key={rule.id} value={rule.id}>
+                                          {rule.ruleName}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-indigo-500" />
+                          <p className="text-sm font-semibold text-slate-700">比赛结束策略</p>
+                        </div>
+                        <div className="grid gap-4 xl:grid-cols-3">
+                          {[
+                            {
+                              key: 'play-all' as const,
+                              title: '打满全部比赛后结束',
+                              description: '即使已经提前分出团体胜负，剩余场次仍需全部完成。',
+                            },
+                            {
+                              key: 'finish-running' as const,
+                              title: '分出胜负后已开赛场次继续',
+                              description: '一旦团体胜负确定，未开始的场次不再进行；已开赛但未结束的场次继续完成。',
+                            },
+                            {
+                              key: 'stop-immediately' as const,
+                              title: '分出胜负后立即结束未完成场次',
+                              description: '一旦团体胜负确定，未开始及未完成的场次均立即终止。',
+                            },
+                          ].map((option) => (
+                            <button
+                              key={option.key}
+                              type="button"
+                              onClick={() => setTeamBattleRuleDraft((prev) => ({ ...prev, endStrategy: option.key }))}
+                              className={`rounded-[24px] border px-5 py-5 text-left transition-all ${
+                                teamBattleRuleDraft.endStrategy === option.key
+                                  ? 'border-indigo-200 bg-indigo-50 shadow-sm'
+                                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                              }`}
+                            >
+                              <p className="text-sm font-semibold text-slate-800">{option.title}</p>
+                              <p className="mt-2 text-sm leading-6 text-slate-500">{option.description}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )
+            ) : adminActiveMenu === 'official-list' ? (
+              technicalOfficialPageMode === 'list' ? (
+                <div className="mx-auto w-full max-w-7xl min-w-0">
+                  <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">技术官员列表</h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            统一维护技术官员的档案资料、实名信息与证书信息，并支持处理小程序注册审核。
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={openCreateTechnicalOfficial}
+                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                      >
+                        新建技术官员
+                      </button>
+                    </div>
+
+                    <div className="border-b border-slate-100 px-8 py-5">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="flex flex-wrap gap-2 rounded-full bg-white p-1.5 shadow-lg shadow-slate-200/70 ring-1 ring-slate-200 w-fit">
+                          {[
+                            { key: 'all' as const, label: '全部', count: technicalOfficialStatusCounts.all },
+                            { key: 'pending' as const, label: '待审核', count: technicalOfficialStatusCounts.pending },
+                            { key: 'approved' as const, label: '已通过', count: technicalOfficialStatusCounts.approved },
+                            { key: 'rejected' as const, label: '已驳回', count: technicalOfficialStatusCounts.rejected },
+                            { key: 'disabled' as const, label: '已停用', count: technicalOfficialStatusCounts.disabled },
+                          ].map((tab) => (
+                            <button
+                              key={tab.key}
+                              onClick={() => {
+                                setTechnicalOfficialStatusFilter(tab.key);
+                                setTechnicalOfficialPage(1);
+                              }}
+                              className={`px-4 py-2.5 rounded-full text-xs font-bold transition-all ${
+                                technicalOfficialStatusFilter === tab.key
+                                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                              }`}
+                            >
+                              {tab.label}
+                              <span className={`ml-1.5 ${technicalOfficialStatusFilter === tab.key ? 'text-white/80' : 'text-slate-400'}`}>
+                                {tab.count}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                          <div className="relative min-w-[280px]">
+                            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              value={technicalOfficialSearchDraft}
+                              onChange={(event) => setTechnicalOfficialSearchDraft(event.target.value)}
+                              placeholder="检索姓名 / 手机号 / 所属单位"
+                              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </div>
+                          <button
+                            onClick={applyTechnicalOfficialSearch}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                          >
+                            筛选
+                          </button>
+                          <button
+                            onClick={resetTechnicalOfficialSearch}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                          >
+                            重置
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="max-w-full overflow-x-auto">
+                      <table className="min-w-[1460px] w-full border-collapse text-left">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-white">
+                            <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">姓名</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">手机号</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">实名信息</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">证书信息</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">审核状态</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">创建时间</th>
+                            <th className="sticky right-0 z-10 w-[220px] bg-white px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
+                              操作
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {pagedTechnicalOfficials.length > 0 ? (
+                            pagedTechnicalOfficials.map((official) => (
+                              <tr key={official.id} className="group align-top transition-colors hover:bg-slate-50/60">
+                                <td className="px-8 py-6">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                                      <UserCircle className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{official.name}</p>
+                                      <p className="mt-1 text-xs text-slate-400 whitespace-nowrap">
+                                        {official.gender} · {official.region} · {official.organization}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{official.phone}</td>
+                                <td className="px-6 py-6">
+                                  <p className="text-sm text-slate-700 whitespace-nowrap">{official.realName || '未填写'}</p>
+                                  <p className="mt-1 text-xs text-slate-400 whitespace-nowrap">
+                                    {official.idType} · {maskIdNumber(official.idNumber)}
+                                  </p>
+                                </td>
+                                <td className="px-6 py-6">
+                                  <p className="text-sm text-slate-700 whitespace-nowrap">{getOfficialCertificateSummary(official)}</p>
+                                  <p className="mt-1 text-xs text-slate-400 whitespace-nowrap">
+                                    {official.certificates.length} 项证书
+                                  </p>
+                                </td>
+                                <td className="px-6 py-6">
+                                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getOfficialStatusClass(official.status)}`}>
+                                    {getOfficialStatusLabel(official.status)}
+                                  </span>
+                                  <p className="mt-2 text-xs text-slate-400 whitespace-nowrap">{getOfficialSourceLabel(official.source)}</p>
+                                </td>
+                                <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{official.createdAt}</td>
+                                <td className="sticky right-0 z-10 bg-white px-8 py-6 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50">
+                                  <div className="flex justify-end gap-2 whitespace-nowrap">
+                                    {official.status === 'pending' && (
+                                      <button
+                                        onClick={() => openEditTechnicalOfficial(official.id)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-600 transition-all hover:text-amber-700"
+                                      >
+                                        <ShieldCheck className="h-4 w-4" />
+                                        审核
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => openEditTechnicalOfficial(official.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
+                                    >
+                                      <PencilLine className="h-4 w-4" />
+                                      编辑
+                                    </button>
+                                    <button
+                                      onClick={() => deleteTechnicalOfficial(official.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      删除
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={7} className="px-8 py-16 text-center text-sm text-slate-500">
+                                暂无符合条件的技术官员记录，试试调整检索条件后再查看。
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <TablePagination
+                      total={filteredTechnicalOfficials.length}
+                      page={normalizedTechnicalOfficialPage}
+                      pageSize={technicalOfficialPageSize}
+                      onPageChange={setTechnicalOfficialPage}
+                      onPageSizeChange={(size) => {
+                        setTechnicalOfficialPageSize(size);
+                        setTechnicalOfficialPage(1);
+                      }}
+                      itemLabel="位技术官员"
+                      compact
+                    />
+                  </section>
+                </div>
+              ) : (
+                <div className="mx-auto w-full max-w-7xl min-w-0 space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setTechnicalOfficialPageMode('list')}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        返回列表
+                      </button>
+                      {technicalOfficialDraft.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() =>
+                              updateTechnicalOfficialStatus(
+                                technicalOfficialDraft.id,
+                                'approved',
+                                '资料完整，审核通过。'
+                              )
+                            }
+                            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700"
+                          >
+                            审核通过
+                          </button>
+                          <button
+                            onClick={() =>
+                              updateTechnicalOfficialStatus(
+                                technicalOfficialDraft.id,
+                                'rejected',
+                                technicalOfficialDraft.reviewRemark || '请补充或修正实名/证书信息后重新提交。'
+                              )
+                            }
+                            className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 transition-all hover:border-rose-300 hover:text-rose-700"
+                          >
+                            驳回
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <button
+                      onClick={saveTechnicalOfficial}
+                      className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                    >
+                      保存
+                    </button>
+                  </div>
+
+                  <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-8 py-6">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">技术官员档案</h3>
+                          <p className="mt-1 text-sm text-slate-500">维护技术官员的个人资料、实名信息与证书信息。</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-8 px-8 py-8">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <UserCircle className="h-4 w-4 text-indigo-500" />
+                          <p className="text-sm font-semibold text-slate-700">个人资料</p>
+                        </div>
+                        <div className="grid gap-5 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm md:grid-cols-2 xl:grid-cols-3">
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">姓名</span>
+                            <input
+                              value={technicalOfficialDraft.name}
+                              onChange={(event) => setTechnicalOfficialDraft((prev) => ({ ...prev, name: event.target.value }))}
+                              placeholder="请输入"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">性别</span>
+                            <select
+                              value={technicalOfficialDraft.gender}
+                              onChange={(event) =>
+                                setTechnicalOfficialDraft((prev) => ({ ...prev, gender: event.target.value as '男' | '女' }))
+                              }
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            >
+                              <option value="男">男</option>
+                              <option value="女">女</option>
+                            </select>
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">手机号</span>
+                            <input
+                              value={technicalOfficialDraft.phone}
+                              onChange={(event) => setTechnicalOfficialDraft((prev) => ({ ...prev, phone: event.target.value }))}
+                              placeholder="请输入"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">所属地区</span>
+                            <input
+                              value={technicalOfficialDraft.region}
+                              onChange={(event) => setTechnicalOfficialDraft((prev) => ({ ...prev, region: event.target.value }))}
+                              placeholder="如：广东省 深圳市"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">所属单位/俱乐部</span>
+                            <input
+                              value={technicalOfficialDraft.organization}
+                              onChange={(event) => setTechnicalOfficialDraft((prev) => ({ ...prev, organization: event.target.value }))}
+                              placeholder="请输入"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">来源</span>
+                            <select
+                              value={technicalOfficialDraft.source}
+                              onChange={(event) =>
+                                setTechnicalOfficialDraft((prev) => ({ ...prev, source: event.target.value as OfficialSource }))
+                              }
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            >
+                              <option value="admin">后台新建</option>
+                              <option value="mini-program">小程序注册</option>
+                            </select>
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">状态</span>
+                            <select
+                              value={technicalOfficialDraft.status}
+                              onChange={(event) =>
+                                setTechnicalOfficialDraft((prev) => ({ ...prev, status: event.target.value as OfficialStatus }))
+                              }
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            >
+                              <option value="pending">待审核</option>
+                              <option value="approved">已通过</option>
+                              <option value="rejected">已驳回</option>
+                              <option value="disabled">已停用</option>
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4 text-indigo-500" />
+                          <p className="text-sm font-semibold text-slate-700">实名信息</p>
+                        </div>
+                        <div className="grid gap-5 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm md:grid-cols-3">
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">证件姓名</span>
+                            <input
+                              value={technicalOfficialDraft.realName}
+                              onChange={(event) => setTechnicalOfficialDraft((prev) => ({ ...prev, realName: event.target.value }))}
+                              placeholder="请输入"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">证件类型</span>
+                            <select
+                              value={technicalOfficialDraft.idType}
+                              onChange={(event) =>
+                                setTechnicalOfficialDraft((prev) => ({
+                                  ...prev,
+                                  idType: event.target.value as TechnicalOfficialRow['idType'],
+                                }))
+                              }
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            >
+                              <option value="身份证">身份证</option>
+                              <option value="护照">护照</option>
+                              <option value="港澳居民来往内地通行证">港澳居民来往内地通行证</option>
+                            </select>
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">证件号码</span>
+                            <input
+                              value={technicalOfficialDraft.idNumber}
+                              onChange={(event) => setTechnicalOfficialDraft((prev) => ({ ...prev, idNumber: event.target.value }))}
+                              placeholder="请输入"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-indigo-500" />
+                            <p className="text-sm font-semibold text-slate-700">证书信息</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTechnicalOfficialDraft((prev) => ({
+                                ...prev,
+                                certificates: [
+                                  ...prev.certificates,
+                                  {
+                                    id: `CERT${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+                                    sport: '',
+                                    certificateName: '',
+                                    level: '',
+                                    certificateNo: '',
+                                    issuer: '',
+                                    issueDate: '',
+                                    expireDate: '',
+                                  },
+                                ],
+                              }))
+                            }
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                          >
+                            新增证书
+                          </button>
+                        </div>
+                        <div className="space-y-4">
+                          {technicalOfficialDraft.certificates.map((certificate, index) => (
+                            <div
+                              key={certificate.id}
+                              className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm"
+                            >
+                              <div className="mb-4 flex items-center justify-between gap-3">
+                                <p className="text-sm font-semibold text-slate-700">证书 {index + 1}</p>
+                                <button
+                                  type="button"
+                                  disabled={technicalOfficialDraft.certificates.length === 1}
+                                  onClick={() =>
+                                    setTechnicalOfficialDraft((prev) => ({
+                                      ...prev,
+                                      certificates: prev.certificates.filter((item) => item.id !== certificate.id),
+                                    }))
+                                  }
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  删除证书
+                                </button>
+                              </div>
+                              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                {[
+                                  { key: 'sport', label: '运动项目', placeholder: '如：羽毛球' },
+                                  { key: 'certificateName', label: '证书名称', placeholder: '请输入' },
+                                  { key: 'level', label: '证书等级', placeholder: '请输入' },
+                                  { key: 'certificateNo', label: '证书编号', placeholder: '请输入' },
+                                  { key: 'issuer', label: '发证单位', placeholder: '请输入' },
+                                  { key: 'issueDate', label: '发证日期', placeholder: '', type: 'date' },
+                                  { key: 'expireDate', label: '有效期', placeholder: '', type: 'date' },
+                                ].map((field) => (
+                                  <label key={field.key} className="block space-y-2">
+                                    <span className="text-sm font-medium text-slate-600">{field.label}</span>
+                                    <input
+                                      type={field.type || 'text'}
+                                      value={certificate[field.key as keyof OfficialCertificate] as string}
+                                      onChange={(event) =>
+                                        setTechnicalOfficialDraft((prev) => ({
+                                          ...prev,
+                                          certificates: prev.certificates.map((item) =>
+                                            item.id === certificate.id
+                                              ? { ...item, [field.key]: event.target.value }
+                                              : item
+                                          ),
+                                        }))
+                                      }
+                                      placeholder={field.placeholder}
+                                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Info className="h-4 w-4 text-indigo-500" />
+                          <p className="text-sm font-semibold text-slate-700">审核备注</p>
+                        </div>
+                        <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                          <textarea
+                            value={technicalOfficialDraft.reviewRemark}
+                            onChange={(event) =>
+                              setTechnicalOfficialDraft((prev) => ({ ...prev, reviewRemark: event.target.value }))
+                            }
+                            rows={4}
+                            placeholder="可填写审核意见或档案备注"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )
+            ) : adminActiveMenu === 'target-list' ? (
+              targetListPageMode === 'list' ? (
+                <div className="mx-auto w-full max-w-7xl min-w-0">
+                  <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <Users className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">目标清单</h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            统一维护可复用的选手清单，后续可在赛事报名规则中按白名单或黑名单方式引用。
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={openCreateTargetList}
+                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                      >
+                        新建清单
+                      </button>
+                    </div>
+
+                    <div className="border-b border-slate-100 px-8 py-5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="relative min-w-[260px]">
+                          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={targetListSearchDraft}
+                            onChange={(event) => setTargetListSearchDraft(event.target.value)}
+                            placeholder="按清单名称检索"
+                            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </div>
+                        <button
+                          onClick={applyTargetListSearch}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          筛选
+                        </button>
+                        <button
+                          onClick={resetTargetListSearch}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          重置
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-w-full overflow-x-auto">
+                      <table className="w-full border-collapse text-left">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-white">
+                            <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">目标清单名称</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">数量</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">最新更新</th>
+                            <th className="px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {pagedTargetLists.length > 0 ? (
+                            pagedTargetLists.map((list) => (
+                              <tr key={list.id} className="align-top transition-colors hover:bg-slate-50/60">
+                                <td className="px-8 py-6">
+                                  <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{list.name}</p>
+                                  <p className="mt-2 max-w-xl text-sm leading-7 text-slate-500">{list.description}</p>
+                                </td>
+                                <td className="px-6 py-6">
+                                  <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
+                                    {list.members.length} 人
+                                  </span>
+                                </td>
+                                <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{list.updatedAt}</td>
+                                <td className="px-8 py-6">
+                                  <div className="flex justify-end gap-2 whitespace-nowrap">
+                                    <button
+                                      onClick={() => openManageTargetList(list.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-600 transition-all hover:text-emerald-700"
+                                    >
+                                      <Users className="h-4 w-4" />
+                                      清单管理
+                                    </button>
+                                    <button
+                                      onClick={() => openEditTargetList(list.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
+                                    >
+                                      <PencilLine className="h-4 w-4" />
+                                      编辑
+                                    </button>
+                                    <button
+                                      onClick={() => deleteTargetList(list.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      删除
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={4} className="px-8 py-16 text-center text-sm text-slate-500">
+                                暂无符合条件的目标清单，试试调整检索条件后再查看。
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <TablePagination
+                      total={filteredTargetLists.length}
+                      page={normalizedTargetListPage}
+                      pageSize={targetListPageSize}
+                      onPageChange={setTargetListPage}
+                      onPageSizeChange={(size) => {
+                        setTargetListPageSize(size);
+                        setTargetListPage(1);
+                      }}
+                      itemLabel="张清单"
+                      compact
+                    />
+                  </section>
+
+                  <AnimatePresence>
+                    {targetListEditorMode && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm"
+                      >
+                        <motion.div
+                          initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                          className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10"
+                        >
+                          <div className="flex items-center justify-between border-b border-slate-100 px-8 py-6">
+                            <div>
+                              <h3 className="text-lg font-bold text-slate-900">
+                                {targetListEditorMode === 'create' ? '新建目标清单' : '编辑目标清单'}
+                              </h3>
+                              <p className="mt-1 text-sm text-slate-500">
+                                维护一张可复用的选手清单，后续可在赛事里作为白名单或黑名单引用。
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => setTargetListEditorMode(null)}
+                              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="space-y-5 px-8 py-8">
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">清单名称</span>
+                              <input
+                                value={targetListDraft.name}
+                                onChange={(event) =>
+                                  setTargetListDraft((prev) => ({ ...prev, name: event.target.value }))
+                                }
+                                placeholder="请输入清单名称"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">清单说明</span>
+                              <textarea
+                                value={targetListDraft.description}
+                                onChange={(event) =>
+                                  setTargetListDraft((prev) => ({ ...prev, description: event.target.value }))
+                                }
+                                rows={4}
+                                placeholder="说明这张清单的适用场景"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-8 py-5">
+                            <button
+                              onClick={() => setTargetListEditorMode(null)}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={saveTargetList}
+                              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="mx-auto w-full max-w-7xl min-w-0 space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <button
+                      onClick={() => setTargetListPageMode('list')}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      返回列表
+                    </button>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={openCreateTargetListMember}
+                        className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                      >
+                        新增成员
+                      </button>
+                      <button
+                        onClick={importTargetListMembers}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        <Upload className="h-4 w-4" />
+                        导入
+                      </button>
+                      <button
+                        onClick={exportTargetListMembers}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        <Download className="h-4 w-4" />
+                        导出
+                      </button>
+                      <button
+                        onClick={clearTargetListMembers}
+                        className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-600 transition-all hover:border-rose-300 hover:text-rose-700"
+                      >
+                        清空
+                      </button>
+                    </div>
+                  </div>
+
+                  {activeTargetList ? (
+                    <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                      <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                            <UserCheck className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-900">{activeTargetList.name}</h3>
+                            <p className="mt-1 text-sm text-slate-500">{activeTargetList.description}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="rounded-full bg-indigo-50 px-4 py-2 text-xs font-semibold text-indigo-600">
+                            当前共 {activeTargetList.members.length} 位成员
+                          </span>
+                          <span className="rounded-full bg-white px-4 py-2 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+                            最近更新 {activeTargetList.updatedAt}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="border-b border-slate-100 px-8 py-5">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="relative min-w-[320px]">
+                            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              value={targetListMemberSearchDraft}
+                              onChange={(event) => setTargetListMemberSearchDraft(event.target.value)}
+                              placeholder="按选手姓名/手机号/证件号码检索"
+                              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </div>
+                          <button
+                            onClick={applyTargetListMemberSearch}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                          >
+                            筛选
+                          </button>
+                          <button
+                            onClick={resetTargetListMemberSearch}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                          >
+                            重置
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-w-full overflow-x-auto">
+                        <table className="w-full border-collapse text-left">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-white">
+                              <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">选手姓名</th>
+                              <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">手机号</th>
+                              <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">证件类型</th>
+                              <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">证件号码</th>
+                              <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">最新更新</th>
+                              <th className="px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">操作</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {pagedTargetListMembers.length > 0 ? (
+                              pagedTargetListMembers.map((member) => (
+                                <tr key={member.id} className="align-top transition-colors hover:bg-slate-50/60">
+                                  <td className="px-8 py-6 text-sm font-semibold text-slate-900 whitespace-nowrap">
+                                    {member.playerName}
+                                  </td>
+                                  <td className="px-6 py-6 text-sm text-slate-600 whitespace-nowrap">
+                                    {member.phone || '未填写'}
+                                  </td>
+                                  <td className="px-6 py-6 text-sm text-slate-600 whitespace-nowrap">{member.idType}</td>
+                                  <td className="px-6 py-6 text-sm text-slate-600 whitespace-nowrap">
+                                    {maskIdNumber(member.idNumber)}
+                                  </td>
+                                  <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{member.updatedAt}</td>
+                                  <td className="px-8 py-6">
+                                    <div className="flex justify-end gap-2 whitespace-nowrap">
+                                      <button
+                                        onClick={() => openEditTargetListMember(member.id)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
+                                      >
+                                        <PencilLine className="h-4 w-4" />
+                                        编辑
+                                      </button>
+                                      <button
+                                        onClick={() => deleteTargetListMember(member.id)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                        删除
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="px-8 py-16 text-center text-sm text-slate-500">
+                                  当前清单暂无符合条件的成员记录，试试调整检索条件后再查看。
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <TablePagination
+                        total={filteredTargetListMembers.length}
+                        page={normalizedTargetListMemberPage}
+                        pageSize={targetListMemberPageSize}
+                        onPageChange={setTargetListMemberPage}
+                        onPageSizeChange={(size) => {
+                          setTargetListMemberPageSize(size);
+                          setTargetListMemberPage(1);
+                        }}
+                        itemLabel="位成员"
+                        compact
+                      />
+                    </section>
+                  ) : (
+                    <section className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-8 py-16 text-center">
+                      <p className="text-sm font-semibold text-slate-700">当前没有可管理的目标清单</p>
+                      <p className="mt-3 text-sm leading-7 text-slate-500">
+                        你可以先返回列表页创建一张目标清单，再继续维护具体成员。
+                      </p>
+                    </section>
+                  )}
+
+                  <AnimatePresence>
+                    {targetListMemberEditorMode && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm"
+                      >
+                        <motion.div
+                          initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                          className="w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10"
+                        >
+                          <div className="flex items-center justify-between border-b border-slate-100 px-8 py-6">
+                            <div>
+                              <h3 className="text-lg font-bold text-slate-900">
+                                {targetListMemberEditorMode === 'create' ? '新增清单成员' : '编辑清单成员'}
+                              </h3>
+                              <p className="mt-1 text-sm text-slate-500">
+                                维护选手的姓名、手机号与证件信息，用于后续赛事报名校验。
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => setTargetListMemberEditorMode(null)}
+                              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="grid gap-5 px-8 py-8 md:grid-cols-2">
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">选手姓名</span>
+                              <input
+                                value={targetListMemberDraft.playerName}
+                                onChange={(event) =>
+                                  setTargetListMemberDraft((prev) => ({ ...prev, playerName: event.target.value }))
+                                }
+                                placeholder="请输入"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">手机号</span>
+                              <input
+                                value={targetListMemberDraft.phone}
+                                onChange={(event) =>
+                                  setTargetListMemberDraft((prev) => ({ ...prev, phone: event.target.value }))
+                                }
+                                placeholder="请输入"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">证件类型</span>
+                              <select
+                                value={targetListMemberDraft.idType}
+                                onChange={(event) =>
+                                  setTargetListMemberDraft((prev) => ({
+                                    ...prev,
+                                    idType: event.target.value as TargetListMemberRow['idType'],
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              >
+                                <option value="身份证">身份证</option>
+                                <option value="护照">护照</option>
+                                <option value="港澳居民来往内地通行证">港澳居民来往内地通行证</option>
+                              </select>
+                            </label>
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">证件号码</span>
+                              <input
+                                value={targetListMemberDraft.idNumber}
+                                onChange={(event) =>
+                                  setTargetListMemberDraft((prev) => ({ ...prev, idNumber: event.target.value }))
+                                }
+                                placeholder="请输入"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-8 py-5">
+                            <button
+                              onClick={() => setTargetListMemberEditorMode(null)}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={saveTargetListMember}
+                              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )
+            ) : adminActiveMenu === 'registration-template' ? (
+              registrationTemplatePageMode === 'list' ? (
+                <div className="mx-auto w-full max-w-7xl min-w-0">
+                  <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <ClipboardList className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">报名模板</h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            统一维护用户报名时需要填写的字段，支持从选手档案映射基础资料，并补充赛事自定义信息。
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={openCreateRegistrationTemplate}
+                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                      >
+                        新建模板
+                      </button>
+                    </div>
+
+                    <div className="border-b border-slate-100 px-8 py-5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="relative min-w-[260px]">
+                          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={registrationTemplateSearchDraft}
+                            onChange={(event) => setRegistrationTemplateSearchDraft(event.target.value)}
+                            placeholder="按模板名称或说明检索"
+                            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </div>
+                        <button
+                          onClick={applyRegistrationTemplateSearch}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          筛选
+                        </button>
+                        <button
+                          onClick={resetRegistrationTemplateSearch}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          重置
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-w-full overflow-x-auto">
+                      <table className="w-full border-collapse text-left">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-white">
+                            <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">模板ID</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">模板名称</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">模板说明</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">字段数量</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">最近更新</th>
+                            <th className="px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {pagedRegistrationTemplates.length > 0 ? (
+                            pagedRegistrationTemplates.map((template) => (
+                              <tr key={template.id} className="align-top transition-colors hover:bg-slate-50/60">
+                                <td className="px-8 py-6 text-sm font-medium text-slate-500 whitespace-nowrap">{template.id}</td>
+                                <td className="px-6 py-6">
+                                  <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{template.name}</p>
+                                </td>
+                                <td className="px-6 py-6 text-sm leading-7 text-slate-600">{template.description}</td>
+                                <td className="px-6 py-6">
+                                  <span className="inline-flex whitespace-nowrap rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
+                                    {template.fields.length} 个字段
+                                  </span>
+                                </td>
+                                <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{template.updatedAt}</td>
+                                <td className="px-8 py-6">
+                                  <div className="flex justify-end gap-2 whitespace-nowrap">
+                                    <button
+                                      onClick={() => openEditRegistrationTemplate(template.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
+                                    >
+                                      <PencilLine className="h-4 w-4" />
+                                      编辑
+                                    </button>
+                                    <button
+                                      onClick={() => duplicateRegistrationTemplate(template.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-600 transition-all hover:text-violet-700"
+                                    >
+                                      <ClipboardList className="h-4 w-4" />
+                                      复制
+                                    </button>
+                                    <button
+                                      onClick={() => deleteRegistrationTemplate(template.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      删除
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="px-8 py-16 text-center text-sm text-slate-500">
+                                暂无符合条件的报名模板，试试调整检索条件后再查看。
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <TablePagination
+                      total={filteredRegistrationTemplates.length}
+                      page={normalizedRegistrationTemplatePage}
+                      pageSize={registrationTemplatePageSize}
+                      onPageChange={setRegistrationTemplatePage}
+                      onPageSizeChange={(size) => {
+                        setRegistrationTemplatePageSize(size);
+                        setRegistrationTemplatePage(1);
+                      }}
+                      itemLabel="个模板"
+                      compact
+                    />
+                  </section>
+                </div>
+              ) : (
+                <div className="mx-auto w-full max-w-7xl min-w-0 space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <button
+                      onClick={() => setRegistrationTemplatePageMode('list')}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      返回列表
+                    </button>
+                    <button
+                      onClick={saveRegistrationTemplate}
+                      className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                    >
+                      保存
+                    </button>
+                  </div>
+
+                  <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-8 py-6">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <ClipboardList className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">报名模板配置</h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            通过选手档案映射字段和自定义字段组合出报名表，减少用户重复录入基础资料。
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-8 px-8 py-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+                      <div className="space-y-8 min-w-0">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-indigo-500" />
+                            <p className="text-sm font-semibold text-slate-700">模板基础信息</p>
+                          </div>
+                          <div className="space-y-5 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                            <label className="block max-w-3xl space-y-2">
+                              <span className="text-sm font-medium text-slate-600">模板名称</span>
+                              <input
+                                value={registrationTemplateDraft.name}
+                                onChange={(event) =>
+                                  setRegistrationTemplateDraft((prev) => ({ ...prev, name: event.target.value }))
+                                }
+                                placeholder="请输入模板名称"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                            <label className="block max-w-4xl space-y-2">
+                              <span className="text-sm font-medium text-slate-600">模板说明</span>
+                              <textarea
+                                value={registrationTemplateDraft.description}
+                                onChange={(event) =>
+                                  setRegistrationTemplateDraft((prev) => ({ ...prev, description: event.target.value }))
+                                }
+                                placeholder="说明这个模板适用于什么报名场景"
+                                rows={4}
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <Database className="h-4 w-4 text-indigo-500" />
+                              <p className="text-sm font-semibold text-slate-700">模板字段配置</p>
+                            </div>
+                            <button
+                              onClick={addCustomFieldToTemplate}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              新增自定义字段
+                            </button>
+                          </div>
+                          <div className="space-y-6 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                            <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
+                              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-slate-700">从选手档案添加字段</p>
+                                <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+                                  已选 {selectedRegistrationProfileKeys.length} 个档案字段
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-3">
+                                {REGISTRATION_TEMPLATE_PROFILE_FIELDS.map((fieldMeta) => {
+                                  const isSelected = selectedRegistrationProfileKeys.includes(fieldMeta.key);
+                                  return (
+                                    <button
+                                      key={fieldMeta.key}
+                                      type="button"
+                                      onClick={() => addProfileFieldToTemplate(fieldMeta.key)}
+                                      disabled={isSelected}
+                                      className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                                        isSelected
+                                          ? 'cursor-not-allowed border border-indigo-100 bg-indigo-50 text-indigo-400'
+                                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {fieldMeta.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="space-y-4">
+                              {registrationTemplateDraft.fields.length > 0 ? (
+                                registrationTemplateDraft.fields.map((field, index) => (
+                                  <div
+                                    key={field.id}
+                                    className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm"
+                                  >
+                                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-indigo-600 px-2 text-xs font-bold text-white">
+                                          {index + 1}
+                                        </span>
+                                        <span
+                                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                            field.source === 'profile'
+                                              ? 'bg-indigo-50 text-indigo-600'
+                                              : 'bg-emerald-50 text-emerald-600'
+                                          }`}
+                                        >
+                                          {field.source === 'profile' ? '档案映射字段' : '自定义字段'}
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap justify-end gap-2">
+                                        <button
+                                          type="button"
+                                          disabled={index === 0}
+                                          onClick={() => moveRegistrationTemplateField(field.id, 'up')}
+                                          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600 transition-all hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                          <ArrowUp className="h-4 w-4" />
+                                          上移
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={index === registrationTemplateDraft.fields.length - 1}
+                                          onClick={() => moveRegistrationTemplateField(field.id, 'down')}
+                                          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600 transition-all hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                          <ArrowDown className="h-4 w-4" />
+                                          下移
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => removeRegistrationTemplateField(field.id)}
+                                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                          删除
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
+                                      <div className="space-y-5">
+                                        <label className="block space-y-2">
+                                          <span className="text-sm font-medium text-slate-600">字段名称</span>
+                                          <input
+                                            value={field.label}
+                                            onChange={(event) =>
+                                              updateRegistrationTemplateField(field.id, (current) => ({
+                                                ...current,
+                                                label: event.target.value,
+                                              }))
+                                            }
+                                            placeholder="请输入字段名称"
+                                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                                          />
+                                        </label>
+                                        <div className="grid gap-5 md:grid-cols-2">
+                                          <label className="block space-y-2">
+                                            <span className="text-sm font-medium text-slate-600">字段类型</span>
+                                            {field.source === 'profile' ? (
+                                              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700">
+                                                {getRegistrationTemplateFieldTypeLabel(field.fieldType)}
+                                              </div>
+                                            ) : (
+                                              <select
+                                                value={field.fieldType}
+                                                onChange={(event) =>
+                                                  updateRegistrationTemplateField(field.id, (current) => ({
+                                                    ...current,
+                                                    fieldType: event.target.value as RegistrationTemplateFieldType,
+                                                    options:
+                                                      event.target.value === 'select' ? current.options : [],
+                                                  }))
+                                                }
+                                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                                              >
+                                                <option value="text">单行文本</option>
+                                                <option value="phone">手机号</option>
+                                                <option value="date">日期</option>
+                                                <option value="select">单选</option>
+                                              </select>
+                                            )}
+                                          </label>
+                                          {field.source === 'profile' && field.profileKey ? (
+                                            <div className="space-y-2">
+                                              <span className="text-sm font-medium text-slate-600">映射字段</span>
+                                              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700">
+                                                {getRegistrationTemplateProfileFieldMeta(field.profileKey).label}
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="space-y-2">
+                                              <span className="text-sm font-medium text-slate-600">映射字段</span>
+                                              <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-400">
+                                                自定义字段无需映射
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <label className="block space-y-2">
+                                          <span className="text-sm font-medium text-slate-600">占位提示</span>
+                                          <input
+                                            value={field.placeholder}
+                                            onChange={(event) =>
+                                              updateRegistrationTemplateField(field.id, (current) => ({
+                                                ...current,
+                                                placeholder: event.target.value,
+                                              }))
+                                            }
+                                            placeholder="请输入占位提示"
+                                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                                          />
+                                        </label>
+                                        {field.fieldType === 'select' && (
+                                          <label className="block space-y-2">
+                                            <span className="text-sm font-medium text-slate-600">选项值</span>
+                                            <input
+                                              value={field.options.join('，')}
+                                              onChange={(event) =>
+                                                updateRegistrationTemplateField(field.id, (current) => ({
+                                                  ...current,
+                                                  options: event.target.value
+                                                    .split(/[，,]/)
+                                                    .map((item) => item.trim())
+                                                    .filter(Boolean),
+                                                }))
+                                              }
+                                              placeholder="多个选项请用逗号分隔"
+                                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                                            />
+                                          </label>
+                                        )}
+                                      </div>
+
+                                      <div className="pt-1">
+                                        <p className="text-sm font-medium text-slate-600">字段行为</p>
+                                        <div className="mt-3 space-y-3">
+                                          {[
+                                            {
+                                              key: 'required',
+                                              label: '必填',
+                                              checked: field.required,
+                                            },
+                                            {
+                                              key: 'editable',
+                                              label: '报名时可修改',
+                                              checked: field.editable,
+                                            },
+                                            {
+                                              key: 'enabled',
+                                              label: '启用字段',
+                                              checked: field.enabled,
+                                            },
+                                          ].map((toggleItem) => (
+                                            <button
+                                              key={toggleItem.key}
+                                              type="button"
+                                              onClick={() =>
+                                                updateRegistrationTemplateField(field.id, (current) => ({
+                                                  ...current,
+                                                  [toggleItem.key]: !current[toggleItem.key as keyof RegistrationTemplateField],
+                                                }))
+                                              }
+                                              className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition-all ${
+                                                toggleItem.checked
+                                                  ? 'border border-indigo-200 bg-indigo-50 text-indigo-700'
+                                                  : 'border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                                              }`}
+                                            >
+                                              <span>{toggleItem.label}</span>
+                                              <span
+                                                className={`inline-flex h-6 min-w-[44px] items-center rounded-full p-1 transition-all ${
+                                                  toggleItem.checked ? 'bg-indigo-600 justify-end' : 'bg-slate-300 justify-start'
+                                                }`}
+                                              >
+                                                <span className="h-4 w-4 rounded-full bg-white shadow-sm" />
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+                                  当前模板还没有字段，请先从选手档案添加字段，或新增自定义字段。
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <aside className="xl:sticky xl:top-6 self-start">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <LayoutDashboard className="h-4 w-4 text-indigo-500" />
+                            <p className="text-sm font-semibold text-slate-700">用户侧移动端预览</p>
+                          </div>
+                          <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5 shadow-sm">
+                            <div className="mx-auto w-[320px] rounded-[36px] bg-slate-900 p-3 shadow-[0_20px_50px_-18px_rgba(15,23,42,0.45)]">
+                              <div className="overflow-hidden rounded-[28px] bg-white">
+                                <div className="bg-gradient-to-br from-indigo-600 via-indigo-500 to-sky-500 px-5 pb-6 pt-5 text-white">
+                                  <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-white/35" />
+                                  <p className="text-xs font-medium text-white/75">赛事报名</p>
+                                  <h4 className="mt-2 text-xl font-bold leading-tight">
+                                    {registrationTemplateDraft.name || '报名模板名称'}
+                                  </h4>
+                                  <p className="mt-2 text-sm leading-6 text-white/85">
+                                    {registrationTemplateDraft.description || '这里会展示模板说明，帮助用户理解需要填写哪些报名信息。'}
+                                  </p>
+                                </div>
+
+                                <div className="max-h-[560px] space-y-4 overflow-y-auto px-4 py-5">
+                                  <div className="rounded-[20px] border border-indigo-100 bg-indigo-50 px-4 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-400">
+                                      选手档案
+                                    </p>
+                                    <p className="mt-2 text-sm font-semibold text-slate-800">从我的选手库中选择报名人</p>
+                                    <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-500 ring-1 ring-indigo-100">
+                                      已选择常用选手档案
+                                    </div>
+                                  </div>
+
+                                  {registrationTemplatePreviewFields.length > 0 ? (
+                                    registrationTemplatePreviewFields.map((field) => (
+                                      <div
+                                        key={`preview-mobile-${field.id}`}
+                                        className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm"
+                                      >
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <p className="text-sm font-semibold text-slate-800">{field.label}</p>
+                                          {field.required && (
+                                            <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-500">
+                                              必填
+                                            </span>
+                                          )}
+                                          <span
+                                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                                              field.source === 'profile'
+                                                ? 'bg-indigo-50 text-indigo-500'
+                                                : 'bg-emerald-50 text-emerald-500'
+                                            }`}
+                                          >
+                                            {field.source === 'profile' ? '档案映射' : '自定义'}
+                                          </span>
+                                        </div>
+                                        <div className="mt-3">
+                                          {field.fieldType === 'select' ? (
+                                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-400">
+                                              {field.options.length > 0 ? `请选择：${field.options.join(' / ')}` : '请选择'}
+                                            </div>
+                                          ) : (
+                                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-400">
+                                              {field.placeholder || '请输入'}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="rounded-[22px] border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
+                                      当前没有启用字段，移动端预览会在添加字段后展示。
+                                    </div>
+                                  )}
+
+                                  <div className="rounded-[22px] border border-emerald-100 bg-emerald-50 px-4 py-4">
+                                    <p className="text-sm font-semibold text-emerald-700">提交效果</p>
+                                    <p className="mt-2 text-sm leading-6 text-emerald-600">
+                                      用户确认档案映射信息并补充自定义字段后，即可提交本次报名表。
+                                    </p>
+                                    <button
+                                      type="button"
+                                      className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-100"
+                                    >
+                                      提交报名
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </aside>
+                    </div>
                   </section>
                 </div>
               )

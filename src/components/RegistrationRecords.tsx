@@ -961,6 +961,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
               setOrdersPage(1);
             }}
             itemLabel="笔订单"
+            compact
           />
         </div>
       </div>
@@ -1072,6 +1073,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
               setProjectSummaryPage(1);
             }}
             itemLabel="个项目"
+            compact
           />
         </div>
       </div>
@@ -1199,6 +1201,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
               setParticipantsPage(1);
             }}
             itemLabel="位选手"
+            compact
           />
         </div>
       </div>
@@ -1359,6 +1362,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
               setTeamsPage(1);
             }}
             itemLabel="支队伍"
+            compact
           />
         </div>
       </div>

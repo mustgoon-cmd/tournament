@@ -454,32 +454,32 @@ export const RegistrationProjects: React.FC = () => {
       {/* Table Content */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-sm text-left">
+          <table className="min-w-[1520px] w-full text-sm text-left">
             <thead className="text-slate-500 bg-slate-50/50 border-b border-slate-100">
               <tr>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">项目名称</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">简称</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">代码</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">项目名称</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">简称</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">代码</th>
                 {activeTab === 'single' ? (
                   <>
-                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">基础报名费</th>
-                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">押金</th>
-                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">席位限制</th>
-                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">需加入队伍</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">基础报名费</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">押金</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">席位限制</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">需加入队伍</th>
                   </>
                 ) : (
                   <>
-                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">团队规模</th>
-                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">席位限制</th>
-                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">基础报名费</th>
-                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">押金</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">团队规模</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">席位限制</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">基础报名费</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">押金</th>
                   </>
                 )}
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">限制规则</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">关联报名模板</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">排序</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">状态</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap text-right">操作</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">限制规则</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">关联报名模板</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">排序</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap">状态</th>
+                <th className="sticky right-0 z-10 w-[220px] bg-slate-50 px-6 py-4 text-xs font-bold uppercase tracking-wider whitespace-nowrap text-right shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -492,7 +492,7 @@ export const RegistrationProjects: React.FC = () => {
               ) : (
                 pagedProjects.map(p => (
                   <React.Fragment key={p.id}>
-                    <tr className="hover:bg-slate-50/80 transition-colors group">
+                    <tr className="hover:bg-slate-50 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTab === 'single' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
@@ -568,28 +568,31 @@ export const RegistrationProjects: React.FC = () => {
                           {p.status === 'active' ? '启用' : '禁用'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <td className="sticky right-0 z-10 w-[220px] bg-white px-6 py-4 text-right whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50">
+                        <div className="flex flex-nowrap justify-end gap-2">
                           <button 
                             onClick={() => {
                               setEditingProject(p);
                               setIsModalOpen(true);
                             }}
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
                           >
                             <Edit3 className="w-4 h-4" />
+                            编辑
                           </button>
                           <button 
                             onClick={() => handleCopy(p)}
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-all hover:text-slate-700"
                           >
                             <Copy className="w-4 h-4" />
+                            复制
                           </button>
                           <button 
                             onClick={() => handleDelete(p.id)}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
                           >
                             <Trash2 className="w-4 h-4" />
+                            删除
                           </button>
                         </div>
                       </td>
@@ -638,6 +641,7 @@ export const RegistrationProjects: React.FC = () => {
             setCurrentPage(1);
           }}
           itemLabel="个项目"
+          compact
         />
       </div>
         </div>

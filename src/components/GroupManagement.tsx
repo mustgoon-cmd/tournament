@@ -10,6 +10,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
+import { TablePagination } from './TablePagination';
 
 type DateRuleOperator = 'on_or_after' | 'on_or_before' | 'between';
 type DateRuleMode = 'fixed' | 'dynamic';
@@ -196,6 +197,8 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
   const [groups, setGroups] = useState<GroupDefinition[]>(INITIAL_GROUPS);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [selectedGroupId, setSelectedGroupId] = useState(INITIAL_GROUPS[0].id);
   const [selectedValueId, setSelectedValueId] = useState(INITIAL_GROUPS[0].values[0].id);
 
@@ -204,14 +207,19 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
     if (!keyword) return groups;
     return groups.filter((group) => group.name.toLowerCase().includes(keyword));
   }, [groups, searchQuery]);
+  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
+  const normalizedPage = Math.min(currentPage, totalPages);
+  const pagedGroups = filteredGroups.slice((normalizedPage - 1) * pageSize, normalizedPage * pageSize);
 
   const applySearch = () => {
     setSearchQuery(searchDraft);
+    setCurrentPage(1);
   };
 
   const resetSearch = () => {
     setSearchDraft('');
     setSearchQuery('');
+    setCurrentPage(1);
   };
 
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0];
@@ -359,12 +367,12 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
                   <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">组别说明</th>
                   <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">组别值</th>
                   <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">创建时间</th>
-                  <th className="px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">操作</th>
+                  <th className="sticky right-0 z-10 bg-white px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredGroups.length > 0 ? (
-                  filteredGroups.map((group) => (
+                {pagedGroups.length > 0 ? (
+                  pagedGroups.map((group) => (
                     <tr key={group.id} className="align-top transition-colors hover:bg-slate-50/60">
                       <td className="px-8 py-6">
                         <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{group.name}</p>
@@ -387,18 +395,18 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
                         </div>
                       </td>
                       <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{group.createdAt}</td>
-                      <td className="px-8 py-6">
+                      <td className="sticky right-0 z-10 bg-white px-8 py-6 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50/60">
                         <div className="flex flex-nowrap justify-end gap-2">
                           <button
                             onClick={() => openEditor(group.id)}
-                            className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
                           >
                             <PencilLine className="h-4 w-4" />
                             编辑
                           </button>
                           <button
                             onClick={() => handleDeleteGroup(group.id)}
-                            className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-500 transition-all hover:bg-rose-50"
+                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
                           >
                             <Trash2 className="h-4 w-4" />
                             删除
@@ -417,6 +425,18 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
               </tbody>
             </table>
           </div>
+          <TablePagination
+            total={filteredGroups.length}
+            page={normalizedPage}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+            itemLabel="个组别"
+            compact
+          />
         </section>
       </div>
     );
