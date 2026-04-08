@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   CalendarDays,
@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   FileText,
   ChevronRight,
-  Search,
   Wand2,
   Upload,
   Bold,
@@ -50,28 +49,6 @@ const CITY_LIBRARY = [
   },
 ];
 
-const VENUE_LIBRARY = {
-  广州市: [
-    { name: '广州天河体育中心羽毛球馆', address: '广州市天河区天河路299号天河体育中心内' },
-    { name: '广州大学城体育馆', address: '广州市番禺区大学城体育中心北路' },
-    { name: '广州国际体育演艺中心', address: '广州市黄埔区开创大道2666号' },
-  ],
-  深圳市: [
-    { name: '深圳湾体育中心羽毛球馆', address: '深圳市南山区滨海大道3001号' },
-    { name: '龙岗大运中心体育馆', address: '深圳市龙岗区龙翔大道3001号' },
-    { name: '福田体育公园羽毛球馆', address: '深圳市福田区福强路3030号' },
-  ],
-  杭州市: [
-    { name: '杭州黄龙体育中心', address: '杭州市西湖区黄龙路1号' },
-    { name: '拱墅运河体育公园', address: '杭州市拱墅区学院北路与隐秀路交叉口' },
-    { name: '奥体中心综合训练馆', address: '杭州市萧山区博奥路2657号' },
-  ],
-  成都市: [
-    { name: '成都双流体育中心', address: '成都市双流区白河路二段' },
-    { name: '高新体育中心羽毛球馆', address: '成都市高新区盛和一路66号' },
-    { name: '东安湖体育公园多功能馆', address: '成都市龙泉驿区东安街道书土路' },
-  ],
-} as const;
 
 const emptyImage =
   'https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1200&q=80';
@@ -81,31 +58,12 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
   onChange,
   onNavigateToDecoration,
 }) => {
-  const [venueKeyword, setVenueKeyword] = useState('');
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const competitionRulesEditorRef = useRef<HTMLDivElement | null>(null);
 
   const selectedProvince = CITY_LIBRARY.find((item) => item.province === value.province);
   const availableCities = selectedProvince?.cities ?? [];
 
-  const venueSuggestions = useMemo(() => {
-    if (!value.city) {
-      return [];
-    }
-
-    const cityVenues = VENUE_LIBRARY[value.city as keyof typeof VENUE_LIBRARY] ?? [];
-    if (!venueKeyword.trim()) {
-      return cityVenues;
-    }
-
-    return cityVenues.filter((venue) => {
-      const keyword = venueKeyword.trim().toLowerCase();
-      return (
-        venue.name.toLowerCase().includes(keyword) ||
-        venue.address.toLowerCase().includes(keyword)
-      );
-    });
-  }, [value.city, venueKeyword]);
 
   const updateListField = (
     field: 'organizers' | 'coOrganizers',
@@ -160,6 +118,8 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
     value.tournamentName,
     value.tournamentSubtitle,
     value.coverUrl,
+    value.registrationStartTime,
+    value.registrationEndTime,
     value.startTime,
     value.endTime,
     value.organizers.filter(Boolean).join(''),
@@ -190,7 +150,7 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                 <div>
                   <h1 className="text-lg font-bold text-slate-900">基础信息配置</h1>
                   <p className="mt-1 text-xs text-slate-500">
-                    配置赛事对外展示的核心信息，后续主页装修、分享页和报名页都可以直接复用这套基础数据。
+                    请配置赛事对外展示的核心信息。
                   </p>
                 </div>
               </div>
@@ -226,33 +186,52 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                     />
                   </label>
 
-                  <label className="space-y-2 md:col-span-2">
+                  <div className="space-y-3 md:col-span-2">
                     <span className="text-sm font-medium text-slate-600">赛事封面</span>
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-                      <div className="space-y-3">
-                        <div className="relative">
-                          <ImagePlus className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                          <input
-                            type="url"
-                            value={value.coverUrl}
-                            onChange={(e) => onChange({ coverUrl: e.target.value })}
-                            placeholder="粘贴封面图 URL，后续也可替换成上传控件"
-                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-11 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                          />
-                        </div>
-                        <p className="text-xs leading-5 text-slate-400">
-                          当前先用图片链接模拟封面选择器，接平台素材库后可无缝替换成上传/媒体选择。
-                        </p>
-                      </div>
-
-                      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-100">
+                    <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-100">
+                      <div className="relative">
                         <img
                           src={value.coverUrl || emptyImage}
                           alt="赛事封面预览"
                           className="h-40 w-full object-cover"
                         />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/70 via-slate-900/30 to-transparent px-5 py-5">
+                          <div className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-700">
+                            <ImagePlus className="h-3.5 w-3.5 text-indigo-500" />
+                            赛事封面图
+                          </div>
+                        </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-6">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-indigo-500" />
+                  <h2 className="text-sm font-semibold text-slate-700">报名时间</h2>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-600">报名开始时间</span>
+                    <input
+                      type="datetime-local"
+                      value={value.registrationStartTime}
+                      onChange={(e) => onChange({ registrationStartTime: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-600">报名结束时间</span>
+                    <input
+                      type="datetime-local"
+                      value={value.registrationEndTime}
+                      onChange={(e) => onChange({ registrationEndTime: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                    />
                   </label>
                 </div>
               </section>
@@ -260,7 +239,7 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
               <section className="space-y-6">
                 <div className="flex items-center gap-2">
                   <CalendarDays className="h-4 w-4 text-indigo-500" />
-                  <h2 className="text-sm font-semibold text-slate-700">举办时间</h2>
+                  <h2 className="text-sm font-semibold text-slate-700">比赛时间</h2>
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
@@ -350,15 +329,15 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                 </div>
               </section>
 
-              <section className="space-y-5">
+              <section className="space-y-6">
                 <div className="flex items-center gap-2">
                   <MapPinned className="h-4 w-4 text-indigo-500" />
-                  <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">举办城市</h2>
+                  <h2 className="text-sm font-semibold text-slate-700">举办地点</h2>
                 </div>
 
                 <div className="grid gap-5 md:grid-cols-2">
                   <label className="space-y-2 md:col-span-2">
-                    <span className="text-sm font-medium text-slate-700">举办城市</span>
+                    <span className="text-sm font-medium text-slate-600">举办城市</span>
                     <div className="grid grid-cols-2 gap-3">
                       <select
                         value={value.province}
@@ -401,61 +380,9 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                       </select>
                     </div>
                   </label>
-                </div>
-              </section>
 
-              <section className="space-y-5">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-indigo-500" />
-                  <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">举办地点</h2>
-                </div>
-
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">地点选择器</span>
-                    <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-                      <div className="relative">
-                        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          value={venueKeyword}
-                          onChange={(e) => setVenueKeyword(e.target.value)}
-                          placeholder={value.city ? `在 ${value.city} 搜索场馆或地址关键词` : '请先选择举办城市'}
-                          disabled={!value.city}
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-11 py-3 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-                        />
-                      </div>
-
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {venueSuggestions.length > 0 ? (
-                          venueSuggestions.map((venue) => (
-                            <button
-                              key={venue.name}
-                              type="button"
-                              onClick={() =>
-                                onChange({
-                                  venueName: venue.name,
-                                  venueAddress: venue.address,
-                                })
-                              }
-                              className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-medium whitespace-nowrap text-slate-600 ring-1 ring-slate-200 transition hover:text-indigo-600 hover:ring-indigo-200"
-                            >
-                              <MapPin className="h-3.5 w-3.5 text-slate-400 transition group-hover:text-indigo-500" />
-                              {venue.name}
-                            </button>
-                          ))
-                        ) : (
-                          <p className="text-xs leading-5 text-slate-400">
-                            {value.city ? '当前城市暂无匹配的推荐场馆，可直接手动填写详细地址。' : '选择城市后会显示推荐地址。'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">场馆名称</span>
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-600">举办场馆</span>
                     <input
                       type="text"
                       value={value.venueName}
@@ -463,26 +390,28 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                       placeholder="例如：深圳湾体育中心羽毛球馆"
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                     />
-                    </label>
+                  </label>
 
-                    <label className="space-y-2 md:col-span-2">
-                    <span className="text-sm font-medium text-slate-700">详细地址</span>
-                    <textarea
-                      value={value.venueAddress}
-                      onChange={(e) => onChange({ venueAddress: e.target.value })}
-                      placeholder="填写详细地址，支持楼栋、楼层、入口说明等"
-                      rows={4}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                    />
-                    </label>
-                  </div>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-sm font-medium text-slate-600">详细地址</span>
+                    <div className="relative">
+                      <MapPin className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={value.venueAddress}
+                        onChange={(e) => onChange({ venueAddress: e.target.value })}
+                        placeholder="请选择详细地址"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-4 py-3 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                      />
+                    </div>
+                  </label>
                 </div>
               </section>
 
               <section className="space-y-5">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-indigo-500" />
-                  <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">竞赛规程</h2>
+                  <h2 className="text-sm font-semibold text-slate-700">竞赛规程</h2>
                 </div>
 
                 <div className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -528,7 +457,7 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
               <section className="space-y-5">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-indigo-500" />
-                  <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">赛事介绍</h2>
+                  <h2 className="text-sm font-semibold text-slate-700">赛事介绍</h2>
                 </div>
 
                 <label className="block space-y-2">
@@ -546,7 +475,7 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
               <section className="space-y-5">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-indigo-500" />
-                  <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">上传附件</h2>
+                  <h2 className="text-sm font-semibold text-slate-700">上传附件</h2>
                 </div>
 
                 <div className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -621,7 +550,7 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold whitespace-nowrap text-indigo-600">
-                    {completionCount}/14
+                    {completionCount}/16
                   </div>
                   <button
                     type="button"
@@ -655,7 +584,8 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
 
               <div className="space-y-3 rounded-3xl bg-slate-50 p-4">
                 {[
-                  { label: '举办时间', value: value.startTime && value.endTime ? `${value.startTime.replace('T', ' ')} 至 ${value.endTime.replace('T', ' ')}` : '待填写' },
+                  { label: '报名时间', value: value.registrationStartTime && value.registrationEndTime ? `${value.registrationStartTime.replace('T', ' ')} 至 ${value.registrationEndTime.replace('T', ' ')}` : '待填写' },
+                  { label: '比赛时间', value: value.startTime && value.endTime ? `${value.startTime.replace('T', ' ')} 至 ${value.endTime.replace('T', ' ')}` : '待填写' },
                   { label: '主办单位', value: value.organizers.filter(Boolean).join(' / ') || '待填写' },
                   { label: '承办单位', value: value.coOrganizers.filter(Boolean).join(' / ') || '待填写' },
                   { label: '举办城市', value: value.province && value.city ? `${value.province} / ${value.city}` : '待填写' },

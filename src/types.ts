@@ -120,32 +120,35 @@ export interface AdvancedTeamLimitRule {
 
 export interface AdvancedTeamLimitConfig {
   requireGroupOnTeamCreation: boolean;
-  enableGroupSpecificLimits: boolean;
-  defaultMaxMembers?: number;
-  defaultGenderRequirement?: TeamGenderRequirement;
-  groupOverrides: AdvancedTeamLimitRule[];
+  maxMembers?: number;
+  includeLeaderInMemberLimit: boolean;
+  includeCoachInMemberLimit: boolean;
+  leaderRequired: boolean;
+  leaderMustBePlayer: boolean;
+  allowCoach: boolean;
+  coachRequired: boolean;
+  maxCoachCount?: number;
 }
 
 export interface RegistrationConfig {
   startTime: string;
   endTime: string;
   channel: RegistrationChannel;
-  listRestriction: ListRestrictionType;
-  selectedListName?: string;
+  listRestrictions: ListRestrictionType[];
+  selectedWhitelistListIds: string[];
+  selectedBlacklistListIds: string[];
   enableQuota: boolean;
   individualQuota?: number;
   teamQuota?: number;
   quotaBasis: QuotaBasis;
   multiEventDiscount: DiscountRule;
   // Multi-Event Restriction
+  enableMultiEventRestriction: boolean;
   maxEventsPerPerson: number;
   restrictionScope: string[]; // e.g., ['INDIVIDUAL', 'TEAM']
   mutuallyExclusiveGroups: MutuallyExclusiveGroup[];
   enableIndividualRegistration: boolean;
-  enableTeamRosterLimit: boolean;
-  maxMembersPerTeam?: number;
-  maxCoachesPerTeam?: number;
-  teamGenderRequirement?: TeamGenderRequirement;
+  enableTeamSizeLimit: boolean;
   teamLimitConfig: AdvancedTeamLimitConfig;
   ageCalculationBase: AgeCalculationBase;
   ageCalculationMethod: AgeCalculationMethod;
@@ -423,6 +426,8 @@ export interface TournamentBasicInfo {
   tournamentName: string;
   tournamentSubtitle: string;
   coverUrl: string;
+  registrationStartTime: string;
+  registrationEndTime: string;
   startTime: string;
   endTime: string;
   organizers: string[];

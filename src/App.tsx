@@ -64,8 +64,7 @@ import {
   DiscountValueType,
   StackStrategy,
   RuleStatus,
-  MultiEventCalcType,
-  TeamGenderRequirement
+  MultiEventCalcType
 } from './types';
 
 import { RegistrationRecords } from './components/RegistrationRecords';
@@ -83,14 +82,6 @@ import { TablePagination } from './components/TablePagination';
 import { GroupManagement } from './components/GroupManagement';
 import { InteractionHelp } from './components/InteractionHelp';
 import { VenueConfig, ProjectSchedulingConfig, TournamentBasicInfo } from './types';
-
-// Mock list data
-const MOCK_LISTS = [
-  { id: '1', name: '2025年度省赛精英名单', count: 150 },
-  { id: '2', name: '违规禁赛黑名单-2024', count: 12 },
-  { id: '3', name: '特邀嘉宾白名单', count: 45 },
-  { id: '4', name: '青少年组预选名单', count: 200 },
-];
 
 const MOCK_EVENTS = [
   { id: 'e1', name: 'A组男子单打' },
@@ -335,9 +326,16 @@ type TargetListMemberRow = {
   updatedAt: string;
 };
 
+type TargetListGroupRow = {
+  id: string;
+  name: string;
+  updatedAt: string;
+};
+
 type TargetListRow = {
   id: string;
   name: string;
+  groupId: string;
   description: string;
   updatedAt: string;
   members: TargetListMemberRow[];
@@ -346,6 +344,7 @@ type TargetListRow = {
 type TargetListPageMode = 'list' | 'manage';
 type TargetListEditorMode = 'create' | 'edit' | null;
 type TargetListMemberEditorMode = 'create' | 'edit' | null;
+type TargetListGroupEditorMode = 'create' | null;
 
 type InlineInfoTooltipProps = {
   content: string;
@@ -988,6 +987,7 @@ const TARGET_LISTS: TargetListRow[] = [
   {
     id: 'TL001',
     name: '城市公开赛邀请清单',
+    groupId: 'TLG001',
     description: '用于邀请赛与定向开放赛事的优先报名选手集合。',
     updatedAt: '2026-03-30 18:22:10',
     members: [
@@ -1020,6 +1020,7 @@ const TARGET_LISTS: TargetListRow[] = [
   {
     id: 'TL002',
     name: '违规限制清单',
+    groupId: 'TLG003',
     description: '用于限制存在违规历史或禁赛记录的选手参与报名。',
     updatedAt: '2026-03-26 11:45:28',
     members: [
@@ -1044,6 +1045,7 @@ const TARGET_LISTS: TargetListRow[] = [
   {
     id: 'TL003',
     name: '青少年预选通过清单',
+    groupId: 'TLG002',
     description: '用于青少年赛事中，预选通过选手的正式报名资格验证。',
     updatedAt: '2026-03-22 14:30:20',
     members: [
@@ -1080,6 +1082,24 @@ const TARGET_LISTS: TargetListRow[] = [
         updatedAt: '2026-03-19 18:20:14',
       },
     ],
+  },
+];
+
+const TARGET_LIST_GROUPS: TargetListGroupRow[] = [
+  {
+    id: 'TLG001',
+    name: '邀请名单',
+    updatedAt: '2026-03-30 18:22:10',
+  },
+  {
+    id: 'TLG002',
+    name: '资格校验',
+    updatedAt: '2026-03-22 14:30:20',
+  },
+  {
+    id: 'TLG003',
+    name: '限制名单',
+    updatedAt: '2026-03-26 11:45:28',
   },
 ];
 
@@ -1176,6 +1196,7 @@ const createEmptyRegistrationTemplate = (): RegistrationTemplateRow => ({
 const createEmptyTargetList = (): TargetListRow => ({
   id: `TL${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
   name: '',
+  groupId: TARGET_LIST_GROUPS[0]?.id ?? '',
   description: '',
   updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
   members: [],
@@ -1187,6 +1208,12 @@ const createEmptyTargetListMember = (): TargetListMemberRow => ({
   phone: '',
   idType: '身份证',
   idNumber: '',
+  updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+});
+
+const createEmptyTargetListGroup = (): TargetListGroupRow => ({
+  id: `TLG${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  name: '',
   updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
 });
 
@@ -1320,6 +1347,8 @@ export default function App() {
   const [agreementPageMode, setAgreementPageMode] = useState<AgreementManagementPageMode>('list');
   const [agreementDraft, setAgreementDraft] = useState<AgreementManagementRow>(INITIAL_AGREEMENT_TEMPLATES[0]);
   const [targetLists, setTargetLists] = useState<TargetListRow[]>(TARGET_LISTS);
+  const [targetListGroups, setTargetListGroups] = useState<TargetListGroupRow[]>(TARGET_LIST_GROUPS);
+  const [selectedTargetListGroupId, setSelectedTargetListGroupId] = useState<'all' | string>('all');
   const [targetListSearchDraft, setTargetListSearchDraft] = useState('');
   const [targetListSearchQuery, setTargetListSearchQuery] = useState('');
   const [targetListPage, setTargetListPage] = useState(1);
@@ -1328,6 +1357,8 @@ export default function App() {
   const [selectedTargetListId, setSelectedTargetListId] = useState(TARGET_LISTS[0]?.id ?? '');
   const [targetListEditorMode, setTargetListEditorMode] = useState<TargetListEditorMode>(null);
   const [targetListDraft, setTargetListDraft] = useState<TargetListRow>(createEmptyTargetList());
+  const [targetListGroupEditorMode, setTargetListGroupEditorMode] = useState<TargetListGroupEditorMode>(null);
+  const [targetListGroupDraft, setTargetListGroupDraft] = useState<TargetListGroupRow>(createEmptyTargetListGroup());
   const [targetListMemberSearchDraft, setTargetListMemberSearchDraft] = useState('');
   const [targetListMemberSearchQuery, setTargetListMemberSearchQuery] = useState('');
   const [targetListMemberPage, setTargetListMemberPage] = useState(1);
@@ -1360,6 +1391,8 @@ export default function App() {
     tournamentName: '2026 城市羽毛球公开赛',
     tournamentSubtitle: '城市俱乐部联赛暨全民健身系列赛',
     coverUrl: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1200&q=80',
+    registrationStartTime: '2026-03-20T09:00',
+    registrationEndTime: '2026-04-20T18:00',
     startTime: '2026-05-01T09:00',
     endTime: '2026-05-03T18:00',
     organizers: ['深圳市羽毛球协会'],
@@ -1388,65 +1421,32 @@ export default function App() {
     startTime: '2026-03-20T09:00',
     endTime: '2026-04-20T18:00',
     channel: RegistrationChannel.UNLIMITED,
-    listRestriction: ListRestrictionType.NONE,
-    selectedListName: '',
+    listRestrictions: [],
+    selectedWhitelistListIds: [],
+    selectedBlacklistListIds: [],
     enableQuota: true,
     individualQuota: 100,
     teamQuota: 20,
     quotaBasis: QuotaBasis.SEAT,
     multiEventDiscount: INITIAL_MULTI_EVENT_DISCOUNT,
+    enableMultiEventRestriction: true,
     maxEventsPerPerson: 2,
     restrictionScope: ['INDIVIDUAL'],
     mutuallyExclusiveGroups: [
       { id: 'g1', eventIds: ['e1', 'e2'], eventNames: ['A组男子单打', 'A组男子双打'] }
     ],
     enableIndividualRegistration: true,
-    enableTeamRosterLimit: true,
-    maxMembersPerTeam: 12,
-    maxCoachesPerTeam: 1,
-    teamGenderRequirement: {
-      max_male: 6,
-      max_female: 6,
-    },
+    enableTeamSizeLimit: true,
     teamLimitConfig: {
       requireGroupOnTeamCreation: true,
-      enableGroupSpecificLimits: true,
-      defaultMaxMembers: 12,
-      defaultGenderRequirement: {
-        max_male: 6,
-        max_female: 6,
-      },
-      groupOverrides: [
-        {
-          id: 'team-limit-a',
-          groupName: 'A组',
-          enabled: true,
-          maxMembers: 12,
-          genderRequirement: {
-            max_male: 6,
-            max_female: 6,
-          },
-        },
-        {
-          id: 'team-limit-b',
-          groupName: 'B组',
-          enabled: true,
-          maxMembers: 10,
-          genderRequirement: {
-            min_male: 3,
-          },
-        },
-        {
-          id: 'team-limit-u12',
-          groupName: 'U12',
-          enabled: true,
-          maxMembers: 8,
-          genderRequirement: {
-            max_male: 4,
-            max_female: 4,
-          },
-        },
-      ],
+      maxMembers: 12,
+      includeLeaderInMemberLimit: false,
+      includeCoachInMemberLimit: false,
+      leaderRequired: true,
+      leaderMustBePlayer: false,
+      allowCoach: true,
+      coachRequired: false,
+      maxCoachCount: 2,
     },
     ageCalculationBase: AgeCalculationBase.EVENT_START,
     ageCalculationMethod: AgeCalculationMethod.BIRTH_YEAR,
@@ -1458,6 +1458,8 @@ export default function App() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [showListModal, setShowListModal] = useState(false);
+  const [activeListPickerType, setActiveListPickerType] = useState<ListRestrictionType>(ListRestrictionType.WHITELIST);
+  const [activeListPickerGroupId, setActiveListPickerGroupId] = useState<'all' | string>('all');
   const [showRestrictionModal, setShowRestrictionModal] = useState(false);
   const [showAgreementModal, setShowAgreementModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<MutuallyExclusiveGroup | null>(null);
@@ -1468,9 +1470,57 @@ export default function App() {
     setTimeout(() => setIsSaving(false), 1500);
   };
 
-  const selectList = (name: string) => {
-    setConfig({ ...config, selectedListName: name });
-    setShowListModal(false);
+  const toggleRegistrationRestrictionType = (type: ListRestrictionType) => {
+    if (type === ListRestrictionType.NONE) {
+      setConfig((prev) => ({
+        ...prev,
+        listRestrictions: [],
+        selectedWhitelistListIds: [],
+        selectedBlacklistListIds: [],
+      }));
+      return;
+    }
+    setConfig((prev) => {
+      const enabled = prev.listRestrictions.includes(type);
+      return {
+        ...prev,
+        listRestrictions: enabled
+          ? prev.listRestrictions.filter((item) => item !== type)
+          : [...prev.listRestrictions, type],
+      };
+    });
+  };
+
+  const openTargetListPicker = (type: ListRestrictionType) => {
+    setActiveListPickerType(type);
+    setActiveListPickerGroupId('all');
+    setShowListModal(true);
+  };
+
+  const toggleSelectedRestrictionList = (listId: string) => {
+    setConfig((prev) => {
+      const key =
+        activeListPickerType === ListRestrictionType.WHITELIST
+          ? 'selectedWhitelistListIds'
+          : 'selectedBlacklistListIds';
+      const current = prev[key];
+      const next = current.includes(listId)
+        ? current.filter((item) => item !== listId)
+        : [...current, listId];
+      return {
+        ...prev,
+        [key]: next,
+      };
+    });
+  };
+
+  const removeSelectedRestrictionList = (type: ListRestrictionType, listId: string) => {
+    setConfig((prev) => ({
+      ...prev,
+      [type === ListRestrictionType.WHITELIST ? 'selectedWhitelistListIds' : 'selectedBlacklistListIds']: (
+        type === ListRestrictionType.WHITELIST ? prev.selectedWhitelistListIds : prev.selectedBlacklistListIds
+      ).filter((item) => item !== listId),
+    }));
   };
 
   const updateAdvancedTeamLimitConfig = (updates: Partial<RegistrationConfig['teamLimitConfig']>) => {
@@ -1483,44 +1533,22 @@ export default function App() {
     }));
   };
 
-  const updateAdvancedDefaultGenderRequirement = (
-    key: keyof TeamGenderRequirement,
-    enabled: boolean,
-    nextValue?: number
-  ) => {
-    setConfig((prev) => {
-      const currentRequirement = prev.teamLimitConfig.defaultGenderRequirement ?? {};
-      const nextRequirement: TeamGenderRequirement = { ...currentRequirement };
-      if (!enabled) {
-        delete nextRequirement[key];
-      } else {
-        nextRequirement[key] = nextValue ?? currentRequirement[key] ?? 1;
-      }
-
-      return {
-        ...prev,
-        teamLimitConfig: {
-          ...prev.teamLimitConfig,
-          defaultGenderRequirement: nextRequirement,
-        },
-      };
+  const filteredLists = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    return targetLists.filter((list) => {
+      const matchesGroup =
+        activeListPickerGroupId === 'all' || list.groupId === activeListPickerGroupId;
+      if (!keyword) return matchesGroup;
+      const groupName = targetListGroups.find((group) => group.id === list.groupId)?.name ?? '';
+      const matchesKeyword = (
+        list.name.toLowerCase().includes(keyword) ||
+        groupName.toLowerCase().includes(keyword)
+      );
+      return matchesGroup && matchesKeyword;
     });
-  };
-
-  const updateAdvancedGroupOverride = (
-    id: string,
-    updater: (rule: RegistrationConfig['teamLimitConfig']['groupOverrides'][number]) => RegistrationConfig['teamLimitConfig']['groupOverrides'][number]
-  ) => {
-    setConfig((prev) => ({
-      ...prev,
-      teamLimitConfig: {
-        ...prev.teamLimitConfig,
-        groupOverrides: prev.teamLimitConfig.groupOverrides.map((rule) => (rule.id === id ? updater(rule) : rule)),
-      },
-    }));
-  };
-
-  const filteredLists = MOCK_LISTS.filter(l => l.name.includes(searchQuery));
+  }, [activeListPickerGroupId, searchQuery, targetListGroups, targetLists]);
+  const selectedWhitelistLists = targetLists.filter((list) => config.selectedWhitelistListIds.includes(list.id));
+  const selectedBlacklistLists = targetLists.filter((list) => config.selectedBlacklistListIds.includes(list.id));
   const currentViewTitle = VIEW_TITLES[viewMode];
   const currentSectionTitle = VIEW_SECTIONS[viewMode];
   const registrationRuleElevatorItems = [
@@ -1534,12 +1562,12 @@ export default function App() {
     const container = detailContentRef.current;
     if (!container || viewMode !== 'settings') return;
 
-    const scrollTop = container.scrollTop;
+    const containerTop = container.getBoundingClientRect().top;
     let nextActive: typeof activeTab = 'config';
 
     registrationRuleElevatorItems.forEach((item) => {
-      const offsetTop = item.ref.current?.offsetTop ?? 0;
-      if (offsetTop - 180 <= scrollTop) {
+      const rect = item.ref.current?.getBoundingClientRect();
+      if (rect && rect.top - containerTop <= 180) {
         nextActive = item.id;
       }
     });
@@ -1551,13 +1579,12 @@ export default function App() {
 
   const scrollToRegistrationSection = (section: typeof activeTab) => {
     setActiveTab(section);
-    const container = detailContentRef.current;
     const target = registrationRuleElevatorItems.find((item) => item.id === section)?.ref.current;
-    if (!container || !target) return;
+    if (!target) return;
 
-    container.scrollTo({
-      top: Math.max(target.offsetTop - 140, 0),
+    target.scrollIntoView({
       behavior: 'smooth',
+      block: 'start',
     });
   };
 
@@ -1577,8 +1604,8 @@ export default function App() {
           city: basicInfo.city,
           venueName: basicInfo.venueName,
           venueAddress: basicInfo.venueAddress,
-          registrationStartTime: config.startTime,
-          registrationEndTime: config.endTime,
+          registrationStartTime: basicInfo.registrationStartTime,
+          registrationEndTime: basicInfo.registrationEndTime,
           startTime: basicInfo.startTime,
           endTime: basicInfo.endTime,
         }
@@ -1727,15 +1754,30 @@ export default function App() {
   );
   const filteredTargetLists = useMemo(() => {
     const keyword = targetListSearchQuery.trim().toLowerCase();
-    if (!keyword) return targetLists;
-    return targetLists.filter((item) => item.name.toLowerCase().includes(keyword));
-  }, [targetListSearchQuery, targetLists]);
+    return targetLists.filter((item) => {
+      const matchesGroup =
+        selectedTargetListGroupId === 'all' || item.groupId === selectedTargetListGroupId;
+      const matchesKeyword = !keyword || item.name.toLowerCase().includes(keyword);
+      return matchesGroup && matchesKeyword;
+    });
+  }, [selectedTargetListGroupId, targetListSearchQuery, targetLists]);
   const targetListTotalPages = Math.max(1, Math.ceil(filteredTargetLists.length / targetListPageSize));
   const normalizedTargetListPage = Math.min(targetListPage, targetListTotalPages);
   const pagedTargetLists = filteredTargetLists.slice(
     (normalizedTargetListPage - 1) * targetListPageSize,
     normalizedTargetListPage * targetListPageSize
   );
+  const activeTargetListGroup =
+    selectedTargetListGroupId === 'all'
+      ? null
+      : targetListGroups.find((item) => item.id === selectedTargetListGroupId) ?? null;
+  const targetListGroupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    targetLists.forEach((item) => {
+      counts.set(item.groupId, (counts.get(item.groupId) ?? 0) + 1);
+    });
+    return counts;
+  }, [targetLists]);
   const activeTargetList = targetLists.find((item) => item.id === selectedTargetListId) ?? targetLists[0] ?? null;
   const filteredTargetListMembers = useMemo(() => {
     const keyword = targetListMemberSearchQuery.trim().toLowerCase();
@@ -2060,7 +2102,13 @@ export default function App() {
   };
 
   const openCreateTargetList = () => {
-    setTargetListDraft(createEmptyTargetList());
+    setTargetListDraft({
+      ...createEmptyTargetList(),
+      groupId:
+        selectedTargetListGroupId !== 'all'
+          ? selectedTargetListGroupId
+          : targetListGroups[0]?.id ?? '',
+    });
     setTargetListEditorMode('create');
   };
 
@@ -2084,6 +2132,9 @@ export default function App() {
       }
       return [normalizedTargetList, ...prev];
     });
+    if (selectedTargetListGroupId === 'all') {
+      setSelectedTargetListGroupId(normalizedTargetList.groupId);
+    }
     setSelectedTargetListId(normalizedTargetList.id);
     setTargetListEditorMode(null);
   };
@@ -2108,6 +2159,22 @@ export default function App() {
     setTargetListMemberSearchDraft('');
     setTargetListMemberSearchQuery('');
     setTargetListMemberPage(1);
+  };
+
+  const openCreateTargetListGroup = () => {
+    setTargetListGroupDraft(createEmptyTargetListGroup());
+    setTargetListGroupEditorMode('create');
+  };
+
+  const saveTargetListGroup = () => {
+    if (!targetListGroupDraft.name.trim()) return;
+    const normalizedTargetListGroup: TargetListGroupRow = {
+      ...targetListGroupDraft,
+      updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+    };
+    setTargetListGroups((prev) => [normalizedTargetListGroup, ...prev]);
+    setSelectedTargetListGroupId(normalizedTargetListGroup.id);
+    setTargetListGroupEditorMode(null);
   };
 
   const openCreateTargetListMember = () => {
@@ -2480,13 +2547,10 @@ export default function App() {
       city: target.city,
       venueName: target.venueName,
       venueAddress: target.venueAddress,
+      registrationStartTime: target.registrationStartTime,
+      registrationEndTime: target.registrationEndTime,
       startTime: target.startTime,
       endTime: target.endTime,
-    }));
-    setConfig((prev) => ({
-      ...prev,
-      startTime: target.registrationStartTime,
-      endTime: target.registrationEndTime,
     }));
     setAppPage('tournament-detail');
   };
@@ -4917,129 +4981,207 @@ export default function App() {
               )
             ) : adminActiveMenu === 'target-list' ? (
               targetListPageMode === 'list' ? (
-                <div className="mx-auto w-full max-w-7xl min-w-0">
+                <div className="mx-auto w-full max-w-7xl min-w-0 space-y-6">
                   <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
-                    <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
-                          <Users className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-slate-900">目标清单</h3>
-                          <p className="mt-1 text-sm text-slate-500">
-                            统一维护可复用的选手清单，后续可在赛事报名规则中按白名单或黑名单方式引用。
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/70 px-8 py-6">
+                      <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                        <Users className="h-5 w-5" />
                       </div>
-                      <button
-                        onClick={openCreateTargetList}
-                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
-                      >
-                        新建清单
-                      </button>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">目标清单</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          统一维护可复用的选手清单，后续可在赛事报名规则中按白名单或黑名单方式引用。
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="border-b border-slate-100 px-8 py-5">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="relative min-w-[260px]">
-                          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                          <input
-                            type="text"
-                            value={targetListSearchDraft}
-                            onChange={(event) => setTargetListSearchDraft(event.target.value)}
-                            placeholder="按清单名称检索"
-                            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    <div className="flex flex-col gap-6 px-6 py-6 xl:flex-row xl:items-start">
+                      <aside className="w-full xl:w-[240px] xl:flex-none">
+                        <div className="rounded-[24px] border border-slate-200 bg-white shadow-sm">
+                          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">清单分组</p>
+                            </div>
+                            <button
+                              onClick={openCreateTargetListGroup}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              新建分组
+                            </button>
+                          </div>
+                          <div className="space-y-2 p-3">
+                            <button
+                              onClick={() => {
+                                setSelectedTargetListGroupId('all');
+                                setTargetListPage(1);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-medium transition-all ${
+                                selectedTargetListGroupId === 'all'
+                                  ? 'bg-indigo-50 text-indigo-600'
+                                  : 'text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span>全部</span>
+                              <span className="text-xs text-slate-400">{targetLists.length}</span>
+                            </button>
+                            {targetListGroups.map((group) => (
+                              <button
+                                key={group.id}
+                                onClick={() => {
+                                  setSelectedTargetListGroupId(group.id);
+                                  setTargetListPage(1);
+                                }}
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-medium transition-all ${
+                                  selectedTargetListGroupId === group.id
+                                    ? 'bg-indigo-50 text-indigo-600'
+                                    : 'text-slate-600 hover:bg-slate-50'
+                                }`}
+                              >
+                                <span className="truncate">{group.name}</span>
+                                <span className="ml-3 text-xs text-slate-400">
+                                  {targetListGroupCounts.get(group.id) ?? 0}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </aside>
+
+                      <div className="min-w-0 flex-1 space-y-4">
+                        <div className="rounded-[24px] border border-slate-200 bg-white shadow-sm">
+                          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-start xl:justify-between">
+                            <div>
+                              <h4 className="text-xl font-bold text-slate-900">
+                                {activeTargetListGroup ? activeTargetListGroup.name : '全部目标清单'}
+                              </h4>
+                              <p className="mt-1 text-sm text-slate-500">
+                                {activeTargetListGroup
+                                  ? '管理当前分组下的目标清单，并维护可复用的选手集合。'
+                                  : '查看所有目标清单，可按分组筛选后继续管理。'}
+                              </p>
+                            </div>
+                            <button
+                              onClick={openCreateTargetList}
+                              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                            >
+                              新建清单
+                            </button>
+                          </div>
+
+                          <div className="border-b border-slate-100 px-6 py-5">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div className="relative min-w-[260px]">
+                                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <input
+                                  type="text"
+                                  value={targetListSearchDraft}
+                                  onChange={(event) => setTargetListSearchDraft(event.target.value)}
+                                  placeholder="按清单名称检索"
+                                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                                />
+                              </div>
+                              <button
+                                onClick={applyTargetListSearch}
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                              >
+                                筛选
+                              </button>
+                              <button
+                                onClick={resetTargetListSearch}
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                              >
+                                重置
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="max-w-full overflow-x-auto">
+                            <table className="w-full border-collapse text-left">
+                              <thead>
+                                <tr className="border-b border-slate-100 bg-white">
+                                  <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">目标清单名称</th>
+                                  <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">所属分组</th>
+                                  <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">数量</th>
+                                  <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">最新更新</th>
+                                  <th className="px-6 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">操作</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {pagedTargetLists.length > 0 ? (
+                                  pagedTargetLists.map((list) => {
+                                    const group = targetListGroups.find((item) => item.id === list.groupId);
+                                    return (
+                                      <tr key={list.id} className="align-top transition-colors hover:bg-slate-50/60">
+                                        <td className="px-6 py-6">
+                                          <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{list.name}</p>
+                                          <p className="mt-2 max-w-xl text-sm leading-7 text-slate-500">{list.description}</p>
+                                        </td>
+                                        <td className="px-6 py-6 whitespace-nowrap">
+                                          <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                                            {group?.name ?? '未分组'}
+                                          </span>
+                                        </td>
+                                        <td className="px-6 py-6 whitespace-nowrap">
+                                          <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
+                                            {list.members.length} 人
+                                          </span>
+                                        </td>
+                                        <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{list.updatedAt}</td>
+                                        <td className="px-6 py-6">
+                                          <div className="flex justify-end gap-2 whitespace-nowrap">
+                                            <button
+                                              onClick={() => openManageTargetList(list.id)}
+                                              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-600 transition-all hover:text-emerald-700"
+                                            >
+                                              <Users className="h-4 w-4" />
+                                              清单管理
+                                            </button>
+                                            <button
+                                              onClick={() => openEditTargetList(list.id)}
+                                              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
+                                            >
+                                              <PencilLine className="h-4 w-4" />
+                                              编辑
+                                            </button>
+                                            <button
+                                              onClick={() => deleteTargetList(list.id)}
+                                              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                              删除
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                ) : (
+                                  <tr>
+                                    <td colSpan={5} className="px-8 py-16 text-center text-sm text-slate-500">
+                                      暂无符合条件的目标清单，试试调整筛选条件后再查看。
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <TablePagination
+                            total={filteredTargetLists.length}
+                            page={normalizedTargetListPage}
+                            pageSize={targetListPageSize}
+                            onPageChange={setTargetListPage}
+                            onPageSizeChange={(size) => {
+                              setTargetListPageSize(size);
+                              setTargetListPage(1);
+                            }}
+                            itemLabel="张清单"
+                            compact
                           />
                         </div>
-                        <button
-                          onClick={applyTargetListSearch}
-                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
-                        >
-                          筛选
-                        </button>
-                        <button
-                          onClick={resetTargetListSearch}
-                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
-                        >
-                          重置
-                        </button>
                       </div>
                     </div>
-
-                    <div className="max-w-full overflow-x-auto">
-                      <table className="w-full border-collapse text-left">
-                        <thead>
-                          <tr className="border-b border-slate-100 bg-white">
-                            <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">目标清单名称</th>
-                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">数量</th>
-                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">最新更新</th>
-                            <th className="px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">操作</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {pagedTargetLists.length > 0 ? (
-                            pagedTargetLists.map((list) => (
-                              <tr key={list.id} className="align-top transition-colors hover:bg-slate-50/60">
-                                <td className="px-8 py-6">
-                                  <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{list.name}</p>
-                                  <p className="mt-2 max-w-xl text-sm leading-7 text-slate-500">{list.description}</p>
-                                </td>
-                                <td className="px-6 py-6">
-                                  <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
-                                    {list.members.length} 人
-                                  </span>
-                                </td>
-                                <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{list.updatedAt}</td>
-                                <td className="px-8 py-6">
-                                  <div className="flex justify-end gap-2 whitespace-nowrap">
-                                    <button
-                                      onClick={() => openManageTargetList(list.id)}
-                                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-600 transition-all hover:text-emerald-700"
-                                    >
-                                      <Users className="h-4 w-4" />
-                                      清单管理
-                                    </button>
-                                    <button
-                                      onClick={() => openEditTargetList(list.id)}
-                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
-                                    >
-                                      <PencilLine className="h-4 w-4" />
-                                      编辑
-                                    </button>
-                                    <button
-                                      onClick={() => deleteTargetList(list.id)}
-                                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                      删除
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={4} className="px-8 py-16 text-center text-sm text-slate-500">
-                                暂无符合条件的目标清单，试试调整检索条件后再查看。
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <TablePagination
-                      total={filteredTargetLists.length}
-                      page={normalizedTargetListPage}
-                      pageSize={targetListPageSize}
-                      onPageChange={setTargetListPage}
-                      onPageSizeChange={(size) => {
-                        setTargetListPageSize(size);
-                        setTargetListPage(1);
-                      }}
-                      itemLabel="张清单"
-                      compact
-                    />
                   </section>
 
                   <AnimatePresence>
@@ -5074,6 +5216,22 @@ export default function App() {
                           </div>
                           <div className="space-y-5 px-8 py-8">
                             <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">所属分组</span>
+                              <select
+                                value={targetListDraft.groupId}
+                                onChange={(event) =>
+                                  setTargetListDraft((prev) => ({ ...prev, groupId: event.target.value }))
+                                }
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              >
+                                {targetListGroups.map((group) => (
+                                  <option key={group.id} value={group.id}>
+                                    {group.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block space-y-2">
                               <span className="text-sm font-medium text-slate-600">清单名称</span>
                               <input
                                 value={targetListDraft.name}
@@ -5106,6 +5264,66 @@ export default function App() {
                             </button>
                             <button
                               onClick={saveTargetList}
+                              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <AnimatePresence>
+                    {targetListGroupEditorMode && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm"
+                      >
+                        <motion.div
+                          initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                          className="w-full max-w-lg rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10"
+                        >
+                          <div className="flex items-center justify-between border-b border-slate-100 px-8 py-6">
+                            <div>
+                              <h3 className="text-lg font-bold text-slate-900">新建分组</h3>
+                              <p className="mt-1 text-sm text-slate-500">
+                                用于对目标清单进行分类管理，后续新建清单时可直接挂到该分组下。
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => setTargetListGroupEditorMode(null)}
+                              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="space-y-5 px-8 py-8">
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">分组名称</span>
+                              <input
+                                value={targetListGroupDraft.name}
+                                onChange={(event) =>
+                                  setTargetListGroupDraft((prev) => ({ ...prev, name: event.target.value }))
+                                }
+                                placeholder="请输入分组名称"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-8 py-5">
+                            <button
+                              onClick={() => setTargetListGroupEditorMode(null)}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={saveTargetListGroup}
                               className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
                             >
                               保存
@@ -6748,214 +6966,339 @@ export default function App() {
                   </div>
                 </motion.div>
               ) : viewMode === 'settings' ? (
-            <motion.div
-              key="settings-view"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="space-y-8"
-            >
-              <div className="sticky top-6 z-10">
-                <div className="rounded-3xl border border-slate-200 bg-white/95 px-8 py-6 shadow-sm backdrop-blur">
-                  <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-bold text-slate-900">报名规则</h2>
-                        <p className="mt-0.5 text-xs text-slate-500">统一配置赛事的报名限制、队伍限制、兼项限制与协议签约规则。</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 rounded-full bg-slate-100 p-1.5 w-fit">
-                      {registrationRuleElevatorItems.map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => scrollToRegistrationSection(item.id)}
-                          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
-                            activeTab === item.id
-                              ? 'bg-white text-indigo-600 shadow-sm'
-                              : 'text-slate-500 hover:text-slate-800 hover:bg-white/70'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div ref={registrationLimitSectionRef} className="scroll-mt-40 space-y-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              {/* Section: Registration Time */}
-              <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-600" />
-                  <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">报名时间设置</h2>
-                </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                      开始时间
-                      <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                    </label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input 
-                        type="datetime-local" 
-                        value={config.startTime}
-                        onChange={e => setConfig({...config, startTime: e.target.value})}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">结束时间</label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input 
-                        type="datetime-local" 
-                        value={config.endTime}
-                        onChange={e => setConfig({...config, endTime: e.target.value})}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Section: Channel & List Restrictions */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Channel Restriction */}
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                    <LayoutGrid className="w-4 h-4 text-indigo-600" />
-                    <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">报名通道限制</h2>
-                  </div>
-                  <div className="p-6 space-y-3">
-                    {[
-                      { id: RegistrationChannel.UNLIMITED, label: '不限', desc: '所有开放渠道均可报名' },
-                      { id: RegistrationChannel.BACKEND_ONLY, label: '仅后台导入', desc: '仅支持管理员在后台导入名单' }
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setConfig({...config, channel: item.id as RegistrationChannel})}
-                        className={`w-full text-left p-4 rounded-xl border transition-all flex items-start gap-3 ${
-                          config.channel === item.id 
-                          ? 'border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600' 
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                        }`}
-                      >
-                        <div className={`mt-1 w-4 h-4 rounded-full border flex items-center justify-center ${
-                          config.channel === item.id ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
-                        }`}>
-                          {config.channel === item.id && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                <motion.div
+                  key="settings-view"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="space-y-6"
+                >
+                  <div className="rounded-3xl border border-slate-200 bg-white px-8 py-6 shadow-sm">
+                    <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <ShieldCheck className="w-5 h-5" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold">{item.label}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
+                          <h2 className="text-lg font-bold text-slate-900">报名规则</h2>
+                          <p className="mt-0.5 text-sm text-slate-500">统一配置赛事的报名限制、队伍限制、兼项限制与协议签约规则。</p>
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                </section>
+                      </div>
 
-                {/* List Restriction */}
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                    <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">报名名单限制</h2>
-                  </div>
-                  <div className="p-6 space-y-4 flex-1">
-                    <div className="flex p-1 bg-slate-100 rounded-xl">
-                      {[
-                        { id: ListRestrictionType.NONE, label: '不限制' },
-                        { id: ListRestrictionType.WHITELIST, label: '白名单' },
-                        { id: ListRestrictionType.BLACKLIST, label: '黑名单' }
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => setConfig({...config, listRestriction: item.id as ListRestrictionType, selectedListName: ''})}
-                          className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                            config.listRestriction === item.id 
-                            ? 'bg-white text-indigo-600 shadow-sm' 
-                            : 'text-slate-500 hover:text-slate-700'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <AnimatePresence mode="wait">
-                      {config.listRestriction !== ListRestrictionType.NONE ? (
-                        <motion.div
-                          key="list-selector"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className="space-y-3"
-                        >
-                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                            关联目标清单
-                          </label>
-                          
-                          {config.selectedListName ? (
-                            <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between group">
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 bg-white rounded-lg shadow-sm">
-                                  <FileText className="w-4 h-4 text-indigo-600" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-semibold text-indigo-900">{config.selectedListName}</p>
-                                  <p className="text-[10px] text-indigo-400 font-medium">已关联名单</p>
-                                </div>
-                              </div>
-                              <button 
-                                onClick={() => setShowListModal(true)}
-                                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 underline underline-offset-4"
-                              >
-                                更换
-                              </button>
-                            </div>
-                          ) : (
+                      <div className="space-y-2 xl:max-w-[560px] xl:items-end">
+                        <div className="flex flex-wrap gap-2 xl:justify-end">
+                          {registrationRuleElevatorItems.map((item) => (
                             <button
-                              onClick={() => setShowListModal(true)}
-                              className="w-full py-8 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all group"
+                              key={item.id}
+                              onClick={() => scrollToRegistrationSection(item.id)}
+                              className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                                activeTab === item.id
+                                  ? 'bg-indigo-600 text-white shadow-sm'
+                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800'
+                              }`}
                             >
-                              <div className="p-2 bg-slate-50 rounded-full group-hover:bg-indigo-100 transition-colors">
-                                <Plus className="w-5 h-5 text-slate-400 group-hover:text-indigo-600" />
-                              </div>
-                              <p className="text-sm font-medium text-slate-500 group-hover:text-indigo-600">点击关联目标清单</p>
+                              {item.label}
                             </button>
-                          )}
-                        </motion.div>
-                      ) : (
-                        <motion.div
-                          key="no-restriction"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="flex flex-col items-center justify-center py-8 text-slate-400"
-                        >
-                          <Users className="w-8 h-8 opacity-20 mb-2" />
-                          <p className="text-sm">当前未设置名单限制</p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </section>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {/* Section: Quota Control */}
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-indigo-600" />
-                      <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">赛事名额控制</h2>
+                          ))}
+                        </div>
+                        <p className="text-xs leading-6 text-slate-400 xl:text-right">
+                          以上按钮用于页面内电梯定位，不是标签页切换。
+                        </p>
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => setConfig({...config, enableQuota: !config.enableQuota})}
+                  </div>
+
+                  <div className="space-y-6">
+              <div ref={registrationLimitSectionRef} className="scroll-mt-32 space-y-5">
+              <div className="space-y-1 px-1">
+                <h3 className="text-xl font-bold text-slate-900">报名限制</h3>
+              </div>
+              <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="divide-y divide-slate-100">
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">用户侧报名</h2>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs leading-6 text-slate-500">
+                        关闭后，将仅支持后台导入报名数据，用户前台不可直接发起报名。
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setConfig({
+                          ...config,
+                          channel:
+                            config.channel === RegistrationChannel.UNLIMITED
+                              ? RegistrationChannel.BACKEND_ONLY
+                              : RegistrationChannel.UNLIMITED,
+                        })
+                      }
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        config.channel === RegistrationChannel.UNLIMITED ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          config.channel === RegistrationChannel.UNLIMITED ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">个人报名</h2>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs leading-6 text-slate-500">
+                        开启后，用户前台赛事详情页会展示单项赛的“个人报名”按钮。
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setConfig({ ...config, enableIndividualRegistration: !config.enableIndividualRegistration })
+                      }
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        config.enableIndividualRegistration ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          config.enableIndividualRegistration ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">报名名单限制</h2>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex w-fit p-1 bg-slate-100 rounded-xl">
+                        {[
+                          { id: ListRestrictionType.NONE, label: '不限制' },
+                          { id: ListRestrictionType.WHITELIST, label: '白名单' },
+                          { id: ListRestrictionType.BLACKLIST, label: '黑名单' }
+                        ].map((item) => {
+                          const enabled =
+                            item.id === ListRestrictionType.NONE
+                              ? config.listRestrictions.length === 0
+                              : config.listRestrictions.includes(item.id);
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => toggleRegistrationRestrictionType(item.id)}
+                              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+                                enabled
+                                  ? 'bg-white text-indigo-600 shadow-sm'
+                                  : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <AnimatePresence initial={false}>
+                        {config.listRestrictions.length > 0 ? (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="space-y-4 rounded-2xl bg-slate-50 px-5 py-4">
+                              {config.listRestrictions.includes(ListRestrictionType.WHITELIST) ? (
+                                <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+                                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div className="space-y-2">
+                                      <p className="text-sm font-medium text-slate-700">白名单</p>
+                                      <p className="text-xs leading-6 text-slate-500">
+                                        仅允许命中白名单的选手发起报名。
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => openTargetListPicker(ListRestrictionType.WHITELIST)}
+                                      className="text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+                                    >
+                                      设置
+                                    </button>
+                                  </div>
+                                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                    {selectedWhitelistLists.length > 0 ? (
+                                      <div className="space-y-3">
+                                        <div className="flex flex-wrap gap-2">
+                                          {selectedWhitelistLists.map((list) => {
+                                            const group = targetListGroups.find((item) => item.id === list.groupId);
+                                            return (
+                                              <div key={list.id} className="flex items-center gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-1.5">
+                                                <FileText className="h-3.5 w-3.5 text-indigo-600" />
+                                                <span className="text-xs font-semibold text-indigo-900">
+                                                  {group?.name ? `${group.name} / ` : ''}
+                                                  {list.name}
+                                                </span>
+                                                <button
+                                                  onClick={() => removeSelectedRestrictionList(ListRestrictionType.WHITELIST, list.id)}
+                                                  className="rounded-full p-0.5 text-indigo-400 transition-colors hover:bg-indigo-100 hover:text-indigo-600"
+                                                >
+                                                  <X className="h-3 w-3" />
+                                                </button>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                        <p className="text-xs leading-6 text-slate-500">
+                                          已选择 {selectedWhitelistLists.length} 张白名单，可继续增减。
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      '当前未关联目标清单'
+                                    )}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {config.listRestrictions.includes(ListRestrictionType.BLACKLIST) ? (
+                                <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+                                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div className="space-y-2">
+                                      <p className="text-sm font-medium text-slate-700">黑名单</p>
+                                      <p className="text-xs leading-6 text-slate-500">
+                                        命中黑名单的选手将被限制报名。
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => openTargetListPicker(ListRestrictionType.BLACKLIST)}
+                                      className="text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+                                    >
+                                      设置
+                                    </button>
+                                  </div>
+                                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                    {selectedBlacklistLists.length > 0 ? (
+                                      <div className="space-y-3">
+                                        <div className="flex flex-wrap gap-2">
+                                          {selectedBlacklistLists.map((list) => {
+                                            const group = targetListGroups.find((item) => item.id === list.groupId);
+                                            return (
+                                              <div key={list.id} className="flex items-center gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-1.5">
+                                                <FileText className="h-3.5 w-3.5 text-indigo-600" />
+                                                <span className="text-xs font-semibold text-indigo-900">
+                                                  {group?.name ? `${group.name} / ` : ''}
+                                                  {list.name}
+                                                </span>
+                                                <button
+                                                  onClick={() => removeSelectedRestrictionList(ListRestrictionType.BLACKLIST, list.id)}
+                                                  className="rounded-full p-0.5 text-indigo-400 transition-colors hover:bg-indigo-100 hover:text-indigo-600"
+                                                >
+                                                  <X className="h-3 w-3" />
+                                                </button>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                        <p className="text-xs leading-6 text-slate-500">
+                                          已选择 {selectedBlacklistLists.length} 张黑名单，可继续增减。
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      '当前未关联目标清单'
+                                    )}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">赛事名额控制</h2>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-slate-700">控制赛事总名额</p>
+                      </div>
+
+                      <AnimatePresence initial={false}>
+                        {config.enableQuota ? (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="rounded-2xl bg-slate-50 px-5 py-4 space-y-5">
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <label className="space-y-2">
+                                  <span className="text-sm font-medium text-slate-700">单项赛总名额上限</span>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      value={config.individualQuota}
+                                      onChange={e => setConfig({ ...config, individualQuota: parseInt(e.target.value) || 0 })}
+                                      placeholder="请输入名额数量"
+                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">个</span>
+                                  </div>
+                                </label>
+                                <label className="space-y-2">
+                                  <span className="text-sm font-medium text-slate-700">团体赛总名额上限</span>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      value={config.teamQuota}
+                                      onChange={e => setConfig({ ...config, teamQuota: parseInt(e.target.value) || 0 })}
+                                      placeholder="请输入名额数量"
+                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">队</span>
+                                  </div>
+                                </label>
+                              </div>
+
+                              <div className="space-y-3">
+                                <label className="text-sm font-medium text-slate-700">统计口径</label>
+                                <div className="flex w-fit p-1 bg-white rounded-xl border border-slate-200">
+                                  {[
+                                    { id: QuotaBasis.SEAT, label: '按席位计算' },
+                                    { id: QuotaBasis.PERSON, label: '按人头计算' }
+                                  ].map((item) => (
+                                    <button
+                                      key={item.id}
+                                      onClick={() => setConfig({ ...config, quotaBasis: item.id as QuotaBasis })}
+                                      className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+                                        config.quotaBasis === item.id
+                                          ? 'bg-slate-100 text-indigo-600 shadow-sm'
+                                          : 'text-slate-500 hover:text-slate-700'
+                                      }`}
+                                    >
+                                      {item.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <p className="text-xs leading-6 text-slate-500">
+                                  {config.quotaBasis === QuotaBasis.SEAT
+                                    ? '按席位计算：团体赛每报名一个队伍算占用一个席位，双打项目一个组合算一个席位。'
+                                    : '按人头计算：例如双打项目一次报名需填写2个选手信息，即占用2个名额。'}
+                                </p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
+                    <button
+                      onClick={() => setConfig({ ...config, enableQuota: !config.enableQuota })}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
                         config.enableQuota ? 'bg-indigo-600' : 'bg-slate-200'
                       }`}
@@ -6965,236 +7308,104 @@ export default function App() {
                       }`} />
                     </button>
                   </div>
-                  
-                  <AnimatePresence>
-                    {config.enableQuota ? (
-                      <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="overflow-hidden"
-                      >
-                        <div className="p-6 space-y-8">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-slate-600">单项赛总名额上限</label>
-                              <div className="relative">
-                                <input 
-                                  type="number" 
-                                  value={config.individualQuota}
-                                  onChange={e => setConfig({...config, individualQuota: parseInt(e.target.value) || 0})}
-                                  placeholder="请输入名额数量"
-                                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                                />
-                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">个</span>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-slate-600">团体赛总名额上限</label>
-                              <div className="relative">
-                                <input 
-                                  type="number" 
-                                  value={config.teamQuota}
-                                  onChange={e => setConfig({...config, teamQuota: parseInt(e.target.value) || 0})}
-                                  placeholder="请输入名额数量"
-                                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                                />
-                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">队</span>
-                              </div>
-                            </div>
-                          </div>
 
-                          <div className="space-y-4">
-                            <label className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                              统计口径
-                            </label>
-                            <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
-                              {[
-                                { id: QuotaBasis.SEAT, label: '按席位计算' },
-                                { id: QuotaBasis.PERSON, label: '按人头计算' }
-                              ].map((item) => (
-                                <button
-                                  key={item.id}
-                                  onClick={() => setConfig({...config, quotaBasis: item.id as QuotaBasis})}
-                                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
-                                    config.quotaBasis === item.id 
-                                    ? 'bg-white text-indigo-600 shadow-sm' 
-                                    : 'text-slate-500 hover:text-slate-700'
-                                  }`}
-                                >
-                                  {item.label}
-                                </button>
-                              ))}
-                            </div>
-                            <div className="flex items-start gap-3 p-5 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                              <Info className="w-4 h-4 text-indigo-600 mt-0.5" />
-                              <p className="text-xs text-indigo-700/80 leading-relaxed">
-                                {config.quotaBasis === QuotaBasis.SEAT 
-                                  ? '按席位计算：团体赛每报名一个队伍算占用一个席位，双打项目一个组合算一个席位，以此类推' 
-                                  : '按人头计算：以双打项目为例，双打每次报名需填写2个选手信息，占用了2个名额。'}
-                              </p>
-                            </div>
-                          </div>
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">年龄计算规则</h2>
+                    </div>
+                    <div className="space-y-5">
+                      <div className="space-y-3">
+                        <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                          计算基准日
+                          <InlineInfoTooltip content="用于定义当需要计算报名选手的年龄时，以什么日期为基准日进行计算。" />
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { id: AgeCalculationBase.EVENT_START, label: '比赛开始日' },
+                            { id: AgeCalculationBase.REGISTRATION_END, label: '报名截止日' },
+                            { id: AgeCalculationBase.CALENDAR_YEAR_START, label: '自然年1月1日' },
+                            { id: AgeCalculationBase.CUSTOM_DATE, label: '指定日期' },
+                          ].map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => setConfig({ ...config, ageCalculationBase: item.id as AgeCalculationBase })}
+                              className={`px-5 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                                config.ageCalculationBase === item.id
+                                  ? 'bg-slate-100 text-indigo-600 shadow-sm'
+                                  : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
                         </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex flex-col items-center justify-center py-12 text-slate-400"
-                      >
-                        <Trophy className="w-8 h-8 opacity-20 mb-2" />
-                        <p className="text-sm">当前未设置赛事名额限制</p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </section>
-
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                    <Users className="w-4 h-4 text-indigo-600" />
-                    <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">年龄计算规则</h2>
-                  </div>
-                  <div className="p-6 space-y-6">
-                    <div className="space-y-4">
-                      <label className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                        计算基准日
-                        <InlineInfoTooltip content="用于定义当需要计算报名选手的年龄时，以什么日期为基准日进行计算。" />
-                      </label>
-                      <div className="flex flex-wrap p-1 bg-slate-100 rounded-xl w-fit gap-1">
-                        {[
-                          { id: AgeCalculationBase.EVENT_START, label: '比赛开始日' },
-                          { id: AgeCalculationBase.REGISTRATION_END, label: '报名截止日' },
-                          { id: AgeCalculationBase.CALENDAR_YEAR_START, label: '自然年1月1日' },
-                          { id: AgeCalculationBase.CUSTOM_DATE, label: '指定日期' },
-                        ].map((item) => (
-                          <button
-                            key={item.id}
-                            onClick={() => setConfig({ ...config, ageCalculationBase: item.id as AgeCalculationBase })}
-                            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                              config.ageCalculationBase === item.id
-                                ? 'bg-white text-indigo-600 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700'
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <AnimatePresence>
-                        {config.ageCalculationBase === AgeCalculationBase.CUSTOM_DATE ? (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.25, ease: 'easeInOut' }}
-                            className="overflow-hidden"
-                          >
-                            <div className="pt-2 max-w-sm">
-                              <label className="space-y-2">
-                                <span className="text-sm font-medium text-slate-600">指定日期</span>
+                        <AnimatePresence initial={false}>
+                          {config.ageCalculationBase === AgeCalculationBase.CUSTOM_DATE ? (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.22, ease: 'easeInOut' }}
+                              className="overflow-hidden"
+                            >
+                              <div className="max-w-sm pt-1">
                                 <input
                                   type="date"
                                   value={config.ageCalculationCustomDate}
                                   onChange={(e) => setConfig({ ...config, ageCalculationCustomDate: e.target.value })}
                                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                                 />
-                              </label>
-                            </div>
-                          </motion.div>
-                        ) : null}
-                      </AnimatePresence>
-                    </div>
-
-                    <div className="h-px bg-slate-100" />
-
-                    <div className="space-y-4">
-                      <label className="text-sm font-medium text-slate-600">年龄计算口径</label>
-                      <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
-                        {[
-                          {
-                            id: AgeCalculationMethod.BIRTH_YEAR,
-                            label: '按出生年份计算',
-                          },
-                          {
-                            id: AgeCalculationMethod.FULL_AGE,
-                            label: '按周岁精确计算',
-                          },
-                        ].map((item) => (
-                          <button
-                            key={item.id}
-                            onClick={() => setConfig({ ...config, ageCalculationMethod: item.id as AgeCalculationMethod })}
-                            className={`px-6 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                              config.ageCalculationMethod === item.id
-                                ? 'bg-white text-indigo-600 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700'
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
+                              </div>
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
                       </div>
-                      <div className="flex items-start gap-3 p-5 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                        <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
-                        <p className="text-xs text-indigo-700/80 leading-relaxed">
+
+                      <div className="space-y-3">
+                        <label className="text-sm font-medium text-slate-700">年龄计算口径</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { id: AgeCalculationMethod.BIRTH_YEAR, label: '按出生年份计算' },
+                            { id: AgeCalculationMethod.FULL_AGE, label: '按周岁精确计算' },
+                          ].map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => setConfig({ ...config, ageCalculationMethod: item.id as AgeCalculationMethod })}
+                              className={`px-5 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                                config.ageCalculationMethod === item.id
+                                  ? 'bg-slate-100 text-indigo-600 shadow-sm'
+                                  : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs leading-6 text-slate-500">
                           {config.ageCalculationMethod === AgeCalculationMethod.BIRTH_YEAR
                             ? '按出生年份计算：选手年龄 = 计算基准日的年份 - 选手报名时填写的出生日期的年份。'
                             : '按周岁精确计算：以计算基准日为准，若当年生日未到，则年龄 = 基准年份 - 出生年份 - 1；若当年生日已到，则年龄 = 基准年份 - 出生年份。'}
                         </p>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+              </div>
 
-                  </div>
-                </section>
-              </div>
-              </div>
-              
-              <div ref={teamLimitSectionRef} className="scroll-mt-40 space-y-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex items-center gap-2">
-                    <LayoutGrid className="h-4 w-4 text-indigo-600" />
-                    <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">报名入口</h2>
-                  </div>
-                  <div className="p-6">
-                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-slate-700">单项赛启用个人报名</p>
-                        <p className="text-xs leading-6 text-slate-500">
-                          开启后，用户前台赛事详情页会展示单项赛的“个人报名”按钮。
-                        </p>
+              <div ref={teamLimitSectionRef} className="scroll-mt-32 space-y-5">
+                <div className="space-y-1 px-1">
+                  <h3 className="text-xl font-bold text-slate-900">队伍限制</h3>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="divide-y divide-slate-100">
+                    <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900">队伍关联组别</h2>
                       </div>
-                      <button
-                        onClick={() =>
-                          setConfig({ ...config, enableIndividualRegistration: !config.enableIndividualRegistration })
-                        }
-                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                          config.enableIndividualRegistration ? 'bg-indigo-600' : 'bg-slate-200'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            config.enableIndividualRegistration ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex items-center gap-2">
-                    <Users className="h-4 w-4 text-indigo-600" />
-                    <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">队伍基础规则</h2>
-                  </div>
-                  <div className="p-6 space-y-6">
-                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4">
                       <div className="space-y-1">
-                        <p className="text-sm font-medium text-slate-700">创建队伍时必须关联组别</p>
                         <p className="text-xs leading-6 text-slate-500">
-                          开启后，用户在创建队伍时必须先选择所属组别，后续将按组别规则校验队伍人数与性别限制。
+                          开启后，该赛事中领队创建队伍时，必须先为队伍关联一个组别。
                         </p>
                       </div>
                       <button
@@ -7215,543 +7426,564 @@ export default function App() {
                       </button>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-slate-700">默认队伍限制</p>
-                          <p className="text-xs leading-6 text-slate-500">
-                            当某个组别没有单独配置专属规则时，默认继承这里的队伍人数与性别限制。
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
-                          全局默认
-                        </span>
+                    <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900">队伍人数限制</h2>
                       </div>
+                      <div className="space-y-4">
+                        <p className="text-xs leading-6 text-slate-500">
+                          开启后，可填写每个队伍最多人数，并定义人数统计时是否包含领队和教练。
+                        </p>
+                        <AnimatePresence initial={false}>
+                          {config.enableTeamSizeLimit ? (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.22, ease: 'easeInOut' }}
+                              className="overflow-hidden"
+                            >
+                              <div className="space-y-6 rounded-2xl bg-slate-50 px-5 py-4">
+                                <label className="max-w-sm space-y-2">
+                                  <span className="text-sm font-medium text-slate-700">每个队伍最多人数</span>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={config.teamLimitConfig.maxMembers}
+                                      onChange={(e) =>
+                                        updateAdvancedTeamLimitConfig({
+                                          maxMembers: parseInt(e.target.value) || 1,
+                                        })
+                                      }
+                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">人</span>
+                                  </div>
+                                </label>
 
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-600">每个队伍最多队员数</label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min="1"
-                              value={config.teamLimitConfig.defaultMaxMembers}
-                              onChange={(e) =>
-                                updateAdvancedTeamLimitConfig({
-                                  defaultMaxMembers: parseInt(e.target.value) || 1,
-                                })
-                              }
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                            />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">人</span>
+                                <div className="space-y-3 pt-3">
+                                  <p className="text-sm font-medium text-slate-700">人数统计口径</p>
+                                  <p className="text-xs leading-6 text-slate-500">人数统计默认包含选手，可按需额外勾选是否将领队和教练计入队伍人数。</p>
+                                  <div className="flex flex-wrap gap-8">
+                                    {[
+                                      { key: 'includeLeaderInMemberLimit' as const, label: '包含领队' },
+                                      { key: 'includeCoachInMemberLimit' as const, label: '包含教练' },
+                                    ].map((item) => (
+                                      <label key={item.key} className="group flex cursor-pointer items-center gap-3">
+                                        <span
+                                          onClick={() =>
+                                            updateAdvancedTeamLimitConfig({
+                                              [item.key]: !config.teamLimitConfig[item.key],
+                                            })
+                                          }
+                                          className={`flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
+                                            config.teamLimitConfig[item.key]
+                                              ? 'border-indigo-600 bg-indigo-600'
+                                              : 'border-slate-300 group-hover:border-indigo-400'
+                                          }`}
+                                        >
+                                          {config.teamLimitConfig[item.key] && <span className="text-[11px] font-bold leading-none text-white">✓</span>}
+                                        </span>
+                                        <span
+                                          className={`text-sm font-medium ${
+                                            config.teamLimitConfig[item.key] ? 'text-slate-900' : 'text-slate-500'
+                                          }`}
+                                        >
+                                          {item.label}
+                                        </span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
+                      </div>
+                      <button
+                        onClick={() => setConfig({ ...config, enableTeamSizeLimit: !config.enableTeamSizeLimit })}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                          config.enableTeamSizeLimit ? 'bg-indigo-600' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            config.enableTeamSizeLimit ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900">领队规则</h2>
+                      </div>
+                      <div className="space-y-4 rounded-2xl bg-slate-50 px-5 py-4">
+                        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-slate-700">必须设置领队</p>
+                            <p className="text-xs leading-6 text-slate-500">开启后，每个队伍都必须填写领队信息。</p>
                           </div>
+                          <button
+                            onClick={() =>
+                              updateAdvancedTeamLimitConfig({
+                                leaderRequired: !config.teamLimitConfig.leaderRequired,
+                              })
+                            }
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              config.teamLimitConfig.leaderRequired ? 'bg-indigo-600' : 'bg-slate-200'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                config.teamLimitConfig.leaderRequired ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
                         </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
-                          <p className="text-sm font-medium text-slate-700">默认规则生效条件</p>
-                          <p className="mt-2 text-xs leading-6 text-slate-500">
-                            未配置组别专属规则的队伍，将优先应用这里的默认限制。后续可在下方为特殊组别单独覆盖。
-                          </p>
+
+                        <div className="grid gap-5 border-t border-slate-200 pt-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-slate-700">领队只能由队员兼任</p>
+                            <p className="text-xs leading-6 text-slate-500">
+                              开启后，领队必须从当前队伍已填写的队员中选择，不能单独录入外部人员。
+                            </p>
+                          </div>
+                          <button
+                            onClick={() =>
+                              updateAdvancedTeamLimitConfig({
+                                leaderMustBePlayer: !config.teamLimitConfig.leaderMustBePlayer,
+                              })
+                            }
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              config.teamLimitConfig.leaderMustBePlayer ? 'bg-indigo-600' : 'bg-slate-200'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                config.teamLimitConfig.leaderMustBePlayer ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
                         </div>
                       </div>
+                    </div>
 
-                      <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                        <div>
-                          <p className="text-sm font-medium text-slate-700">默认队伍性别限制</p>
-                          <p className="mt-1 text-xs leading-6 text-slate-500">
-                            支持按需配置最少/最多男性人数、最少/最多女性人数，例如默认最多 12 人且最多 6 男 6 女。
-                          </p>
+                    <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900">教练规则</h2>
+                      </div>
+                      <div className="space-y-4 rounded-2xl bg-slate-50 px-5 py-4">
+                        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-slate-700">是否允许设置教练</p>
+                            <p className="text-xs leading-6 text-slate-500">关闭后，创建队伍时不展示教练相关录入项。</p>
+                          </div>
+                          <button
+                            onClick={() =>
+                              updateAdvancedTeamLimitConfig({
+                                allowCoach: !config.teamLimitConfig.allowCoach,
+                              })
+                            }
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              config.teamLimitConfig.allowCoach ? 'bg-indigo-600' : 'bg-slate-200'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                config.teamLimitConfig.allowCoach ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
                         </div>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                          {[
-                            { key: 'min_male', label: '最少男性人数' },
-                            { key: 'max_male', label: '最多男性人数' },
-                            { key: 'min_female', label: '最少女性人数' },
-                            { key: 'max_female', label: '最多女性人数' },
-                          ].map((item) => {
-                            const requirement = config.teamLimitConfig.defaultGenderRequirement ?? {};
-                            const value = requirement[item.key as keyof TeamGenderRequirement];
-                            const enabled = value !== undefined;
 
-                            return (
-                              <div key={item.key} className="rounded-xl border border-slate-200 bg-white p-4">
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="text-sm font-medium text-slate-700">{item.label}</p>
+                        <AnimatePresence initial={false}>
+                          {config.teamLimitConfig.allowCoach ? (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.22, ease: 'easeInOut' }}
+                              className="overflow-hidden"
+                            >
+                              <div className="space-y-4 border-t border-slate-200 pt-4">
+                                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-medium text-slate-700">教练是否必填</p>
+                                    <p className="text-xs leading-6 text-slate-500">开启后，创建队伍时至少需要填写一名教练。</p>
+                                  </div>
                                   <button
-                                    type="button"
                                     onClick={() =>
-                                      updateAdvancedDefaultGenderRequirement(
-                                        item.key as keyof TeamGenderRequirement,
-                                        !enabled
-                                      )
+                                      updateAdvancedTeamLimitConfig({
+                                        coachRequired: !config.teamLimitConfig.coachRequired,
+                                      })
                                     }
                                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                      enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                                      config.teamLimitConfig.coachRequired ? 'bg-indigo-600' : 'bg-slate-200'
                                     }`}
                                   >
                                     <span
                                       className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                        enabled ? 'translate-x-6' : 'translate-x-1'
+                                        config.teamLimitConfig.coachRequired ? 'translate-x-6' : 'translate-x-1'
                                       }`}
                                     />
                                   </button>
                                 </div>
-                                {enabled ? (
-                                  <div className="relative mt-4">
+
+                                <label className="max-w-sm space-y-2">
+                                  <span className="text-sm font-medium text-slate-700">教练人数上限</span>
+                                  <div className="relative">
                                     <input
                                       type="number"
-                                      min="0"
-                                      value={value}
+                                      min="1"
+                                      value={config.teamLimitConfig.maxCoachCount}
                                       onChange={(e) =>
-                                        updateAdvancedDefaultGenderRequirement(
-                                          item.key as keyof TeamGenderRequirement,
-                                          true,
-                                          parseInt(e.target.value) || 0
-                                        )
+                                        updateAdvancedTeamLimitConfig({
+                                          maxCoachCount: parseInt(e.target.value) || 1,
+                                        })
                                       }
-                                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                                     />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
-                                      人
-                                    </span>
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">人</span>
                                   </div>
-                                ) : (
-                                  <p className="mt-4 text-xs text-slate-400">未启用该限制</p>
-                                )}
+                                </label>
                               </div>
-                            );
-                          })}
-                        </div>
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
                       </div>
                     </div>
                   </div>
-                </section>
+                </div>
 
-                <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4 text-indigo-600" />
-                      <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">按组别覆盖规则</h2>
+              <div ref={restrictionSectionRef} className="scroll-mt-32 space-y-5">
+                <div className="space-y-1 px-1">
+                  <h3 className="text-xl font-bold text-slate-900">兼项限制</h3>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">兼项限制</h2>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-slate-700">启用兼项限制</p>
+                      <p className="text-xs leading-6 text-slate-500">
+                        开启后，可设置单人最多允许报名项目数、兼项限制范围和互斥项目组。
+                      </p>
                     </div>
                     <button
                       onClick={() =>
-                        updateAdvancedTeamLimitConfig({
-                          enableGroupSpecificLimits: !config.teamLimitConfig.enableGroupSpecificLimits,
-                        })
+                        setConfig({ ...config, enableMultiEventRestriction: !config.enableMultiEventRestriction })
                       }
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                        config.teamLimitConfig.enableGroupSpecificLimits ? 'bg-indigo-600' : 'bg-slate-200'
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        config.enableMultiEventRestriction ? 'bg-indigo-600' : 'bg-slate-200'
                       }`}
                     >
                       <span
                         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          config.teamLimitConfig.enableGroupSpecificLimits ? 'translate-x-6' : 'translate-x-1'
+                          config.enableMultiEventRestriction ? 'translate-x-6' : 'translate-x-1'
                         }`}
                       />
                     </button>
                   </div>
 
-                  <div className="p-6">
-                    {config.teamLimitConfig.enableGroupSpecificLimits ? (
-                      <div className="space-y-5">
-                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 px-5 py-4 text-sm leading-7 text-indigo-700">
-                          开启后，可为特殊组别单独覆盖默认规则。未启用专属规则的组别，仍会继承上方“默认队伍限制”。
-                        </div>
-
-                        {config.teamLimitConfig.groupOverrides.map((rule) => (
-                          <div key={rule.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 lg:flex-row lg:items-center lg:justify-between">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-3">
-                                  <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
-                                    {rule.groupName}
-                                  </span>
-                                  <span className="text-sm font-medium text-slate-500">
-                                    {rule.enabled ? '已启用专属限制' : '继承默认规则'}
-                                  </span>
-                                </div>
-                                <p className="text-xs leading-6 text-slate-500">
-                                  可针对不同组别设置不同的队伍人数与性别要求，例如 A 组最多 12 人、U12 最多 8 人。
-                                </p>
-                              </div>
-                              <button
-                                onClick={() =>
-                                  updateAdvancedGroupOverride(rule.id, (currentRule) => ({
-                                    ...currentRule,
-                                    enabled: !currentRule.enabled,
-                                  }))
-                                }
-                                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                                  rule.enabled ? 'bg-indigo-600' : 'bg-slate-200'
-                                }`}
-                              >
-                                <span
-                                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                    rule.enabled ? 'translate-x-6' : 'translate-x-1'
-                                  }`}
-                                />
-                              </button>
-                            </div>
-
-                            {rule.enabled ? (
-                              <div className="space-y-5 pt-5">
-                                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                  <div className="space-y-2">
-                                    <label className="text-sm font-medium text-slate-600">每个队伍最多队员数</label>
-                                    <div className="relative">
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        value={rule.maxMembers}
-                                        onChange={(e) =>
-                                          updateAdvancedGroupOverride(rule.id, (currentRule) => ({
-                                            ...currentRule,
-                                            maxMembers: parseInt(e.target.value) || 1,
-                                          }))
+                  <AnimatePresence initial={false}>
+                    {config.enableMultiEventRestriction ? (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: 'easeInOut' }}
+                        className="overflow-hidden border-t border-slate-100"
+                      >
+                        <div className="divide-y divide-slate-100">
+                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+                            <div />
+                            <div className="space-y-5 rounded-2xl bg-slate-50 px-5 py-4">
+                              <div className="space-y-3">
+                                <p className="text-sm font-medium text-slate-700">单人最多允许报名项目数</p>
+                                <div className="flex items-center gap-4">
+                                  <div className="relative w-32">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={config.maxEventsPerPerson}
+                                      onChange={(e) =>
+                                        setConfig({ ...config, maxEventsPerPerson: parseInt(e.target.value) || 1 })
+                                      }
+                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-9 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                    <div className="absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setConfig({ ...config, maxEventsPerPerson: config.maxEventsPerPerson + 1 })
                                         }
-                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                      />
-                                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
-                                        人
-                                      </span>
+                                        className="rounded p-0.5 transition-colors hover:bg-slate-200"
+                                      >
+                                        <ArrowUp className="h-3 w-3 text-slate-400" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setConfig({
+                                            ...config,
+                                            maxEventsPerPerson: Math.max(1, config.maxEventsPerPerson - 1),
+                                          })
+                                        }
+                                        className="rounded p-0.5 transition-colors hover:bg-slate-200"
+                                      >
+                                        <ArrowDown className="h-3 w-3 text-slate-400" />
+                                      </button>
                                     </div>
                                   </div>
-                                </div>
-
-                                <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                                  <div>
-                                    <p className="text-sm font-medium text-slate-700">队伍性别限制</p>
-                                    <p className="mt-1 text-xs leading-6 text-slate-500">
-                                      可按组别单独设置男女数量限制，未启用的项表示该组别在此维度不做额外限制。
-                                    </p>
-                                  </div>
-                                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    {[
-                                      { key: 'min_male', label: '最少男性人数' },
-                                      { key: 'max_male', label: '最多男性人数' },
-                                      { key: 'min_female', label: '最少女性人数' },
-                                      { key: 'max_female', label: '最多女性人数' },
-                                    ].map((item) => {
-                                      const requirement = rule.genderRequirement ?? {};
-                                      const value = requirement[item.key as keyof TeamGenderRequirement];
-                                      const enabled = value !== undefined;
-
-                                      return (
-                                        <div key={item.key} className="rounded-xl border border-slate-200 bg-white p-4">
-                                          <div className="flex items-center justify-between gap-3">
-                                            <p className="text-sm font-medium text-slate-700">{item.label}</p>
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                updateAdvancedGroupOverride(rule.id, (currentRule) => {
-                                                  const nextRequirement: TeamGenderRequirement = {
-                                                    ...(currentRule.genderRequirement ?? {}),
-                                                  };
-                                                  if (enabled) {
-                                                    delete nextRequirement[item.key as keyof TeamGenderRequirement];
-                                                  } else {
-                                                    nextRequirement[item.key as keyof TeamGenderRequirement] = 1;
-                                                  }
-
-                                                  return {
-                                                    ...currentRule,
-                                                    genderRequirement: nextRequirement,
-                                                  };
-                                                })
-                                              }
-                                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                                enabled ? 'bg-indigo-600' : 'bg-slate-200'
-                                              }`}
-                                            >
-                                              <span
-                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                                  enabled ? 'translate-x-6' : 'translate-x-1'
-                                                }`}
-                                              />
-                                            </button>
-                                          </div>
-                                          {enabled ? (
-                                            <div className="relative mt-4">
-                                              <input
-                                                type="number"
-                                                min="0"
-                                                value={value}
-                                                onChange={(e) =>
-                                                  updateAdvancedGroupOverride(rule.id, (currentRule) => ({
-                                                    ...currentRule,
-                                                    genderRequirement: {
-                                                      ...(currentRule.genderRequirement ?? {}),
-                                                      [item.key]: parseInt(e.target.value) || 0,
-                                                    },
-                                                  }))
-                                                }
-                                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                              />
-                                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
-                                                人
-                                              </span>
-                                            </div>
-                                          ) : (
-                                            <p className="mt-4 text-xs text-slate-400">未启用该限制</p>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
+                                  <p className="text-xs leading-6 text-slate-500">
+                                    一个自然人（Identity）以“选手”的身份，在本次赛事中最多允许报名的项目次数。
+                                  </p>
                                 </div>
                               </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-slate-400">
-                        <ShieldCheck className="h-4 w-4 opacity-60" />
-                        <p className="text-sm">当前未启用组别专属队伍限制</p>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              </div>
 
-              <div ref={restrictionSectionRef} className="scroll-mt-40 space-y-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                {/* Max Events Per Person */}
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                    <UserCircle className="w-4 h-4 text-indigo-600" />
-                    <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">单人报名限制</h2>
-                  </div>
-                  <div className="p-6 space-y-8">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-500 font-bold">*</span>
-                        <label className="text-sm font-medium text-slate-700">单人最多允许报名项目数：</label>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="relative w-32">
-                          <input 
-                            type="number" 
-                            min="1"
-                            value={config.maxEventsPerPerson}
-                            onChange={(e) => setConfig({ ...config, maxEventsPerPerson: parseInt(e.target.value) || 1 })}
-                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
-                          />
-                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5">
-                            <button onClick={() => setConfig({ ...config, maxEventsPerPerson: config.maxEventsPerPerson + 1 })} className="p-0.5 hover:bg-slate-200 rounded transition-colors"><ArrowUp className="w-3 h-3 text-slate-400" /></button>
-                            <button onClick={() => setConfig({ ...config, maxEventsPerPerson: Math.max(1, config.maxEventsPerPerson - 1) })} className="p-0.5 hover:bg-slate-200 rounded transition-colors"><ArrowDown className="w-3 h-3 text-slate-400" /></button>
+                              <div className="space-y-3 border-t border-slate-200 pt-4">
+                                <p className="text-sm font-medium text-slate-700">单人兼项限制范围</p>
+                                <div className="flex flex-wrap gap-8">
+                                  {[
+                                    { id: 'INDIVIDUAL', label: '单项赛' },
+                                    { id: 'TEAM', label: '团体赛' },
+                                  ].map((item) => (
+                                    <label key={item.id} className="group flex cursor-pointer items-center gap-3">
+                                      <span
+                                        onClick={() => {
+                                          const newScope = config.restrictionScope.includes(item.id)
+                                            ? config.restrictionScope.filter((s) => s !== item.id)
+                                            : [...config.restrictionScope, item.id];
+                                          setConfig({ ...config, restrictionScope: newScope });
+                                        }}
+                                        className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all ${
+                                          config.restrictionScope.includes(item.id)
+                                            ? 'border-indigo-600 bg-indigo-600'
+                                            : 'border-slate-300 group-hover:border-indigo-400'
+                                        }`}
+                                      >
+                                        {config.restrictionScope.includes(item.id) && <div className="h-2 w-2 rounded-full bg-white" />}
+                                      </span>
+                                      <span
+                                        className={`text-sm font-medium ${
+                                          config.restrictionScope.includes(item.id) ? 'text-slate-900' : 'text-slate-500'
+                                        }`}
+                                      >
+                                        {item.label}
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                            <div />
+                            <div className="space-y-3">
+                              <p className="text-sm font-medium text-slate-700">互斥项目组</p>
+                              <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                                {config.mutuallyExclusiveGroups.length > 0 ? (
+                                  <div className="space-y-3">
+                                    {config.mutuallyExclusiveGroups.map((group, idx) => (
+                                      <div
+                                        key={group.id}
+                                        className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 md:flex-row md:items-start md:justify-between"
+                                      >
+                                        <div className="space-y-2">
+                                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                            互斥组 {idx + 1}
+                                          </p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {group.eventNames.map((name, i) => (
+                                              <span
+                                                key={i}
+                                                className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
+                                              >
+                                                {name}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-sm font-semibold">
+                                          <button
+                                            onClick={() => {
+                                              setEditingGroup(group);
+                                              setShowRestrictionModal(true);
+                                            }}
+                                            className="text-indigo-600 transition-colors hover:text-indigo-700"
+                                          >
+                                            编辑
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setConfig({
+                                                ...config,
+                                                mutuallyExclusiveGroups: config.mutuallyExclusiveGroups.filter(
+                                                  (g) => g.id !== group.id
+                                                ),
+                                              });
+                                            }}
+                                            className="text-red-500 transition-colors hover:text-red-600"
+                                          >
+                                            删除
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 text-slate-400">
+                                    <Layers className="h-4 w-4 opacity-60" />
+                                    <p className="text-sm">当前未配置互斥项目组</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setEditingGroup(null);
+                                setShowRestrictionModal(true);
+                              }}
+                              className="text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+                            >
+                              设置
+                            </button>
                           </div>
                         </div>
-                        <p className="text-xs text-slate-400">
-                          一个自然人（Identity）<span className="text-red-500 font-medium">以“选手”的身份</span> 在本次赛事中最多允许报名的次数
-                        </p>
-                      </div>
-                    </div>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </div>
+              </div>
 
-                    <div className="space-y-4 pt-6 border-t border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-500 font-bold">*</span>
-                        <label className="text-sm font-medium text-slate-700">单人兼项限制范围：</label>
-                      </div>
-                      <div className="flex items-center gap-8">
-                        {[
-                          { id: 'INDIVIDUAL', label: '单项赛' },
-                          { id: 'TEAM', label: '团体赛' }
-                        ].map(item => (
-                          <label key={item.id} className="flex items-center gap-3 cursor-pointer group">
-                            <span
-                              onClick={() => {
-                                const newScope = config.restrictionScope.includes(item.id)
-                                  ? config.restrictionScope.filter(s => s !== item.id)
-                                  : [...config.restrictionScope, item.id];
-                                setConfig({ ...config, restrictionScope: newScope });
-                              }}
-                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                config.restrictionScope.includes(item.id)
-                                  ? 'bg-indigo-600 border-indigo-600'
-                                  : 'border-slate-300 group-hover:border-indigo-400'
-                              }`}
-                            >
-                              {config.restrictionScope.includes(item.id) && <div className="w-2 h-2 rounded-full bg-white" />}
-                            </span>
-                            <span className={`text-sm font-medium ${config.restrictionScope.includes(item.id) ? 'text-slate-900' : 'text-slate-500'}`}>
-                              {item.label}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
+              <div ref={signingSectionRef} className="scroll-mt-32 space-y-5">
+                <div className="space-y-1 px-1">
+                  <h3 className="text-xl font-bold text-slate-900">协议签约</h3>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">协议签约</h2>
                     </div>
-                  </div>
-                </section>
-
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-indigo-600" />
-                      <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">互斥项目组</h2>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-slate-700">参赛需签约</p>
+                      <p className="text-xs leading-6 text-slate-500">
+                        若开启，则将在用户填写报名表时引导用户完成签约，每份报名表需单独签约。
+                      </p>
                     </div>
-                    <button 
-                      onClick={() => {
-                        setEditingGroup(null);
-                        setShowRestrictionModal(true);
-                      }}
-                      className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                    <button
+                      onClick={() => setConfig({ ...config, enableSigning: !config.enableSigning })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                        config.enableSigning ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      添加互斥组
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          config.enableSigning ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
                     </button>
                   </div>
-                  
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50/50 border-b border-slate-100">
-                          <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider w-20">序</th>
-                          <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">互斥项目</th>
-                          <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider w-32">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {config.mutuallyExclusiveGroups.map((group, idx) => (
-                          <tr key={group.id} className="hover:bg-slate-50/30 transition-colors">
-                            <td className="px-6 py-4 text-sm text-slate-500 font-medium">{idx + 1}</td>
-                            <td className="px-6 py-4">
-                              <div className="flex flex-wrap gap-2">
-                                {group.eventNames.map((name, i) => (
-                                  <span key={i} className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium border border-slate-200">
-                                    {name}
-                                  </span>
+
+                  <AnimatePresence initial={false}>
+                    {config.enableSigning ? (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: 'easeInOut' }}
+                        className="overflow-hidden border-t border-slate-100"
+                      >
+                        <div className="divide-y divide-slate-100">
+                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                            <div />
+                            <div className="space-y-3">
+                              <p className="text-sm font-medium text-slate-700">签约协议</p>
+                              <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                                {config.selectedAgreements.length > 0 ? (
+                                  <div className="space-y-3">
+                                    <div className="flex flex-wrap gap-2">
+                                      {config.selectedAgreements.map((agreement) => (
+                                        <div key={agreement.id} className="flex items-center gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-1.5">
+                                          <FileText className="h-3.5 w-3.5 text-indigo-600" />
+                                          <span className="text-xs font-semibold text-indigo-900">{agreement.name}</span>
+                                          <button
+                                            onClick={() =>
+                                              setConfig({
+                                                ...config,
+                                                selectedAgreements: config.selectedAgreements.filter((a) => a.id !== agreement.id),
+                                              })
+                                            }
+                                            className="rounded-full p-0.5 text-indigo-400 transition-colors hover:bg-indigo-100 hover:text-indigo-600"
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <p className="text-xs leading-6 text-slate-500">已选择 {config.selectedAgreements.length} 份协议，可继续增减。</p>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs leading-6 text-slate-400">当前未选择签约协议。</p>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setShowAgreementModal(true)}
+                              className="text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+                            >
+                              设置
+                            </button>
+                          </div>
+
+                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+                            <div />
+                            <div className="space-y-3">
+                              <p className="text-sm font-medium text-slate-700">签署方式</p>
+                              <div className="flex flex-wrap gap-8">
+                                {[
+                                  { id: SigningMethod.READ_AND_AGREE, label: '阅读并同意' },
+                                  { id: SigningMethod.USER_SIGNATURE, label: '用户签名' },
+                                ].map((item) => (
+                                  <label key={item.id} className="flex cursor-pointer items-center gap-3 group">
+                                    <div
+                                      onClick={() => setConfig({ ...config, signingMethod: item.id })}
+                                      className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all ${
+                                        config.signingMethod === item.id
+                                          ? 'border-indigo-600 bg-indigo-600'
+                                          : 'border-slate-300 group-hover:border-indigo-400'
+                                      }`}
+                                    >
+                                      {config.signingMethod === item.id && <div className="h-2 w-2 rounded-full bg-white" />}
+                                    </div>
+                                    <span
+                                      className={`text-sm font-medium ${
+                                        config.signingMethod === item.id ? 'text-slate-900' : 'text-slate-500'
+                                      }`}
+                                    >
+                                      {item.label}
+                                    </span>
+                                  </label>
                                 ))}
                               </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-4">
-                                <button 
-                                  onClick={() => {
-                                    setEditingGroup(group);
-                                    setShowRestrictionModal(true);
-                                  }}
-                                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
-                                >
-                                  编辑
-                                </button>
-                                <button 
-                                  onClick={() => {
-                                    setConfig({
-                                      ...config,
-                                      mutuallyExclusiveGroups: config.mutuallyExclusiveGroups.filter(g => g.id !== group.id)
-                                    });
-                                  }}
-                                  className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors"
-                                >
-                                  删除
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {config.mutuallyExclusiveGroups.length === 0 && (
-                          <tr>
-                            <td colSpan={3} className="px-6 py-12 text-center">
-                              <div className="flex flex-col items-center gap-2 opacity-30">
-                                <Layers className="w-8 h-8 text-slate-400" />
-                                <p className="text-xs font-medium text-slate-500">暂无互斥配置</p>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              </div>
-
-              <div ref={signingSectionRef} className="scroll-mt-40 space-y-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                    <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">协议签约配置</h2>
-                  </div>
-                  <div className="p-8 space-y-10">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-500 font-bold">*</span>
-                        <label className="text-sm font-medium text-slate-700">参赛需签约：</label>
-                      </div>
-                      <div className="flex flex-col gap-3">
-                        <button 
-                          onClick={() => setConfig({ ...config, enableSigning: !config.enableSigning })}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                            config.enableSigning ? 'bg-indigo-600' : 'bg-slate-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enableSigning ? 'translate-x-6' : 'translate-x-1'}`} />
-                        </button>
-                        <p className="text-xs text-slate-400">
-                          若开启，则将在用户填写报名表时引导用户完成签约，每份报名表需单独签约
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-500 font-bold">*</span>
-                        <label className="text-sm font-medium text-slate-700">签约协议：</label>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap gap-2">
-                          {config.selectedAgreements.map(agreement => (
-                            <div key={agreement.id} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-lg group transition-all">
-                              <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                              <span className="text-xs font-semibold text-indigo-900">{agreement.name}</span>
-                              <button 
-                                onClick={() => setConfig({ ...config, selectedAgreements: config.selectedAgreements.filter(a => a.id !== agreement.id) })}
-                                className="p-0.5 hover:bg-indigo-200 rounded-full text-indigo-400 hover:text-indigo-600 transition-colors"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
                             </div>
-                          ))}
+                            <div className="text-sm font-medium text-slate-400">
+                              {config.signingMethod === SigningMethod.READ_AND_AGREE ? '已选择阅读并同意' : '已选择用户签名'}
+                            </div>
+                          </div>
                         </div>
-                        <button 
-                          onClick={() => setShowAgreementModal(true)}
-                          className="text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1"
-                        >
-                          选择协议
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-500 font-bold">*</span>
-                        <label className="text-sm font-medium text-slate-700">签署方式：</label>
-                      </div>
-                      <div className="flex items-center gap-8">
-                        {[
-                          { id: SigningMethod.READ_AND_AGREE, label: '阅读并同意' },
-                          { id: SigningMethod.USER_SIGNATURE, label: '用户签名' }
-                        ].map(item => (
-                          <label key={item.id} className="flex items-center gap-3 cursor-pointer group">
-                            <div 
-                              onClick={() => setConfig({ ...config, signingMethod: item.id })}
-                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                config.signingMethod === item.id
-                                  ? 'bg-indigo-600 border-indigo-600'
-                                  : 'border-slate-300 group-hover:border-indigo-400'
-                              }`}
-                            >
-                              {config.signingMethod === item.id && <div className="w-2 h-2 rounded-full bg-white" />}
-                            </div>
-                            <span className={`text-sm font-medium ${config.signingMethod === item.id ? 'text-slate-900' : 'text-slate-500'}`}>
-                              {item.label}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </div>
+              </div>
                     </div>
                   </div>
-                </section>
-              </div>
-            </motion.div>
+                </motion.div>
 
             ) : viewMode === 'discount-rules' ? (
               <motion.div
@@ -7759,14 +7991,28 @@ export default function App() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="space-y-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                className="space-y-6"
               >
+                <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/70 px-8 py-6">
+                    <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                      <Tag className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">优惠规则</h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        统一配置赛事报名阶段的优惠策略，当前支持兼项优惠。
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
                 {/* Single Discount Rule: Multi-Event Discount */}
                 <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                  <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Zap className="w-4 h-4 text-indigo-600" />
-                      <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">兼项优惠配置</h2>
+                      <h2 className="text-base font-semibold text-slate-900">兼项优惠配置</h2>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs font-medium text-slate-500">
@@ -7850,15 +8096,22 @@ export default function App() {
                                   <button
                                     key={item.id}
                                     type="button"
-                                    onClick={() => setConfig({
-                                      ...config,
-                                      multiEventDiscount: { ...config.multiEventDiscount, multi_event_calc_type: item.id as MultiEventCalcType }
-                                    })}
+                                    onClick={() => {
+                                      if (item.id === MultiEventCalcType.ENTRY) return;
+                                      setConfig({
+                                        ...config,
+                                        multiEventDiscount: { ...config.multiEventDiscount, multi_event_calc_type: item.id as MultiEventCalcType }
+                                      });
+                                    }}
                                     className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                      item.id === MultiEventCalcType.ENTRY
+                                        ? 'cursor-not-allowed text-slate-300'
+                                        : 
                                       config.multiEventDiscount.multi_event_calc_type === item.id 
                                       ? 'bg-white text-indigo-600 shadow-sm' 
                                       : 'text-slate-500 hover:text-slate-700'
                                     }`}
+                                    disabled={item.id === MultiEventCalcType.ENTRY}
                                   >
                                     {item.label}
                                   </button>
@@ -8016,33 +8269,6 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Validity Period */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
-                            <div className="space-y-2">
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">生效开始时间</label>
-                              <input 
-                                type="datetime-local" 
-                                value={config.multiEventDiscount.start_time}
-                                onChange={(e) => setConfig({
-                                  ...config,
-                                  multiEventDiscount: { ...config.multiEventDiscount, start_time: e.target.value }
-                                })}
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">生效结束时间</label>
-                              <input 
-                                type="datetime-local" 
-                                value={config.multiEventDiscount.end_time}
-                                onChange={(e) => setConfig({
-                                  ...config,
-                                  multiEventDiscount: { ...config.multiEventDiscount, end_time: e.target.value }
-                                })}
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                              />
-                            </div>
-                          </div>
                         </div>
                       </motion.div>
                     ) : (
@@ -8093,7 +8319,9 @@ export default function App() {
               className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
             >
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <h3 className="font-semibold text-slate-800">选择目标清单</h3>
+                <h3 className="font-semibold text-slate-800">
+                  选择{activeListPickerType === ListRestrictionType.WHITELIST ? '白名单' : '黑名单'}目标清单
+                </h3>
                 <button 
                   onClick={() => setShowListModal(false)}
                   className="p-2 hover:bg-slate-200 rounded-full transition-colors"
@@ -8115,31 +8343,90 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {filteredLists.length > 0 ? (
-                  filteredLists.map((list) => (
+              <div className="flex min-h-0 flex-1">
+                <aside className="w-[180px] flex-none border-r border-slate-100 p-3">
+                  <div className="space-y-2">
                     <button
-                      key={list.id}
-                      onClick={() => selectList(list.name)}
-                      className="w-full text-left p-4 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50 transition-all flex items-center justify-between group"
+                      onClick={() => setActiveListPickerGroupId('all')}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-all ${
+                        activeListPickerGroupId === 'all'
+                          ? 'bg-indigo-50 text-indigo-600'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-slate-50 rounded-lg group-hover:bg-white transition-colors">
-                          <FileText className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-700 group-hover:text-indigo-900">{list.name}</p>
-                          <p className="text-xs text-slate-400">包含 {list.count} 条记录</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600" />
+                      <span>全部分组</span>
+                      <span className="text-xs text-slate-400">{targetLists.length}</span>
                     </button>
-                  ))
+                    {targetListGroups.map((group) => (
+                      <button
+                        key={group.id}
+                        onClick={() => setActiveListPickerGroupId(group.id)}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-all ${
+                          activeListPickerGroupId === group.id
+                            ? 'bg-indigo-50 text-indigo-600'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="truncate">{group.name}</span>
+                        <span className="text-xs text-slate-400">
+                          {targetListGroupCounts.get(group.id) ?? 0}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </aside>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-2">
+                {filteredLists.length > 0 ? (
+                  filteredLists.map((list) => {
+                    const selectedIds =
+                      activeListPickerType === ListRestrictionType.WHITELIST
+                        ? config.selectedWhitelistListIds
+                        : config.selectedBlacklistListIds;
+                    const isSelected = selectedIds.includes(list.id);
+                    const group = targetListGroups.find((item) => item.id === list.groupId);
+                    return (
+                      <button
+                        key={list.id}
+                        onClick={() => toggleSelectedRestrictionList(list.id)}
+                        className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between group ${
+                          isSelected
+                            ? 'border-indigo-200 bg-indigo-50'
+                            : 'border-slate-100 hover:border-indigo-200 hover:bg-indigo-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg transition-colors ${isSelected ? 'bg-white' : 'bg-slate-50 group-hover:bg-white'}`}>
+                            <FileText className={`w-4 h-4 ${isSelected ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`} />
+                          </div>
+                          <div>
+                            <p className={`text-sm font-semibold ${isSelected ? 'text-indigo-900' : 'text-slate-700 group-hover:text-indigo-900'}`}>
+                              {list.name}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                              <span>包含 {list.members.length} 条记录</span>
+                              {group ? (
+                                <span className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
+                                  {group.name}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                        {isSelected ? (
+                          <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600" />
+                        )}
+                      </button>
+                    );
+                  })
                 ) : (
                   <div className="py-12 text-center">
                     <p className="text-sm text-slate-400">未找到相关清单</p>
                   </div>
                 )}
+                </div>
               </div>
 
               <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
@@ -8147,7 +8434,7 @@ export default function App() {
                   onClick={() => setShowListModal(false)}
                   className="px-6 py-2 text-sm font-medium text-slate-600 hover:text-slate-800"
                 >
-                  关闭
+                  完成
                 </button>
               </div>
             </motion.div>
