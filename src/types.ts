@@ -14,6 +14,18 @@ export enum QuotaBasis {
   PERSON = 'PERSON'
 }
 
+export enum AgeCalculationBase {
+  EVENT_START = 'EVENT_START',
+  REGISTRATION_END = 'REGISTRATION_END',
+  CALENDAR_YEAR_START = 'CALENDAR_YEAR_START',
+  CUSTOM_DATE = 'CUSTOM_DATE'
+}
+
+export enum AgeCalculationMethod {
+  BIRTH_YEAR = 'BIRTH_YEAR',
+  FULL_AGE = 'FULL_AGE'
+}
+
 export enum RuleType {
   EARLY_BIRD = 'EARLY_BIRD',
   MULTI_EVENT = 'MULTI_EVENT',
@@ -98,6 +110,22 @@ export interface AgreementTemplate {
   name: string;
 }
 
+export interface AdvancedTeamLimitRule {
+  id: string;
+  groupName: string;
+  enabled: boolean;
+  maxMembers?: number;
+  genderRequirement?: TeamGenderRequirement;
+}
+
+export interface AdvancedTeamLimitConfig {
+  requireGroupOnTeamCreation: boolean;
+  enableGroupSpecificLimits: boolean;
+  defaultMaxMembers?: number;
+  defaultGenderRequirement?: TeamGenderRequirement;
+  groupOverrides: AdvancedTeamLimitRule[];
+}
+
 export interface RegistrationConfig {
   startTime: string;
   endTime: string;
@@ -113,9 +141,15 @@ export interface RegistrationConfig {
   maxEventsPerPerson: number;
   restrictionScope: string[]; // e.g., ['INDIVIDUAL', 'TEAM']
   mutuallyExclusiveGroups: MutuallyExclusiveGroup[];
+  enableIndividualRegistration: boolean;
   enableTeamRosterLimit: boolean;
   maxMembersPerTeam?: number;
   maxCoachesPerTeam?: number;
+  teamGenderRequirement?: TeamGenderRequirement;
+  teamLimitConfig: AdvancedTeamLimitConfig;
+  ageCalculationBase: AgeCalculationBase;
+  ageCalculationMethod: AgeCalculationMethod;
+  ageCalculationCustomDate?: string;
   // Agreement Signing
   enableSigning: boolean;
   selectedAgreements: AgreementTemplate[];
@@ -379,6 +413,12 @@ export interface MatchRound {
   matches: MatchSession[];
 }
 
+export interface TournamentAttachment {
+  id: string;
+  name: string;
+  sizeLabel: string;
+}
+
 export interface TournamentBasicInfo {
   tournamentName: string;
   tournamentSubtitle: string;
@@ -391,7 +431,9 @@ export interface TournamentBasicInfo {
   city: string;
   venueName: string;
   venueAddress: string;
+  competitionRules: string;
   description: string;
+  attachments: TournamentAttachment[];
 }
 
 export interface VenueConfig {

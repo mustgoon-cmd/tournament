@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   CalendarDays,
@@ -13,6 +13,11 @@ import {
   ChevronRight,
   Search,
   Wand2,
+  Upload,
+  Bold,
+  List,
+  ListOrdered,
+  Quote,
 } from 'lucide-react';
 import { TournamentBasicInfo } from '../types';
 
@@ -77,6 +82,8 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
   onNavigateToDecoration,
 }) => {
   const [venueKeyword, setVenueKeyword] = useState('');
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const competitionRulesEditorRef = useRef<HTMLDivElement | null>(null);
 
   const selectedProvince = CITY_LIBRARY.find((item) => item.province === value.province);
   const availableCities = selectedProvince?.cities ?? [];
@@ -119,6 +126,36 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
     onChange({ [field]: nextList.length > 0 ? nextList : [''] });
   };
 
+  const handleAttachmentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+
+    const nextAttachments = files.map((file) => ({
+      id: `ATT${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      name: file.name,
+      sizeLabel:
+        file.size >= 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${Math.max(1, Math.round(file.size / 1024))} KB`,
+    }));
+
+    onChange({ attachments: [...value.attachments, ...nextAttachments] });
+    event.target.value = '';
+  };
+
+  const removeAttachment = (attachmentId: string) => {
+    onChange({ attachments: value.attachments.filter((item) => item.id !== attachmentId) });
+  };
+
+  const applyCompetitionRulesFormat = (
+    command: 'bold' | 'insertUnorderedList' | 'insertOrderedList' | 'formatBlock',
+    valueArg?: string,
+  ) => {
+    competitionRulesEditorRef.current?.focus();
+    document.execCommand(command, false, valueArg);
+    onChange({ competitionRules: competitionRulesEditorRef.current?.innerHTML ?? '' });
+  };
+
   const completionCount = [
     value.tournamentName,
     value.tournamentSubtitle,
@@ -131,7 +168,9 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
     value.city,
     value.venueName,
     value.venueAddress,
+    value.competitionRules,
     value.description,
+    value.attachments.length > 0 ? 'attachments' : '',
   ].filter(Boolean).length;
 
   return (
@@ -443,6 +482,52 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
               <section className="space-y-5">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-indigo-500" />
+                  <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">竞赛规程</h2>
+                </div>
+
+                <div className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                    {[
+                      { label: '加粗', icon: Bold, onClick: () => applyCompetitionRulesFormat('bold') },
+                      { label: '无序列表', icon: List, onClick: () => applyCompetitionRulesFormat('insertUnorderedList') },
+                      { label: '有序列表', icon: ListOrdered, onClick: () => applyCompetitionRulesFormat('insertOrderedList') },
+                      { label: '引用', icon: Quote, onClick: () => applyCompetitionRulesFormat('formatBlock', 'blockquote') },
+                    ].map((item) => (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={item.onClick}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        <item.icon className="h-3.5 w-3.5" />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative min-h-[220px] rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-4">
+                    {!value.competitionRules && (
+                      <div className="pointer-events-none absolute left-5 top-4 text-sm leading-7 text-slate-400">
+                        支持录入赛事规程、参赛须知、竞赛办法、奖励说明等内容。
+                      </div>
+                    )}
+                    <div
+                      ref={competitionRulesEditorRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onInput={(event) =>
+                        onChange({ competitionRules: (event.currentTarget as HTMLDivElement).innerHTML })
+                      }
+                      dangerouslySetInnerHTML={{ __html: value.competitionRules }}
+                      className="min-h-[188px] text-sm leading-7 text-slate-800 outline-none [&_blockquote]:border-l-4 [&_blockquote]:border-indigo-200 [&_blockquote]:pl-4 [&_li]:ml-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p+ul]:mt-2 [&_p]:mb-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-5">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-indigo-500" />
                   <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">赛事介绍</h2>
                 </div>
 
@@ -456,6 +541,67 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                     className="w-full rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-4 text-sm leading-7 text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                   />
                 </label>
+              </section>
+
+              <section className="space-y-5">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-indigo-500" />
+                  <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">上传附件</h2>
+                </div>
+
+                <div className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">上传赛事规程、报名须知等附件</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">
+                        当前以原型方式模拟上传，支持先选择本地文件并展示文件名与大小。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => attachmentInputRef.current?.click()}
+                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700"
+                    >
+                      <Upload className="h-4 w-4" />
+                      上传附件
+                    </button>
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={handleAttachmentUpload}
+                    />
+                  </div>
+
+                  {value.attachments.length > 0 ? (
+                    <div className="space-y-3">
+                      {value.attachments.map((attachment) => (
+                        <div
+                          key={attachment.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">{attachment.name}</p>
+                            <p className="mt-1 text-xs text-slate-400">{attachment.sizeLabel}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(attachment.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition hover:text-rose-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            删除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-400">
+                      暂未上传附件
+                    </div>
+                  )}
+                </div>
               </section>
             </div>
           </motion.section>
@@ -475,7 +621,7 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold whitespace-nowrap text-indigo-600">
-                    {completionCount}/12
+                    {completionCount}/14
                   </div>
                   <button
                     type="button"
@@ -514,12 +660,29 @@ export const BasicInfoConfig: React.FC<BasicInfoConfigProps> = ({
                   { label: '承办单位', value: value.coOrganizers.filter(Boolean).join(' / ') || '待填写' },
                   { label: '举办城市', value: value.province && value.city ? `${value.province} / ${value.city}` : '待填写' },
                   { label: '举办地点', value: value.venueName || value.venueAddress || '待填写' },
+                  { label: '竞赛规程', value: value.competitionRules ? '已填写' : '待填写' },
+                  { label: '上传附件', value: value.attachments.length > 0 ? `${value.attachments.length} 个文件` : '未上传' },
                 ].map((item) => (
                   <div key={item.label} className="flex items-start justify-between gap-4 border-b border-slate-200/70 pb-3 last:border-b-0 last:pb-0">
                     <span className="shrink-0 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">{item.label}</span>
                     <span className="text-right text-sm leading-6 text-slate-600">{item.value}</span>
                   </div>
                 ))}
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                  <FileText className="h-4 w-4 text-indigo-500" />
+                  竞赛规程摘要
+                </div>
+                <div
+                  className="mt-3 text-sm leading-7 text-slate-500 [&_blockquote]:border-l-4 [&_blockquote]:border-indigo-200 [&_blockquote]:pl-4 [&_li]:ml-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5"
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      value.competitionRules ||
+                      '<p>这里会展示竞赛规程摘要，便于在右侧快速确认是否已录入赛事的核心比赛规则。</p>',
+                  }}
+                />
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">

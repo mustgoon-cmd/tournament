@@ -13,7 +13,7 @@ import {
 import { TablePagination } from './TablePagination';
 
 type DateRuleOperator = 'on_or_after' | 'on_or_before' | 'between';
-type DateRuleMode = 'fixed' | 'dynamic';
+type DateRuleMode = 'fixed';
 type GroupPageMode = 'list' | 'editor';
 
 type BirthDateRule = {
@@ -51,7 +51,7 @@ const createId = (prefix: string) => `${prefix}-${Math.random().toString(36).sli
 const createRule = (overrides: Partial<BirthDateRule> = {}): BirthDateRule => ({
   id: createId('rule'),
   operator: 'between',
-  mode: 'dynamic',
+  mode: 'fixed',
   fixedDate: '',
   fixedStartDate: '',
   fixedEndDate: '',
@@ -86,7 +86,7 @@ const INITIAL_GROUPS: GroupDefinition[] = [
   {
     id: 'group-u',
     name: 'U系列',
-    description: '青少年分龄组，按出生日期自动计算对应年龄段。',
+    description: '青少年分龄组，按出生日期区间划分对应年龄段。',
     createdAt: '2026-03-24 16:20:00',
     values: [
       {
@@ -96,11 +96,9 @@ const INITIAL_GROUPS: GroupDefinition[] = [
         rules: [
           createRule({
             operator: 'between',
-            mode: 'dynamic',
-            rangeStartAgeOffset: 10,
-            rangeStartMonthDay: '01-01',
-            rangeEndAgeOffset: 10,
-            rangeEndMonthDay: '12-31',
+            mode: 'fixed',
+            fixedStartDate: '2016-01-01',
+            fixedEndDate: '2016-12-31',
           }),
         ],
       },
@@ -111,11 +109,9 @@ const INITIAL_GROUPS: GroupDefinition[] = [
         rules: [
           createRule({
             operator: 'between',
-            mode: 'dynamic',
-            rangeStartAgeOffset: 12,
-            rangeStartMonthDay: '01-01',
-            rangeEndAgeOffset: 12,
-            rangeEndMonthDay: '12-31',
+            mode: 'fixed',
+            fixedStartDate: '2014-01-01',
+            fixedEndDate: '2014-12-31',
           }),
         ],
       },
@@ -155,44 +151,29 @@ const OPERATOR_OPTIONS: { value: DateRuleOperator; label: string }[] = [
   { value: 'between', label: '介于区间' },
 ];
 
-const normalizeMonthDay = (value: string, fallback: string) =>
-  /^\d{2}-\d{2}$/.test(value) ? value : fallback;
-
-const formatSingleResolvedDate = (rule: BirthDateRule, currentYear: number) => {
-  if (rule.mode === 'fixed') {
-    return rule.fixedDate || '未设置日期';
-  }
-
-  return `${currentYear - rule.ageOffset}-${normalizeMonthDay(rule.monthDay, '01-01')}`;
+const formatSingleResolvedDate = (rule: BirthDateRule) => {
+  return rule.fixedDate || '未设置日期';
 };
 
-const formatRangeResolvedDates = (rule: BirthDateRule, currentYear: number) => {
-  if (rule.mode === 'fixed') {
-    return {
-      start: rule.fixedStartDate || '未设置开始日期',
-      end: rule.fixedEndDate || '未设置结束日期',
-    };
-  }
-
+const formatRangeResolvedDates = (rule: BirthDateRule) => {
   return {
-    start: `${currentYear - rule.rangeStartAgeOffset}-${normalizeMonthDay(rule.rangeStartMonthDay, '01-01')}`,
-    end: `${currentYear - rule.rangeEndAgeOffset}-${normalizeMonthDay(rule.rangeEndMonthDay, '12-31')}`,
+    start: rule.fixedStartDate || '未设置开始日期',
+    end: rule.fixedEndDate || '未设置结束日期',
   };
 };
 
-const summarizeRule = (rule: BirthDateRule, currentYear: number) => {
+const summarizeRule = (rule: BirthDateRule) => {
   if (rule.operator === 'between') {
-    const { start, end } = formatRangeResolvedDates(rule, currentYear);
+    const { start, end } = formatRangeResolvedDates(rule);
     return `出生日期 介于 ${start} ～ ${end}`;
   }
 
   const operatorLabel =
     OPERATOR_OPTIONS.find((item) => item.value === rule.operator)?.label ?? '晚于或等于';
-  return `出生日期 ${operatorLabel} ${formatSingleResolvedDate(rule, currentYear)}`;
+  return `出生日期 ${operatorLabel} ${formatSingleResolvedDate(rule)}`;
 };
 
 export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boolean }) {
-  const currentYear = new Date().getFullYear();
   const [pageMode, setPageMode] = useState<GroupPageMode>('list');
   const [groups, setGroups] = useState<GroupDefinition[]>(INITIAL_GROUPS);
   const [searchDraft, setSearchDraft] = useState('');
@@ -444,8 +425,7 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
 
   if (!selectedGroup || !selectedValue) return null;
 
-  const resolvedRange = selectedRule ? formatRangeResolvedDates(selectedRule, currentYear) : null;
-  const resolvedDate = selectedRule ? formatSingleResolvedDate(selectedRule, currentYear) : null;
+  const resolvedRange = selectedRule ? formatRangeResolvedDates(selectedRule) : null;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -634,179 +614,53 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
 
                       <label className="flex h-full flex-col">
                         <span className="text-sm font-medium text-slate-600">日期模式</span>
-                        <select
-                          value={selectedRule.mode}
-                          onChange={(event) =>
-                            updateRule(selectedRule.id, { mode: event.target.value as DateRuleMode })
-                          }
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                        >
-                          <option value="fixed">固定日期</option>
-                          <option value="dynamic">按年龄计算</option>
-                        </select>
+                        <div className="flex h-[46px] items-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-700">
+                          固定日期
+                        </div>
                       </label>
                     </div>
 
-                    {selectedRule.mode === 'fixed' ? (
-                      selectedRule.operator === 'between' ? (
-                        <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          <label className="space-y-2">
-                            <span className="text-sm font-medium text-slate-600">开始日期</span>
-                            <input
-                              type="date"
-                              value={selectedRule.fixedStartDate}
-                              onChange={(event) =>
-                                updateRule(selectedRule.id, { fixedStartDate: event.target.value })
-                              }
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                            />
-                          </label>
-                          <label className="space-y-2">
-                            <span className="text-sm font-medium text-slate-600">结束日期</span>
-                            <input
-                              type="date"
-                              value={selectedRule.fixedEndDate}
-                              onChange={(event) =>
-                                updateRule(selectedRule.id, { fixedEndDate: event.target.value })
-                              }
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                            />
-                          </label>
-                        </div>
-                      ) : (
-                        <div className="mt-4">
-                          <label className="space-y-2">
-                            <span className="text-sm font-medium text-slate-600">出生日期</span>
-                            <input
-                              type="date"
-                              value={selectedRule.fixedDate}
-                              onChange={(event) => updateRule(selectedRule.id, { fixedDate: event.target.value })}
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                            />
-                          </label>
-                        </div>
-                      )
+                    {selectedRule.operator === 'between' ? (
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <label className="space-y-2">
+                          <span className="text-sm font-medium text-slate-600">开始日期</span>
+                          <input
+                            type="date"
+                            value={selectedRule.fixedStartDate}
+                            onChange={(event) =>
+                              updateRule(selectedRule.id, { fixedStartDate: event.target.value })
+                            }
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </label>
+                        <label className="space-y-2">
+                          <span className="text-sm font-medium text-slate-600">结束日期</span>
+                          <input
+                            type="date"
+                            value={selectedRule.fixedEndDate}
+                            onChange={(event) =>
+                              updateRule(selectedRule.id, { fixedEndDate: event.target.value })
+                            }
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </label>
+                      </div>
                     ) : (
-                      <div className="mt-4 space-y-4">
-                        <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100">
-                          当前年份：{currentYear}
-                        </div>
-                        {selectedRule.operator === 'between' ? (
-                          <div className="grid gap-4 xl:grid-cols-2">
-                            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-                              <p className="mb-4 text-sm font-semibold text-slate-800">开始日期</p>
-                              <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm text-slate-500">当前年 -</span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={selectedRule.rangeStartAgeOffset}
-                                    onChange={(event) =>
-                                      updateRule(selectedRule.id, {
-                                        rangeStartAgeOffset: Number(event.target.value || 0),
-                                      })
-                                    }
-                                    className="w-24 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-center text-lg font-bold text-indigo-600 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                                  />
-                                  <span className="text-sm text-slate-500">年</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm text-slate-500">日期</span>
-                                  <input
-                                    value={selectedRule.rangeStartMonthDay}
-                                    onChange={(event) =>
-                                      updateRule(selectedRule.id, {
-                                        rangeStartMonthDay: event.target.value.replace(/[^\d-]/g, '').slice(0, 5),
-                                      })
-                                    }
-                                    placeholder="01-01"
-                                    className="w-32 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-semibold text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                                  />
-                                </div>
-                              </div>
-                              <p className="mt-4 text-sm font-semibold text-indigo-600">{resolvedRange?.start}</p>
-                            </div>
-
-                            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-                              <p className="mb-4 text-sm font-semibold text-slate-800">结束日期</p>
-                              <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm text-slate-500">当前年 -</span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={selectedRule.rangeEndAgeOffset}
-                                    onChange={(event) =>
-                                      updateRule(selectedRule.id, {
-                                        rangeEndAgeOffset: Number(event.target.value || 0),
-                                      })
-                                    }
-                                    className="w-24 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-center text-lg font-bold text-indigo-600 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                                  />
-                                  <span className="text-sm text-slate-500">年</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm text-slate-500">日期</span>
-                                  <input
-                                    value={selectedRule.rangeEndMonthDay}
-                                    onChange={(event) =>
-                                      updateRule(selectedRule.id, {
-                                        rangeEndMonthDay: event.target.value.replace(/[^\d-]/g, '').slice(0, 5),
-                                      })
-                                    }
-                                    placeholder="12-31"
-                                    className="w-32 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-semibold text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                                  />
-                                </div>
-                              </div>
-                              <p className="mt-4 text-sm font-semibold text-indigo-600">{resolvedRange?.end}</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_200px]">
-                            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-                              <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm text-slate-500">当前年 -</span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={selectedRule.ageOffset}
-                                    onChange={(event) =>
-                                      updateRule(selectedRule.id, { ageOffset: Number(event.target.value || 0) })
-                                    }
-                                    className="w-24 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-center text-lg font-bold text-indigo-600 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                                  />
-                                  <span className="text-sm text-slate-500">年</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm text-slate-500">日期</span>
-                                  <input
-                                    value={selectedRule.monthDay}
-                                    onChange={(event) =>
-                                      updateRule(selectedRule.id, {
-                                        monthDay: event.target.value.replace(/[^\d-]/g, '').slice(0, 5),
-                                      })
-                                    }
-                                    placeholder="01-01"
-                                    className="w-32 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-semibold text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                            <div className="rounded-[22px] border border-indigo-100 bg-indigo-50 px-4 py-4">
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-400">生效年份</p>
-                              <p className="mt-2 text-2xl font-bold text-indigo-700">{currentYear - selectedRule.ageOffset}</p>
-                              <p className="mt-2 text-sm text-indigo-500">{resolvedDate}</p>
-                            </div>
-                          </div>
-                        )}
+                      <div className="mt-4">
+                        <label className="space-y-2">
+                          <span className="text-sm font-medium text-slate-600">出生日期</span>
+                          <input
+                            type="date"
+                            value={selectedRule.fixedDate}
+                            onChange={(event) => updateRule(selectedRule.id, { fixedDate: event.target.value })}
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </label>
                       </div>
                     )}
 
                     <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      规则预览：{summarizeRule(selectedRule, currentYear)}
+                      规则预览：{summarizeRule(selectedRule)}
                     </div>
                   </div>
                 ) : null}
