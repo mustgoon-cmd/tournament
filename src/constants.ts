@@ -14,7 +14,7 @@ export const MOCK_ORDERS: RegistrationOrder[] = [
     user_name: '张三',
     user_phone: '13800138000',
     order_source: '小程序报名',
-    remarks: '同一笔订单内含单项与团体项目，客服已电话确认队伍名单。',
+    remarks: '领队已统一确认本次报名信息，待赛事方审核报名资料。',
     tournament_id: 'T001',
     tournament_name: '2026全国羽毛球公开赛',
     total_amount: 300,

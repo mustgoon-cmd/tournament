@@ -2220,7 +2220,6 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                   const relatedOrder = getOrderForEntry(selectedEntryForDetail);
                   const paymentRecords = relatedOrder ? getOrderPaymentRecords(relatedOrder) : [];
                   const refundRecords = relatedOrder ? getOrderRefundRecords(relatedOrder) : [];
-                  const editPermissionStatus = getEntryEditPermissionStatus(selectedEntryForDetail);
                   const paymentTime =
                     paymentRecords.find((record) => record.status !== '待支付')?.time ||
                     (relatedOrder?.pay_status !== PayStatus.UNPAID ? relatedOrder?.updated_at : '--') ||
@@ -2329,32 +2328,6 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">更新时间</p>
                         <p className="mt-1 text-sm font-mono text-slate-700">{selectedEntryForDetail.updated_at}</p>
-                      </div>
-                      <div className="xl:col-span-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">报名信息修改权限</p>
-                        <div className="mt-1 space-y-1">
-                          <p className="text-sm font-bold text-slate-800">
-                            {editPermissionStatus.enabled ? '已允许修改报名信息' : '当前未开放报名信息修改'}
-                            {editPermissionStatus.source === 'event' ? ' · 沿用赛事规则' : ''}
-                          </p>
-                          <p className="text-[11px] text-slate-500">
-                            {editPermissionStatus.enabled
-                              ? `截止时间：${editPermissionStatus.deadline || '未设置'}`
-                              : '报名截止后默认不可修改。'}
-                          </p>
-                          {postDeadlineEditConfig?.editableFields?.length ? (
-                            <div className="flex flex-wrap gap-2 pt-1">
-                              {postDeadlineEditConfig.editableFields.map((field) => (
-                                <span
-                                  key={field}
-                                  className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500"
-                                >
-                                  {POST_DEADLINE_EDIT_SCOPE_LABELS[field]}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
                       </div>
                     </div>
                   </div>
