@@ -136,7 +136,12 @@ export const RegistrationProjects: React.FC = () => {
   const [pageMode, setPageMode] = useState<'list' | 'matrix-generator'>('list');
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   
-  // Search states
+  // Search draft states
+  const [searchNameDraft, setSearchNameDraft] = useState('');
+  const [searchFormatDraft, setSearchFormatDraft] = useState('');
+  const [searchGroupDraft, setSearchGroupDraft] = useState('');
+  const [searchStatusDraft, setSearchStatusDraft] = useState('');
+  // Applied search states
   const [searchName, setSearchName] = useState('');
   const [searchFormat, setSearchFormat] = useState('');
   const [searchGroup, setSearchGroup] = useState('');
@@ -179,6 +184,26 @@ export const RegistrationProjects: React.FC = () => {
       return matchType && matchName && matchStatus;
     });
   }, [projects, activeTab, searchName, searchFormat, searchGroup, searchStatus]);
+
+  const applySearch = () => {
+    setSearchName(searchNameDraft);
+    setSearchFormat(searchFormatDraft);
+    setSearchGroup(searchGroupDraft);
+    setSearchStatus(searchStatusDraft);
+    setCurrentPage(1);
+  };
+
+  const resetSearch = () => {
+    setSearchNameDraft('');
+    setSearchFormatDraft('');
+    setSearchGroupDraft('');
+    setSearchStatusDraft('');
+    setSearchName('');
+    setSearchFormat('');
+    setSearchGroup('');
+    setSearchStatus('');
+    setCurrentPage(1);
+  };
   const totalPages = Math.max(1, Math.ceil(filteredProjects.length / pageSize));
   const normalizedPage = Math.min(currentPage, totalPages);
   const pagedProjects = filteredProjects.slice((normalizedPage - 1) * pageSize, normalizedPage * pageSize);
@@ -396,24 +421,23 @@ export const RegistrationProjects: React.FC = () => {
           </div>
         </div>
         <div className="p-8 space-y-6">
-      {/* Search Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="relative">
+      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+        <div className="relative min-w-[260px] flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input 
             type="text" 
             placeholder="搜索项目名称..."
-            value={searchName}
-            onChange={(e) => setSearchName(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+            value={searchNameDraft}
+            onChange={(e) => setSearchNameDraft(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none"
           />
         </div>
         {activeTab === 'single' && (
           <>
             <select 
-              value={searchFormat}
-              onChange={(e) => setSearchFormat(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={searchFormatDraft}
+              onChange={(e) => setSearchFormatDraft(e.target.value)}
+              className="min-w-[220px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none"
             >
               <option value="">所有比赛形式</option>
               {MATCH_FORMAT_GROUPS.map((group) => (
@@ -427,9 +451,9 @@ export const RegistrationProjects: React.FC = () => {
               ))}
             </select>
             <select 
-              value={searchGroup}
-              onChange={(e) => setSearchGroup(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={searchGroupDraft}
+              onChange={(e) => setSearchGroupDraft(e.target.value)}
+              className="min-w-[180px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none"
             >
               <option value="">所有组别</option>
               <option value="U8">U8</option>
@@ -441,14 +465,26 @@ export const RegistrationProjects: React.FC = () => {
           </>
         )}
         <select 
-          value={searchStatus}
-          onChange={(e) => setSearchStatus(e.target.value)}
-          className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+          value={searchStatusDraft}
+          onChange={(e) => setSearchStatusDraft(e.target.value)}
+          className="min-w-[160px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none"
         >
           <option value="">所有状态</option>
           <option value="active">启用</option>
           <option value="inactive">禁用</option>
         </select>
+        <button
+          onClick={applySearch}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+        >
+          筛选
+        </button>
+        <button
+          onClick={resetSearch}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+        >
+          重置
+        </button>
       </div>
 
       {/* Table Content */}

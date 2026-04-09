@@ -42,10 +42,17 @@ type AnnouncementTab = 'projects' | 'multi_event_stats';
 interface RegistrationAnnouncementProps {
   onNavigateToRecords?: (tab: 'orders' | 'project_summary' | 'participants' | 'teams') => void;
   onNavigateToRegistration?: () => void;
+  initialTab?: AnnouncementTab;
+  pageVariant?: 'announcement' | 'project-filing' | 'multi-event-stats';
 }
 
-export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> = ({ onNavigateToRecords, onNavigateToRegistration }) => {
-  const [activeTab, setActiveTab] = useState<AnnouncementTab>('projects');
+export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> = ({
+  onNavigateToRecords,
+  onNavigateToRegistration,
+  initialTab = 'projects',
+  pageVariant = 'announcement',
+}) => {
+  const [activeTab, setActiveTab] = useState<AnnouncementTab>(initialTab);
   const [isCreateDropdownOpen, setIsCreateDropdownOpen] = useState(false);
   const [isCreateTypeModalOpen, setIsCreateTypeModalOpen] = useState(false);
   const [batchGroupCategory, setBatchGroupCategory] = useState<string>('U系列');
@@ -89,6 +96,26 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
   const [batchSelectedGroups, setBatchSelectedGroups] = useState<string[]>(['公开组']);
   const [batchSelectedFormats, setBatchSelectedFormats] = useState<string[]>(['男子单打', '女子单打', '混合双打']);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const showTabSwitcher = pageVariant === 'announcement';
+  const isProjectPage = activeTab === 'projects';
+  const pageMeta =
+    pageVariant === 'project-filing'
+      ? {
+          icon: Trophy,
+          title: '项目立项',
+          description: '根据报名数据确认比赛项目是否立项，并维护最终选手清单',
+        }
+      : pageVariant === 'multi-event-stats'
+      ? {
+          icon: BarChart3,
+          title: '兼项统计',
+          description: '查看当前赛事选手兼项情况与冲突分布',
+        }
+      : {
+          icon: Megaphone,
+          title: '比赛项目管理',
+          description: '管理已立项项目的公示状态及最终选手清单',
+        };
 
   const currentBatchFormatOptions = useMemo(
     () => MATCH_FORMAT_GROUPS.find((group) => group.name === batchFormatGroup)?.options || [],
@@ -464,31 +491,33 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
           <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
-                <Megaphone className="w-5 h-5" />
+                <pageMeta.icon className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">报名公示管理</h2>
-                <p className="text-xs text-slate-500 mt-0.5">管理已立项项目的公示状态及最终选手清单</p>
+                <h2 className="text-lg font-bold text-slate-900">{pageMeta.title}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{pageMeta.description}</p>
               </div>
             </div>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex gap-2 rounded-full bg-white p-1.5 shadow-lg shadow-slate-200/70 ring-1 ring-slate-200 w-fit">
-                <button 
-                  onClick={() => setActiveTab('projects')}
-                  className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'projects' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
-                >
-                  <Trophy className="w-3.5 h-3.5" />
-                  比赛项目信息
-                </button>
-                <button 
-                  onClick={() => setActiveTab('multi_event_stats')}
-                  className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'multi_event_stats' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
-                >
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  选手兼项统计
-                </button>
-              </div>
-              {activeTab === 'projects' && (
+              {showTabSwitcher && (
+                <div className="flex gap-2 rounded-full bg-white p-1.5 shadow-lg shadow-slate-200/70 ring-1 ring-slate-200 w-fit">
+                  <button 
+                    onClick={() => setActiveTab('projects')}
+                    className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'projects' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+                  >
+                    <Trophy className="w-3.5 h-3.5" />
+                    比赛项目信息
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('multi_event_stats')}
+                    className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'multi_event_stats' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    选手兼项统计
+                  </button>
+                </div>
+              )}
+              {isProjectPage && (
                 <div className="relative">
                   <button 
                     onClick={() => setIsCreateDropdownOpen(!isCreateDropdownOpen)}
@@ -555,7 +584,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.2 }}
               >
-                {activeTab === 'projects' ? renderProjectInfo() : renderMultiEventStats()}
+                {isProjectPage ? renderProjectInfo() : renderMultiEventStats()}
               </motion.div>
             </AnimatePresence>
         </div>

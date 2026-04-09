@@ -134,6 +134,8 @@ export interface RegistrationConfig {
   startTime: string;
   endTime: string;
   channel: RegistrationChannel;
+  enableRegistrationPublicity: boolean;
+  publicVisiblePlayerFields: string[];
   listRestrictions: ListRestrictionType[];
   selectedWhitelistListIds: string[];
   selectedBlacklistListIds: string[];
@@ -465,6 +467,7 @@ export interface ProjectSchedulingConfig {
 export interface TeamRecord {
   id: string;
   name: string;
+  group_name?: string;
   invite_code?: string;
   creator_name?: string;
   creator_phone?: string;

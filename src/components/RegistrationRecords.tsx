@@ -23,6 +23,7 @@ import {
   ExternalLink,
   ArrowRight,
   RotateCcw
+  ,Layers3
 } from 'lucide-react';
 import { 
   RegistrationOrder, 
@@ -37,9 +38,11 @@ import { TablePagination } from './TablePagination';
 
 type RecordTab = 'orders' | 'project_summary' | 'participants' | 'teams';
 type OrderDetailTab = 'projects' | 'payments' | 'refunds';
+type EntryDetailTab = 'order' | 'team' | 'participants' | 'payments' | 'refunds';
 
 interface RegistrationRecordsProps {
   initialTab?: RecordTab;
+  showTabs?: boolean;
 }
 
 interface EntryParticipantView {
@@ -60,7 +63,7 @@ interface ParticipantEntryRelation {
   entry: RegistrationEntry;
 }
 
-export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initialTab }) => {
+export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initialTab, showTabs = true }) => {
   const [activeTab, setActiveTab] = useState<RecordTab>(initialTab || 'orders');
 
   useEffect(() => {
@@ -68,6 +71,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
       setActiveTab(initialTab);
     }
   }, [initialTab]);
+
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [expandedParticipant, setExpandedParticipant] = useState<string | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
@@ -92,26 +96,48 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
   const [entryReplacementRecords, setEntryReplacementRecords] = useState<Record<string, { oldParticipant: EntryParticipantView; newParticipant: EntryParticipantView }>>({});
   const [teamExitedParticipantKeys, setTeamExitedParticipantKeys] = useState<Record<string, string[]>>({});
   const [orderDetailTab, setOrderDetailTab] = useState<OrderDetailTab>('projects');
+  const [entryDetailTab, setEntryDetailTab] = useState<EntryDetailTab>('order');
   const [isEditingParticipant, setIsEditingParticipant] = useState(false);
   const [editingParticipantData, setEditingParticipantData] = useState<RegistrationEntry | null>(null);
   
   // Search states
   const [projectSearch, setProjectSearch] = useState('');
   const [projectTypeSearch, setProjectTypeSearch] = useState('');
+  const [projectSearchDraft, setProjectSearchDraft] = useState('');
+  const [projectTypeSearchDraft, setProjectTypeSearchDraft] = useState('');
   
   // Participant search states
   const [participantNameSearch, setParticipantNameSearch] = useState('');
   const [participantPhoneSearch, setParticipantPhoneSearch] = useState('');
+  const [participantNameSearchDraft, setParticipantNameSearchDraft] = useState('');
+  const [participantPhoneSearchDraft, setParticipantPhoneSearchDraft] = useState('');
 
   // Team search states
   const [teamNameSearch, setTeamNameSearch] = useState('');
   const [teamLeaderSearch, setTeamLeaderSearch] = useState('');
+  const [teamGroupSearch, setTeamGroupSearch] = useState('');
+  const [teamNameSearchDraft, setTeamNameSearchDraft] = useState('');
+  const [teamLeaderSearchDraft, setTeamLeaderSearchDraft] = useState('');
+  const [teamGroupSearchDraft, setTeamGroupSearchDraft] = useState('');
   
   // Order search states
   const [orderNoSearch, setOrderNoSearch] = useState('');
   const [orderUserSearch, setOrderUserSearch] = useState('');
-  const [orderStatusSearch, setOrderStatusSearch] = useState('');
+  const [orderProjectSearch, setOrderProjectSearch] = useState('');
+  const [orderParticipantSearch, setOrderParticipantSearch] = useState('');
+  const [orderTeamSearch, setOrderTeamSearch] = useState('');
+  const [orderPayStatusSearch, setOrderPayStatusSearch] = useState('');
+  const [orderEntryStatusSearch, setOrderEntryStatusSearch] = useState('');
   const [orderDateSearch, setOrderDateSearch] = useState('');
+  const [orderNoSearchDraft, setOrderNoSearchDraft] = useState('');
+  const [orderUserSearchDraft, setOrderUserSearchDraft] = useState('');
+  const [orderProjectSearchDraft, setOrderProjectSearchDraft] = useState('');
+  const [orderParticipantSearchDraft, setOrderParticipantSearchDraft] = useState('');
+  const [orderTeamSearchDraft, setOrderTeamSearchDraft] = useState('');
+  const [orderPayStatusSearchDraft, setOrderPayStatusSearchDraft] = useState('');
+  const [orderEntryStatusSearchDraft, setOrderEntryStatusSearchDraft] = useState('');
+  const [orderDateSearchDraft, setOrderDateSearchDraft] = useState('');
+  const [orderFiltersExpanded, setOrderFiltersExpanded] = useState(false);
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(10);
   const [projectSummaryPage, setProjectSummaryPage] = useState(1);
@@ -121,6 +147,12 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
   const [teamsPage, setTeamsPage] = useState(1);
   const [teamsPageSize, setTeamsPageSize] = useState(10);
 
+  useEffect(() => {
+    if (selectedEntryForDetail) {
+      setEntryDetailTab('order');
+    }
+  }, [selectedEntryForDetail]);
+
   // Project interaction states
   const [selectedProjectForDetails, setSelectedProjectForDetails] = useState<any | null>(null);
   const [selectedParticipantForAdjustment, setSelectedParticipantForAdjustment] = useState<any | null>(null);
@@ -128,6 +160,83 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
   const [newProjectForAdjustment, setNewProjectForAdjustment] = useState('');
   const [projectSummary, setProjectSummary] = useState(MOCK_PROJECT_SUMMARY);
   const [projectToEstablish, setProjectToEstablish] = useState<any | null>(null);
+
+  const applyOrderSearch = () => {
+    setOrderNoSearch(orderNoSearchDraft);
+    setOrderUserSearch(orderUserSearchDraft);
+    setOrderProjectSearch(orderProjectSearchDraft);
+    setOrderParticipantSearch(orderParticipantSearchDraft);
+    setOrderTeamSearch(orderTeamSearchDraft);
+    setOrderPayStatusSearch(orderPayStatusSearchDraft);
+    setOrderEntryStatusSearch(orderEntryStatusSearchDraft);
+    setOrderDateSearch(orderDateSearchDraft);
+    setOrdersPage(1);
+  };
+
+  const resetOrderSearch = () => {
+    setOrderNoSearchDraft('');
+    setOrderUserSearchDraft('');
+    setOrderProjectSearchDraft('');
+    setOrderParticipantSearchDraft('');
+    setOrderTeamSearchDraft('');
+    setOrderPayStatusSearchDraft('');
+    setOrderEntryStatusSearchDraft('');
+    setOrderDateSearchDraft('');
+    setOrderNoSearch('');
+    setOrderUserSearch('');
+    setOrderProjectSearch('');
+    setOrderParticipantSearch('');
+    setOrderTeamSearch('');
+    setOrderPayStatusSearch('');
+    setOrderEntryStatusSearch('');
+    setOrderDateSearch('');
+    setOrdersPage(1);
+  };
+
+  const applyProjectSummarySearch = () => {
+    setProjectSearch(projectSearchDraft);
+    setProjectTypeSearch(projectTypeSearchDraft);
+    setProjectSummaryPage(1);
+  };
+
+  const resetProjectSummarySearch = () => {
+    setProjectSearchDraft('');
+    setProjectTypeSearchDraft('');
+    setProjectSearch('');
+    setProjectTypeSearch('');
+    setProjectSummaryPage(1);
+  };
+
+  const applyParticipantSearch = () => {
+    setParticipantNameSearch(participantNameSearchDraft);
+    setParticipantPhoneSearch(participantPhoneSearchDraft);
+    setParticipantsPage(1);
+  };
+
+  const resetParticipantSearch = () => {
+    setParticipantNameSearchDraft('');
+    setParticipantPhoneSearchDraft('');
+    setParticipantNameSearch('');
+    setParticipantPhoneSearch('');
+    setParticipantsPage(1);
+  };
+
+  const applyTeamSearch = () => {
+    setTeamNameSearch(teamNameSearchDraft);
+    setTeamLeaderSearch(teamLeaderSearchDraft);
+    setTeamGroupSearch(teamGroupSearchDraft);
+    setTeamsPage(1);
+  };
+
+  const resetTeamSearch = () => {
+    setTeamNameSearchDraft('');
+    setTeamLeaderSearchDraft('');
+    setTeamGroupSearchDraft('');
+    setTeamNameSearch('');
+    setTeamLeaderSearch('');
+    setTeamGroupSearch('');
+    setTeamsPage(1);
+  };
 
   const handleConfirmEstablishment = (projectId: string) => {
     setProjectSummary(prev => prev.map(p => 
@@ -316,6 +425,9 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
     if (team) setSelectedTeamForDetail(team);
   };
 
+  const getOrderForEntry = (entry?: RegistrationEntry) =>
+    entry ? MOCK_ORDERS.find((order) => order.id === entry.order_id || order.order_no === entry.order_no) || null : null;
+
   const getOrderSigningInfo = (entry?: RegistrationEntry) =>
     entry ? MOCK_ORDERS.find((order) => order.id === entry.order_id)?.signing_info || [] : [];
 
@@ -501,6 +613,51 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
         statusText: '已退出队伍',
       };
     });
+  };
+
+  const getOrderProjects = (order: RegistrationOrder) =>
+    order.entries.map((entry) => ({
+      id: entry.id,
+      name: entry.registration_event_name,
+      type: entry.type === 'team' ? '团体项目' : '单项项目',
+    }));
+
+  const getOrderParticipantsSummary = (order: RegistrationOrder) =>
+    order.entries.flatMap((entry) =>
+      getEntryParticipants(entry).map((participant) => ({
+        key: `${entry.id}-${participant.name}-${participant.phone}`,
+        name: participant.name,
+        phone: participant.phone,
+      })),
+    );
+
+  const getOrderTeams = (order: RegistrationOrder) =>
+    Array.from(new Set(order.entries.map((entry) => entry.team_name).filter(Boolean) as string[]));
+
+  const getOrderEntryStatusSummary = (order: RegistrationOrder) => {
+    const uniqueStatuses = Array.from(new Set(order.entries.map((entry) => entry.entry_status)));
+    return uniqueStatuses;
+  };
+
+  const getPaymentMethodLabel = (order: RegistrationOrder) => {
+    if (order.pay_status === PayStatus.UNPAID) return '--';
+    if (order.order_source?.includes('后台')) return '线下转账';
+    return '微信支付';
+  };
+
+  const getOrderDiscountDetailText = (order: RegistrationOrder) =>
+    order.entries
+      .map(
+        (entry) =>
+          `${entry.registration_event_name}：-¥${entry.discount_amount.toFixed(2)}`,
+      )
+      .join(' ｜ ');
+
+  const handleCancelOrder = (order: RegistrationOrder) => {
+    if (order.pay_status !== PayStatus.UNPAID) return;
+    if (confirm(`确定要取消订单「${order.order_no}」吗？`)) {
+      alert('订单已取消');
+    }
   };
 
   const renderOrderEntryCard = (
@@ -797,162 +954,333 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
   };
 
   const renderOrders = () => {
-    const filteredOrders = MOCK_ORDERS.filter(order => {
+    const orderDetailRows = MOCK_ORDERS.flatMap((order) =>
+      order.entries.map((entry) => ({
+        order,
+        entry,
+        participants: getEntryParticipants(entry),
+      })),
+    );
+
+    const filteredOrderRows = orderDetailRows.filter(({ order, entry, participants }) => {
       const matchesNo = order.order_no.toLowerCase().includes(orderNoSearch.toLowerCase());
-      const matchesUser = order.user_name.toLowerCase().includes(orderUserSearch.toLowerCase()) || 
-                          order.user_phone.includes(orderUserSearch);
-      const matchesStatus = orderStatusSearch === '' || order.pay_status === orderStatusSearch;
+      const matchesUser =
+        order.user_name.toLowerCase().includes(orderUserSearch.toLowerCase()) ||
+        order.user_phone.includes(orderUserSearch);
+      const matchesProject =
+        orderProjectSearch === '' ||
+        entry.registration_event_name.toLowerCase().includes(orderProjectSearch.toLowerCase());
+      const matchesParticipant =
+        orderParticipantSearch === '' ||
+        participants.some(
+          (participant) =>
+            participant.name.toLowerCase().includes(orderParticipantSearch.toLowerCase()) ||
+            participant.phone.includes(orderParticipantSearch),
+        );
+      const matchesTeam =
+        orderTeamSearch === '' ||
+        (entry.team_name || '').toLowerCase().includes(orderTeamSearch.toLowerCase());
+      const matchesPayStatus =
+        orderPayStatusSearch === '' || entry.pay_status === orderPayStatusSearch || order.pay_status === orderPayStatusSearch;
+      const matchesEntryStatus =
+        orderEntryStatusSearch === '' || entry.entry_status === orderEntryStatusSearch;
       const matchesDate = order.created_at.includes(orderDateSearch);
-      
-      return matchesNo && matchesUser && matchesStatus && matchesDate;
+
+      return (
+        matchesNo &&
+        matchesUser &&
+        matchesProject &&
+        matchesParticipant &&
+        matchesTeam &&
+        matchesPayStatus &&
+        matchesEntryStatus &&
+        matchesDate
+      );
     });
-    const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPageSize));
+
+    const totalPages = Math.max(1, Math.ceil(filteredOrderRows.length / ordersPageSize));
     const currentPage = Math.min(ordersPage, totalPages);
-    const pagedOrders = filteredOrders.slice((currentPage - 1) * ordersPageSize, currentPage * ordersPageSize);
+    const pagedOrderRows = filteredOrderRows.slice((currentPage - 1) * ordersPageSize, currentPage * ordersPageSize);
+    const orderSearchActions = (
+      <>
+        <button
+          onClick={applyOrderSearch}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+        >
+          筛选
+        </button>
+        <button
+          onClick={resetOrderSearch}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+        >
+          重置
+        </button>
+        <button
+          onClick={() => setOrderFiltersExpanded((prev) => !prev)}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+        >
+          {orderFiltersExpanded ? '收起筛选' : '展开筛选'}
+        </button>
+        <button className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-indigo-700">
+          导入报名订单
+        </button>
+        <button className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-indigo-700">
+          导出报名订单
+        </button>
+      </>
+    );
 
     return (
       <div className="space-y-4">
-        {/* Order Search Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="订单编号..."
-              value={orderNoSearch}
-              onChange={(e) => setOrderNoSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
-            />
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="订单编号..."
+                value={orderNoSearchDraft}
+                onChange={(e) => setOrderNoSearchDraft(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+              />
+            </div>
+            <div className="relative min-w-[220px] flex-1">
+              <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="报名用户..."
+                value={orderUserSearchDraft}
+                onChange={(e) => setOrderUserSearchDraft(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+              />
+            </div>
+            <div className="relative min-w-[220px] flex-1">
+              <ClipboardList className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="报名项目..."
+                value={orderProjectSearchDraft}
+                onChange={(e) => setOrderProjectSearchDraft(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+              />
+            </div>
+            <div className="relative min-w-[220px] flex-1">
+              <Users className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="报名选手..."
+                value={orderParticipantSearchDraft}
+                onChange={(e) => setOrderParticipantSearchDraft(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+              />
+            </div>
+            {!orderFiltersExpanded && <div className="flex flex-wrap items-center gap-3">{orderSearchActions}</div>}
           </div>
-          <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="下单用户/手机号..."
-              value={orderUserSearch}
-              onChange={(e) => setOrderUserSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
-            />
-          </div>
-          <div className="relative">
-            <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <select 
-              value={orderStatusSearch}
-              onChange={(e) => setOrderStatusSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
-            >
-              <option value="">所有支付状态</option>
-              <option value={PayStatus.PAID}>{PayStatus.PAID}</option>
-              <option value={PayStatus.UNPAID}>{PayStatus.UNPAID}</option>
-              <option value={PayStatus.REFUNDED}>{PayStatus.REFUNDED}</option>
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          </div>
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="创建时间 (YYYY-MM-DD)..."
-              value={orderDateSearch}
-              onChange={(e) => setOrderDateSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
-            />
-          </div>
+
+          <AnimatePresence initial={false}>
+            {orderFiltersExpanded ? (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="grid gap-3 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-center">
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="所属队伍..."
+                      value={orderTeamSearchDraft}
+                      onChange={(e) => setOrderTeamSearchDraft(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    />
+                  </div>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <select
+                      value={orderPayStatusSearchDraft}
+                      onChange={(e) => setOrderPayStatusSearchDraft(e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    >
+                      <option value="">所有支付状态</option>
+                      <option value={PayStatus.UNPAID}>{PayStatus.UNPAID}</option>
+                      <option value={PayStatus.PAID}>{PayStatus.PAID}</option>
+                      <option value={PayStatus.PARTIAL_REFUND}>{PayStatus.PARTIAL_REFUND}</option>
+                      <option value={PayStatus.REFUNDED}>{PayStatus.REFUNDED}</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
+                  <div className="relative">
+                    <CheckCircle2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <select
+                      value={orderEntryStatusSearchDraft}
+                      onChange={(e) => setOrderEntryStatusSearchDraft(e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    >
+                      <option value="">所有报名状态</option>
+                      <option value={EntryStatus.SUCCESS}>{EntryStatus.SUCCESS}</option>
+                      <option value={EntryStatus.PENDING_PAYMENT}>{EntryStatus.PENDING_PAYMENT}</option>
+                      <option value={EntryStatus.CANCELLED}>{EntryStatus.CANCELLED}</option>
+                      <option value={EntryStatus.REFUNDED}>{EntryStatus.REFUNDED}</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="创建时间..."
+                      value={orderDateSearchDraft}
+                      onChange={(e) => setOrderDateSearchDraft(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 xl:justify-end">{orderSearchActions}</div>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="min-w-[1360px] w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="w-12 px-3 py-4" />
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">订单编号</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">下单用户</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">实付金额</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">支付状态</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">下单时间</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">操作</th>
+                <th className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-slate-500">订单编号</th>
+                <th className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-slate-500">报名项目</th>
+                <th className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-slate-500">项目类型</th>
+                <th className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-slate-500">报名用户</th>
+                <th className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-slate-500">选手信息</th>
+                <th className="whitespace-nowrap px-5 py-4 text-right text-xs font-semibold text-slate-500">实付金额</th>
+                <th className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-slate-500">报名状态</th>
+                <th className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-slate-500">支付信息</th>
+                <th className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-slate-500">创建时间</th>
+                <th className="whitespace-nowrap px-5 py-4 text-center text-xs font-semibold text-slate-500">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {pagedOrders.map(order => (
-                <React.Fragment key={order.id}>
-                  <tr className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-3 py-4">
-                      <button 
-                        onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
-                        className="p-1.5 hover:bg-slate-100 rounded-lg transition-all text-slate-400 group-hover:text-slate-600"
-                      >
-                        {expandedOrder === order.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-slate-900 font-mono">{order.order_no}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-slate-900">
-                          {order.user_name}
-                        </span>
-                        <span className="text-xs text-slate-400 font-mono">{order.user_phone}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-bold text-indigo-600">¥{order.pay_amount.toFixed(2)}</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        order.pay_status === PayStatus.PAID ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {order.pay_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-xs text-slate-500 font-mono">{order.created_at}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center">
-                        <button 
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setOrderDetailTab('projects');
-                          }}
-                          className="text-indigo-600 hover:text-indigo-700 text-xs font-bold bg-indigo-50 px-3 py-1.5 rounded-lg transition-all"
+              {pagedOrderRows.map(({ order, entry, participants }) => (
+                <tr key={entry.id} className="align-top transition-colors hover:bg-slate-50/40">
+                  <td className="px-5 py-4">
+                    <div className="space-y-1">
+                      <p className="font-mono text-sm font-bold text-slate-900">{order.order_no}</p>
+                      <p className="text-xs text-slate-400">{order.order_source || '用户报名'}</p>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <p className="whitespace-nowrap text-sm font-semibold text-slate-900">{entry.registration_event_name}</p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="inline-flex whitespace-nowrap items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                      {entry.type === 'team' ? '团体项目' : '单项项目'}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-900">{order.user_name}</p>
+                      <p className="font-mono text-xs text-slate-400">{order.user_phone}</p>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex max-w-[280px] flex-wrap gap-1.5">
+                      {participants.map((participant) => (
+                        <button
+                          key={`${entry.id}-${participant.name}-${participant.phone}`}
+                          onClick={() => openParticipantForm(entry, participant)}
+                          className="inline-flex items-center rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold text-indigo-600 transition-all hover:border-indigo-200 hover:bg-indigo-100"
+                          title={`查看 ${participant.name} 报名表`}
                         >
-                          详情
+                          {participant.name}
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <AnimatePresence>
-                    {expandedOrder === order.id && (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-4 bg-slate-50/30">
-                          <motion.div 
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="space-y-3 overflow-hidden"
-                          >
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="h-1 w-4 bg-indigo-600 rounded-full" />
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">报名项目</p>
-                            </div>
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                              {order.entries.map((entry) =>
-                                renderOrderEntryCard(order, entry, {
-                                  showRefundButton: true,
-                                }),
-                              )}
-                            </div>
-                          </motion.div>
-                        </td>
-                      </tr>
-                    )}
-                  </AnimatePresence>
-                </React.Fragment>
+                      ))}
+                      {entry.team_name && (
+                        <button
+                          onClick={() => openTeamDetail(entry)}
+                          className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold text-indigo-600 transition-all hover:bg-indigo-100"
+                          title={`查看 ${entry.team_name} 队伍详情`}
+                        >
+                          队伍：{entry.team_name}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="whitespace-nowrap text-sm font-bold text-indigo-600">¥{entry.actual_amount.toFixed(2)}</span>
+                      <button
+                        title={`报名费 ¥${entry.fee.toFixed(2)} / 押金 ¥${entry.deposit_amount.toFixed(2)} / 优惠 -¥${entry.discount_amount.toFixed(2)}`}
+                        className="rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                      >
+                        <AlertCircle className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span
+                      className={`inline-flex whitespace-nowrap items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        entry.entry_status === EntryStatus.SUCCESS
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : entry.entry_status === EntryStatus.PENDING_PAYMENT
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {entry.entry_status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="space-y-1">
+                      <p className="whitespace-nowrap text-sm font-semibold text-slate-700">{getPaymentMethodLabel(order)}</p>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        entry.pay_status === PayStatus.PAID
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : entry.pay_status === PayStatus.PARTIAL_REFUND
+                          ? 'bg-sky-50 text-sky-700'
+                          : entry.pay_status === PayStatus.UNPAID
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {entry.pay_status}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-500">{entry.created_at}</td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                      <button 
+                        onClick={() => {
+                          setSelectedEntryForDetail(entry);
+                        }}
+                        className="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 hover:text-indigo-700"
+                      >
+                        订单详情
+                      </button>
+                      {(entry.pay_status === PayStatus.PAID || entry.pay_status === PayStatus.PARTIAL_REFUND) && (
+                        <button
+                          onClick={() => requestEntryRefund(entry)}
+                          className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                        >
+                          退款
+                        </button>
+                      )}
+                      {entry.pay_status === PayStatus.UNPAID && (
+                        <button
+                          onClick={() => handleCancelOrder(order)}
+                          className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700"
+                        >
+                          取消订单
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
           <TablePagination
-            total={filteredOrders.length}
+            total={filteredOrderRows.length}
             page={currentPage}
             pageSize={ordersPageSize}
             onPageChange={setOrdersPage}
@@ -960,7 +1288,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
               setOrdersPageSize(size);
               setOrdersPage(1);
             }}
-            itemLabel="笔订单"
+            itemLabel="条明细"
             compact
           />
         </div>
@@ -980,27 +1308,29 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
     return (
       <div className="space-y-4">
         {/* Search Bar */}
-        <div className="flex flex-wrap gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex-1 min-w-[240px] relative">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+          <div className="relative min-w-[240px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
               placeholder="搜索项目名称..."
-              value={projectSearch}
-              onChange={(e) => setProjectSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={projectSearchDraft}
+              onChange={(e) => setProjectSearchDraft(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             />
           </div>
-          <div className="flex-1 min-w-[240px] relative">
+          <div className="relative min-w-[240px] flex-1">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
               placeholder="搜索项目类型..."
-              value={projectTypeSearch}
-              onChange={(e) => setProjectTypeSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={projectTypeSearchDraft}
+              onChange={(e) => setProjectTypeSearchDraft(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             />
           </div>
+          <button onClick={applyProjectSummarySearch} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50">筛选</button>
+          <button onClick={resetProjectSummarySearch} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50">重置</button>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1092,27 +1422,29 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
     return (
       <div className="space-y-4">
         {/* Search Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="relative">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+          <div className="relative min-w-[220px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
               placeholder="搜索选手姓名..."
-              value={participantNameSearch}
-              onChange={(e) => setParticipantNameSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={participantNameSearchDraft}
+              onChange={(e) => setParticipantNameSearchDraft(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             />
           </div>
-          <div className="relative">
+          <div className="relative min-w-[220px] flex-1">
             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
               placeholder="搜索手机号..."
-              value={participantPhoneSearch}
-              onChange={(e) => setParticipantPhoneSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={participantPhoneSearchDraft}
+              onChange={(e) => setParticipantPhoneSearchDraft(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             />
           </div>
+          <button onClick={applyParticipantSearch} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50">筛选</button>
+          <button onClick={resetParticipantSearch} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50">重置</button>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1211,7 +1543,8 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
   const renderTeams = () => {
     const filteredTeams = MOCK_TEAMS.filter(t => 
       t.name.toLowerCase().includes(teamNameSearch.toLowerCase()) &&
-      (t.leader.toLowerCase().includes(teamLeaderSearch.toLowerCase()) || t.leader_phone.includes(teamLeaderSearch))
+      (t.leader.toLowerCase().includes(teamLeaderSearch.toLowerCase()) || t.leader_phone.includes(teamLeaderSearch)) &&
+      (t.group_name || '').toLowerCase().includes(teamGroupSearch.toLowerCase())
     );
     const totalPages = Math.max(1, Math.ceil(filteredTeams.length / teamsPageSize));
     const currentPage = Math.min(teamsPage, totalPages);
@@ -1220,27 +1553,39 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
     return (
       <div className="space-y-4">
         {/* Search Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="relative">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+          <div className="relative min-w-[220px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
               placeholder="搜索队伍名称..."
-              value={teamNameSearch}
-              onChange={(e) => setTeamNameSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={teamNameSearchDraft}
+              onChange={(e) => setTeamNameSearchDraft(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             />
           </div>
-          <div className="relative">
+          <div className="relative min-w-[220px] flex-1">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
               placeholder="搜索领队姓名/手机号..."
-              value={teamLeaderSearch}
-              onChange={(e) => setTeamLeaderSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={teamLeaderSearchDraft}
+              onChange={(e) => setTeamLeaderSearchDraft(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             />
           </div>
+          <div className="relative min-w-[220px] flex-1">
+            <Layers3 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="搜索关联组别..."
+              value={teamGroupSearchDraft}
+              onChange={(e) => setTeamGroupSearchDraft(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+            />
+          </div>
+          <button onClick={applyTeamSearch} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50">筛选</button>
+          <button onClick={resetTeamSearch} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50">重置</button>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1249,6 +1594,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-3 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center"></th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">队伍名称</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">关联组别</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">创建用户</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">领队信息</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">教练信息</th>
@@ -1282,6 +1628,11 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                         >
                           {t.name}
                         </button>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-100">
+                          {t.group_name || '--'}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
@@ -1324,7 +1675,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                     <AnimatePresence>
                       {expandedTeam === t.id && (
                         <tr>
-                          <td colSpan={8} className="px-6 py-4 bg-slate-50/30">
+                          <td colSpan={9} className="px-6 py-4 bg-slate-50/30">
                             <motion.div 
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: 'auto', opacity: 1 }}
@@ -1369,6 +1720,25 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
     );
   };
 
+  const currentPageMeta: Record<RecordTab, { title: string; description: string }> = {
+    orders: {
+      title: '报名订单管理',
+      description: '查看及管理当前比赛所有项目的报名订单数据',
+    },
+    project_summary: {
+      title: '项目报名汇总',
+      description: '查看当前比赛各报名项目的整体报名情况与立项依据',
+    },
+    participants: {
+      title: '选手列表',
+      description: '查看当前比赛所有报名选手信息及其关联报名项目',
+    },
+    teams: {
+      title: '队伍列表',
+      description: '查看当前比赛所有报名队伍信息及其关联项目情况',
+    },
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1378,32 +1748,34 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">报名记录管理</h2>
-              <p className="text-xs text-slate-500 mt-0.5">查看及管理所有比赛的报名订单、项目报名情况、选手及队伍信息</p>
+              <h2 className="text-lg font-bold text-slate-900">{currentPageMeta[activeTab].title}</h2>
+              <p className="text-xs text-slate-500 mt-0.5">{currentPageMeta[activeTab].description}</p>
             </div>
           </div>
 
-          <div className="flex gap-2 rounded-full bg-white p-1.5 shadow-lg shadow-slate-200/70 ring-1 ring-slate-200">
-            {[
-              { id: 'orders', label: '报名订单', icon: ClipboardList },
-              { id: 'project_summary', label: '项目汇总', icon: Trophy },
-              { id: 'participants', label: '报名选手', icon: User },
-              { id: 'teams', label: '报名队伍', icon: Users }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as RecordTab)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
-                  activeTab === tab.id 
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                }`}
-              >
-                <tab.icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {showTabs ? (
+            <div className="flex gap-2 rounded-full bg-white p-1.5 shadow-lg shadow-slate-200/70 ring-1 ring-slate-200">
+              {[
+                { id: 'orders', label: '报名订单', icon: ClipboardList },
+                { id: 'project_summary', label: '项目汇总', icon: Trophy },
+                { id: 'participants', label: '报名选手', icon: User },
+                { id: 'teams', label: '报名队伍', icon: Users }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as RecordTab)}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
+                    activeTab === tab.id 
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  <tab.icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="p-8">
@@ -1798,6 +2170,15 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
               </div>
 
               <div className="flex-1 overflow-y-auto bg-slate-50/40 custom-scrollbar">
+                {(() => {
+                  const relatedOrder = getOrderForEntry(selectedEntryForDetail);
+                  const paymentRecords = relatedOrder ? getOrderPaymentRecords(relatedOrder) : [];
+                  const refundRecords = relatedOrder ? getOrderRefundRecords(relatedOrder) : [];
+                  const paymentTime =
+                    paymentRecords.find((record) => record.status !== '待支付')?.time ||
+                    (relatedOrder?.pay_status !== PayStatus.UNPAID ? relatedOrder?.updated_at : '--') ||
+                    '--';
+                  return (
                 <div className="p-8 space-y-6">
                   <div className="rounded-3xl border border-slate-200 bg-white p-6 space-y-5">
                     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1827,32 +2208,86 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                           </button>
                         </div>
                         <p className="mt-2 text-xs text-slate-500 font-mono">
-                          所属订单 {selectedEntryForDetail.order_no} · 更新时间 {selectedEntryForDetail.updated_at}
+                          所属订单 {selectedEntryForDetail.order_no}
                         </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">报名费</p>
-                        <p className="mt-2 text-lg font-bold text-slate-900">¥{selectedEntryForDetail.fee.toFixed(2)}</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">押金</p>
-                        <p className="mt-2 text-lg font-bold text-slate-900">¥{selectedEntryForDetail.deposit_amount.toFixed(2)}</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">优惠金额</p>
-                        <p className="mt-2 text-lg font-bold text-emerald-600">-¥{selectedEntryForDetail.discount_amount.toFixed(2)}</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">实付金额</p>
-                        <p className="mt-2 text-lg font-bold text-indigo-600">¥{selectedEntryForDetail.actual_amount.toFixed(2)}</p>
                       </div>
                     </div>
                   </div>
 
-                  {selectedEntryForDetail.team_name && (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-3">
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { id: 'order', label: '订单信息', icon: ClipboardList },
+                        ...(selectedEntryForDetail.team_name ? [{ id: 'team', label: '队伍信息', icon: Users } as const] : []),
+                        { id: 'participants', label: '选手报名表', icon: FileText },
+                        { id: 'payments', label: '支付记录', icon: CreditCard },
+                        { id: 'refunds', label: '退款记录', icon: RotateCcw },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setEntryDetailTab(tab.id as EntryDetailTab)}
+                          className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                            entryDetailTab === tab.id
+                              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                          }`}
+                        >
+                          <tab.icon className="h-3.5 w-3.5" />
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {entryDetailTab === 'order' ? (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <ClipboardList className="w-4 h-4 text-indigo-600" />
+                      <h3 className="text-sm font-bold text-slate-900">订单信息</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">订单编号</p>
+                        <p className="mt-1 text-sm font-bold font-mono text-slate-800">{relatedOrder?.order_no || selectedEntryForDetail.order_no}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">下单用户</p>
+                        <p className="mt-1 text-sm font-bold text-slate-800">{relatedOrder?.user_name || '--'}</p>
+                        <p className="mt-1 text-[11px] font-mono text-slate-500">{relatedOrder?.user_phone || '--'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">报名状态</p>
+                        <p className="mt-1 text-sm font-bold text-slate-800">{selectedEntryForDetail.entry_status}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">订单金额</p>
+                        <p className="mt-1 text-sm font-bold text-indigo-600">¥{(relatedOrder?.pay_amount ?? selectedEntryForDetail.actual_amount).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">订单来源</p>
+                        <p className="mt-1 text-sm font-bold text-slate-800">{relatedOrder?.order_source || '--'}</p>
+                      </div>
+                      <div className="xl:col-span-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">订单备注</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-600">{relatedOrder?.remarks || '暂无订单备注'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">下单时间</p>
+                        <p className="mt-1 text-sm font-mono text-slate-700">{relatedOrder?.created_at || '--'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">支付时间</p>
+                        <p className="mt-1 text-sm font-mono text-slate-700">{paymentTime}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">更新时间</p>
+                        <p className="mt-1 text-sm font-mono text-slate-700">{selectedEntryForDetail.updated_at}</p>
+                      </div>
+                    </div>
+                  </div>
+                  ) : null}
+
+                  {entryDetailTab === 'team' && selectedEntryForDetail.team_name && (
                     (() => {
                       const teamDetail = getTeamDetailFromEntry(selectedEntryForDetail);
                       const teamCoaches = getTeamCoaches(teamDetail);
@@ -1985,6 +2420,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                     })()
                   )}
 
+                  {entryDetailTab === 'participants' ? (
                   <div className="rounded-3xl border border-slate-200 bg-white p-6 space-y-4">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
@@ -2001,8 +2437,72 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                       )}
                     </div>
                   </div>
+                  ) : null}
+
+                  {entryDetailTab === 'payments' ? (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-indigo-600" />
+                      <h3 className="text-sm font-bold text-slate-900">支付记录</h3>
+                    </div>
+                    <div className="space-y-3">
+                      {paymentRecords.map((record) => (
+                        <div key={record.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{record.title}</p>
+                            <p className="mt-1 text-[11px] font-mono text-slate-500">{record.time}</p>
+                            <p className="mt-2 text-[11px] text-slate-500">{record.note}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                              record.status === '待支付' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                            }`}>
+                              {record.status}
+                            </span>
+                            <p className="mt-3 text-base font-bold text-indigo-600">¥{record.amount.toFixed(2)}</p>
+                            <p className="mt-1 text-[11px] text-slate-400">{record.method}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  ) : null}
+
+                  {entryDetailTab === 'refunds' ? (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4 text-indigo-600" />
+                      <h3 className="text-sm font-bold text-slate-900">退款记录</h3>
+                    </div>
+                    {refundRecords.length > 0 ? (
+                      <div className="space-y-3">
+                        {refundRecords.map((record) => (
+                          <div key={record.id} className="rounded-2xl border border-rose-100 bg-rose-50/40 p-4 flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">{record.title}</p>
+                              <p className="mt-1 text-[11px] font-mono text-slate-500">{record.time}</p>
+                              <p className="mt-2 text-[11px] text-slate-500">{record.note}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                                {record.status}
+                              </span>
+                              <p className="mt-3 text-base font-bold text-rose-600">¥{record.amount.toFixed(2)}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-12 text-center">
+                        <p className="text-sm font-medium text-slate-400">当前报名项目所属订单暂无退款记录</p>
+                      </div>
+                    )}
+                  </div>
+                  ) : null}
 
                 </div>
+                  );
+                })()}
               </div>
             </motion.div>
           </div>
@@ -2437,6 +2937,10 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                         <div>
                           <p className="text-[10px] font-bold text-indigo-400 uppercase">邀请码</p>
                           <p className="mt-1 text-sm font-bold text-slate-800 font-mono">{selectedTeamForDetail.invite_code || '--'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-indigo-400 uppercase">关联组别</p>
+                          <p className="mt-1 text-sm font-bold text-slate-800">{selectedTeamForDetail.group_name || '--'}</p>
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-indigo-400 uppercase">创建人</p>

@@ -45,7 +45,8 @@ import {
   Bell,
   ArrowLeft,
   Upload,
-  Download
+  Download,
+  GitBranch
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -91,6 +92,14 @@ const MOCK_EVENTS = [
   { id: 'e5', name: '混合双打' },
 ];
 
+const REGISTRATION_PUBLIC_PLAYER_FIELD_OPTIONS = [
+  { id: 'name', label: '选手姓名' },
+  { id: 'gender', label: '性别' },
+  { id: 'group', label: '组别' },
+  { id: 'team', label: '所属队伍' },
+  { id: 'organization', label: '所属单位' },
+] as const;
+
 const INITIAL_MULTI_EVENT_DISCOUNT: DiscountRule = { 
   id: '1', 
   event_id: '1001',
@@ -119,6 +128,13 @@ const VIEW_TITLES = {
   'page-decoration': '页面装修',
   settings: '报名规则',
   'discount-rules': '优惠规则',
+  'registration-public': '报名公示',
+  'records-orders': '报名订单',
+  'records-project-summary': '项目报名汇总',
+  'records-teams': '队伍列表',
+  'records-participants': '选手列表',
+  'project-filing': '项目立项',
+  'multi-event-stats': '兼项统计',
   records: '报名记录',
   announcement: '报名公示',
   scheduling: '项目编排',
@@ -134,12 +150,19 @@ const VIEW_SECTIONS = {
   'basic-info': '基础配置',
   'event-group-management': '基础配置',
   'page-decoration': '基础配置',
-  settings: '报名管理',
-  'discount-rules': '报名管理',
-  records: '报名管理',
-  announcement: '报名管理',
+  settings: '报名配置',
+  'discount-rules': '报名配置',
+  'registration-public': '报名配置',
+  projects: '报名配置',
+  'records-orders': '报名数据',
+  'records-project-summary': '报名数据',
+  'records-teams': '报名数据',
+  'records-participants': '报名数据',
+  'project-filing': '报名数据',
+  'multi-event-stats': '报名数据',
+  records: '报名数据',
+  announcement: '报名数据',
   scheduling: '赛事编排',
-  projects: '报名管理',
   'match-management': '赛事编排',
   'player-management': '赛事编排',
   'schedule-config': '赛事编排',
@@ -173,6 +196,41 @@ type AdminMenuSection = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   children: { key: string; label: string }[];
+};
+
+type IterationChangeType = 'new' | 'updated' | 'removed';
+
+type IterationPageLink = {
+  id: string;
+  label: string;
+  area: 'admin' | 'detail';
+  adminMenu?: string;
+  detailView?:
+    | 'settings'
+    | 'discount-rules'
+    | 'basic-info'
+    | 'event-group-management'
+    | 'announcement'
+    | 'projects'
+    | 'records'
+    | 'records-orders'
+    | 'project-filing'
+    | 'multi-event-stats';
+  changeType: IterationChangeType;
+  summary: string;
+  details?: string[];
+};
+
+type IterationVersion = {
+  id: string;
+  name: string;
+  status: '规划中' | '开发中' | '已上线';
+  updatedAt: string;
+  description: string;
+  pages: IterationPageLink[];
+  added: string[];
+  updated: string[];
+  removed: string[];
 };
 
 type MatchFormatGroupRow = {
@@ -1284,7 +1342,99 @@ const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
     key: 'system',
     label: '系统设置',
     icon: Settings,
-    children: [{ key: 'operation-log', label: '操作日志' }],
+    children: [
+      { key: 'operation-log', label: '操作日志' },
+    ],
+  },
+];
+
+const ITERATION_VERSIONS: IterationVersion[] = [
+  {
+    id: 'v1.2',
+    name: 'v1.2 赛事详情页菜单调整与报名数据优化',
+    status: '已上线',
+    updatedAt: '2026-04-09 22:10:00',
+    description: '这一版聚焦赛事详情页菜单结构调整，以及报名数据查看方式的重组与细化。',
+    pages: [
+      {
+        id: 'detail-structure',
+        label: '赛事详情页',
+        area: 'detail',
+        detailView: 'settings',
+        changeType: 'updated',
+        summary: '调整赛事详情页菜单结构，并补充报名公示配置页面。',
+        details: ['将报名模块的菜单改成：报名配置 与 报名数据管理', '新增报名公示配置页面', '修改详情页展示内容'],
+      },
+      {
+        id: 'records-orders',
+        label: '报名订单管理',
+        area: 'detail',
+        detailView: 'records-orders',
+        changeType: 'updated',
+        summary: '将报名订单页改成以报名项目明细为核心的数据视图。',
+        details: ['报名订单页面改成展示：报名项目明细表（kacat_fixture_registration_order_item）的数据', '不再单独展示主订单列表', '独立拆分出：项目报名汇总、队伍列表、选手列表页'],
+      },
+      {
+        id: 'records-teams',
+        label: '队伍列表',
+        area: 'detail',
+        detailView: 'records',
+        changeType: 'updated',
+        summary: '补充队伍与组别的关联信息，方便按组别查看报名队伍。',
+        details: ['新增关联组别信息'],
+      },
+    ],
+    added: ['报名公示配置页面', '报名数据管理菜单组'],
+    updated: ['报名订单展示结构调整', '队伍列表补充关联组别信息'],
+    removed: ['报名订单主订单列表展示'],
+  },
+  {
+    id: 'v1.1',
+    name: 'v1.1 报名规则与清单优化',
+    status: '开发中',
+    updatedAt: '2026-04-09 15:20:00',
+    description: '这一版聚焦报名限制规则重组、目标清单分组管理以及协议模板复用，方便研发只聚焦本次调整范围。',
+    pages: [
+      {
+        id: 'settings',
+        label: '报名规则',
+        area: 'detail',
+        detailView: 'settings',
+        changeType: 'updated',
+        summary: '将报名规则改成长页面结构，并拆分优惠规则、名单限制与队伍限制配置。',
+        details: ['报名规则改成长页面结构', '优惠规则从报名规则中独立出来', '名单限制与队伍限制配置重组'],
+      },
+      {
+        id: 'discount-rules',
+        label: '优惠规则',
+        area: 'detail',
+        detailView: 'discount-rules',
+        changeType: 'new',
+        summary: '从报名规则中独立出来，单独管理赛事优惠策略。',
+        details: ['新增独立优惠规则页面', '承接赛事优惠策略配置', '减少报名规则页面干扰'],
+      },
+      {
+        id: 'target-list',
+        label: '目标清单',
+        area: 'admin',
+        adminMenu: 'target-list',
+        changeType: 'updated',
+        summary: '新增清单分组能力，清单创建时必须挂到某个分组下。',
+        details: ['新增目标清单分组能力', '清单创建时必须挂在某个分组下', '支持按分组筛选查看清单'],
+      },
+      {
+        id: 'agreement-management',
+        label: '协议管理',
+        area: 'admin',
+        adminMenu: 'agreement-management',
+        changeType: 'new',
+        summary: '新增协议模板管理和变量插入能力，供赛事协议签约复用。',
+        details: ['新增协议模板管理页面', '支持变量插入协议正文', '赛事协议签约可直接复用协议模板'],
+      },
+    ],
+    added: ['优惠规则独立页面', '协议管理', '目标清单分组'],
+    updated: ['报名规则结构改造', '报名名单限制支持多选目标清单', '队伍限制规则重组'],
+    removed: ['报名规则内旧的队伍限制卡片'],
   },
 ];
 
@@ -1346,6 +1496,7 @@ export default function App() {
   const [agreementTemplates, setAgreementTemplates] = useState<AgreementManagementRow[]>(INITIAL_AGREEMENT_TEMPLATES);
   const [agreementPageMode, setAgreementPageMode] = useState<AgreementManagementPageMode>('list');
   const [agreementDraft, setAgreementDraft] = useState<AgreementManagementRow>(INITIAL_AGREEMENT_TEMPLATES[0]);
+  const [selectedIterationVersionId, setSelectedIterationVersionId] = useState(ITERATION_VERSIONS[0]?.id ?? '');
   const [targetLists, setTargetLists] = useState<TargetListRow[]>(TARGET_LISTS);
   const [targetListGroups, setTargetListGroups] = useState<TargetListGroupRow[]>(TARGET_LIST_GROUPS);
   const [selectedTargetListGroupId, setSelectedTargetListGroupId] = useState<'all' | string>('all');
@@ -1366,11 +1517,33 @@ export default function App() {
   const [targetListMemberEditorMode, setTargetListMemberEditorMode] = useState<TargetListMemberEditorMode>(null);
   const [targetListMemberDraft, setTargetListMemberDraft] = useState<TargetListMemberRow>(createEmptyTargetListMember());
   const [selectedTournamentId, setSelectedTournamentId] = useState(DEFAULT_TOURNAMENT.id);
-  const [viewMode, setViewMode] = useState<'basic-info' | 'event-group-management' | 'page-decoration' | 'settings' | 'discount-rules' | 'records' | 'announcement' | 'scheduling' | 'projects' | 'match-management' | 'player-management' | 'schedule-config' | 'referee-management' | 'venue-config'>('basic-info');
+  const [viewMode, setViewMode] = useState<
+    | 'basic-info'
+    | 'event-group-management'
+    | 'page-decoration'
+    | 'settings'
+    | 'discount-rules'
+    | 'registration-public'
+    | 'records-orders'
+    | 'records-project-summary'
+    | 'records-teams'
+    | 'records-participants'
+    | 'project-filing'
+    | 'multi-event-stats'
+    | 'records'
+    | 'announcement'
+    | 'scheduling'
+    | 'projects'
+    | 'match-management'
+    | 'player-management'
+    | 'schedule-config'
+    | 'referee-management'
+    | 'venue-config'
+  >('basic-info');
   const [recordsInitialTab, setRecordsInitialTab] = useState<'orders' | 'project_summary' | 'participants' | 'teams'>('orders');
   const [activeTab, setActiveTab] = useState<'config' | 'team-limit' | 'restriction' | 'signing'>('config');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['basic', 'registration', 'scheduling']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['basic', 'registration-config', 'registration-data', 'scheduling']);
   const detailContentRef = useRef<HTMLDivElement | null>(null);
   const registrationLimitSectionRef = useRef<HTMLDivElement | null>(null);
   const teamLimitSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1421,6 +1594,8 @@ export default function App() {
     startTime: '2026-03-20T09:00',
     endTime: '2026-04-20T18:00',
     channel: RegistrationChannel.UNLIMITED,
+    enableRegistrationPublicity: true,
+    publicVisiblePlayerFields: ['name', 'gender', 'group'],
     listRestrictions: [],
     selectedWhitelistListIds: [],
     selectedBlacklistListIds: [],
@@ -1635,6 +1810,8 @@ export default function App() {
   const activeAdminItem =
     activeAdminSection.children.find((child) => child.key === adminActiveMenu) ??
     activeAdminSection.children[0];
+  const selectedIterationVersion =
+    ITERATION_VERSIONS.find((version) => version.id === selectedIterationVersionId) ?? ITERATION_VERSIONS[0];
   const tournamentListTotalPages = Math.max(1, Math.ceil(filteredTournamentListData.length / tournamentListPageSize));
   const normalizedTournamentListPage = Math.min(tournamentListPage, tournamentListTotalPages);
   const pagedTournaments = filteredTournamentListData.slice(
@@ -2599,6 +2776,19 @@ export default function App() {
     );
   };
 
+  const openIterationPageLink = (page: IterationPageLink) => {
+    if (page.area === 'admin' && page.adminMenu) {
+      setAppPage('tournament-list');
+      setAdminActiveMenu(page.adminMenu);
+      return;
+    }
+
+    if (page.area === 'detail' && page.detailView) {
+      setAppPage('tournament-detail');
+      setViewMode(page.detailView);
+    }
+  };
+
   if (appPage === 'tournament-list') {
     return (
       <div className="min-h-screen bg-slate-100 flex overflow-x-hidden">
@@ -2720,6 +2910,17 @@ export default function App() {
         <div className={`min-w-0 flex-1 min-h-screen flex flex-col transition-all duration-300 ${adminSidebarCollapsed ? 'ml-24' : 'ml-80'}`}>
           <header className="min-w-0 h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-end sticky top-0 z-30">
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => setAdminActiveMenu('iteration-center')}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                  adminActiveMenu === 'iteration-center'
+                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <GitBranch className="h-4 w-4" />
+                版本迭代
+              </button>
               <button
                 onClick={() => setPrototypeMode((prev) => !prev)}
                 className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
@@ -6146,6 +6347,136 @@ export default function App() {
                   </section>
                 </div>
               )
+            ) : adminActiveMenu === 'iteration-center' ? (
+              <div className="mx-auto w-full max-w-7xl min-w-0 space-y-6">
+                <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="border-b border-slate-100 bg-slate-50/70 px-8 py-6">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                        <LayoutDashboard className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">版本迭代</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          按版本查看本次涉及的页面与模块，帮助研发和设计快速聚焦当前迭代范围。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 px-8 py-8 xl:grid-cols-[260px_minmax(0,1fr)]">
+                    <aside className="space-y-3">
+                      <p className="text-sm font-semibold text-slate-700">版本列表</p>
+                      <div className="space-y-2 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm">
+                        {ITERATION_VERSIONS.map((version) => {
+                          const isActive = version.id === selectedIterationVersion?.id;
+                          return (
+                            <button
+                              key={version.id}
+                              onClick={() => setSelectedIterationVersionId(version.id)}
+                              className={`w-full rounded-2xl px-4 py-3 text-left transition-all ${
+                                isActive
+                                  ? 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-100'
+                                  : 'text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-semibold">{version.name}</p>
+                              </div>
+                              <p className="mt-2 text-xs text-slate-400">{version.updatedAt}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </aside>
+
+                    <div className="min-w-0 space-y-6">
+                      <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <h4 className="text-xl font-bold text-slate-900">{selectedIterationVersion.name}</h4>
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                  selectedIterationVersion.status === '已上线'
+                                    ? 'bg-emerald-50 text-emerald-600'
+                                    : selectedIterationVersion.status === '开发中'
+                                      ? 'bg-amber-50 text-amber-600'
+                                      : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                {selectedIterationVersion.status}
+                              </span>
+                            </div>
+                            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
+                              {selectedIterationVersion.description}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">最近更新</p>
+                            <p className="mt-2 text-sm font-medium text-slate-600">{selectedIterationVersion.updatedAt}</p>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <ClipboardList className="h-4 w-4 text-indigo-500" />
+                          <h5 className="text-base font-bold text-slate-900">本次涉及页面</h5>
+                        </div>
+                        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                          {selectedIterationVersion.pages.map((page) => {
+                            const changeTypeLabel =
+                              page.changeType === 'new'
+                                ? '本次新增'
+                                : page.changeType === 'removed'
+                                  ? '本次下线'
+                                  : '本次修改';
+                            const changeTypeStyle =
+                              page.changeType === 'new'
+                                ? 'bg-emerald-50 text-emerald-600'
+                                : page.changeType === 'removed'
+                                  ? 'bg-slate-100 text-slate-500'
+                                  : 'bg-indigo-50 text-indigo-600';
+
+                            return (
+                              <div key={page.id} className="rounded-[22px] border border-slate-200 bg-slate-50/70 p-5">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="text-base font-semibold text-slate-900">{page.label}</p>
+                                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${changeTypeStyle}`}>
+                                        {changeTypeLabel}
+                                      </span>
+                                    </div>
+                                    {!!page.details?.length && (
+                                      <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                                        {page.details.map((item) => (
+                                          <li key={item} className="flex items-start gap-2">
+                                            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-slate-300" />
+                                            <span>{item}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => openIterationPageLink(page)}
+                                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-600 transition-all hover:text-indigo-700"
+                                  >
+                                    查看页面
+                                    <ChevronRight className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                </section>
+              </div>
             ) : adminActiveMenu === 'agreement-management' ? (
               agreementPageMode === 'list' ? (
                 <div className="mx-auto w-full max-w-7xl min-w-0">
@@ -6553,23 +6884,23 @@ export default function App() {
             </AnimatePresence>
           </div>
 
-          {/* 2. 报名管理 */}
+          {/* 2. 报名配置 */}
           <div className="space-y-1">
             <button 
-              onClick={() => toggleMenu('registration')}
+              onClick={() => toggleMenu('registration-config')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-2xl transition-all hover:bg-slate-100 group ${!isSidebarOpen && 'justify-center'}`}
             >
               <div className="flex items-center gap-3">
-                <ClipboardList className={`w-5 h-5 ${expandedMenus.includes('registration') ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-700'}`} />
-                {isSidebarOpen && <span className={`text-sm font-bold ${expandedMenus.includes('registration') ? 'text-slate-900' : 'text-slate-600'}`}>报名管理</span>}
+                <ClipboardList className={`w-5 h-5 ${expandedMenus.includes('registration-config') ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-700'}`} />
+                {isSidebarOpen && <span className={`text-sm font-bold ${expandedMenus.includes('registration-config') ? 'text-slate-900' : 'text-slate-600'}`}>报名配置</span>}
               </div>
               {isSidebarOpen && (
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedMenus.includes('registration') ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedMenus.includes('registration-config') ? 'rotate-180' : ''}`} />
               )}
             </button>
 
             <AnimatePresence>
-              {expandedMenus.includes('registration') && isSidebarOpen && (
+              {expandedMenus.includes('registration-config') && isSidebarOpen && (
                 <motion.div 
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -6595,16 +6926,74 @@ export default function App() {
                     优惠规则
                   </button>
                   <button 
-                    onClick={() => setViewMode('records')}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'records' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                  >
-                    报名记录
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('announcement')}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'announcement' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                    onClick={() => setViewMode('registration-public')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'registration-public' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
                   >
                     报名公示
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 3. 报名数据 */}
+          <div className="space-y-1">
+            <button 
+              onClick={() => toggleMenu('registration-data')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-2xl transition-all hover:bg-slate-100 group ${!isSidebarOpen && 'justify-center'}`}
+            >
+              <div className="flex items-center gap-3">
+                <Database className={`w-5 h-5 ${expandedMenus.includes('registration-data') ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-700'}`} />
+                {isSidebarOpen && <span className={`text-sm font-bold ${expandedMenus.includes('registration-data') ? 'text-slate-900' : 'text-slate-600'}`}>报名数据</span>}
+              </div>
+              {isSidebarOpen && (
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedMenus.includes('registration-data') ? 'rotate-180' : ''}`} />
+              )}
+            </button>
+
+            <AnimatePresence>
+              {expandedMenus.includes('registration-data') && isSidebarOpen && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="ml-4 pl-4 border-l border-slate-200 space-y-1 overflow-hidden"
+                >
+                  <button 
+                    onClick={() => setViewMode('records-orders')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'records-orders' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    报名订单
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('records-teams')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'records-teams' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    队伍列表
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('records-participants')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'records-participants' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    选手列表
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('records-project-summary')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'records-project-summary' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    项目报名汇总
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('project-filing')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'project-filing' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    项目立项
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('multi-event-stats')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'multi-event-stats' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    兼项统计
                   </button>
                 </motion.div>
               )}
@@ -6724,6 +7113,20 @@ export default function App() {
 
           <div className="flex items-center gap-4">
             <button
+              onClick={() => {
+                setAppPage('tournament-list');
+                setAdminActiveMenu('iteration-center');
+              }}
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                appPage === 'tournament-list' && adminActiveMenu === 'iteration-center'
+                  ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <GitBranch className="h-4 w-4" />
+              版本迭代
+            </button>
+            <button
               onClick={() => setPrototypeMode((prev) => !prev)}
               className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
                 prototypeMode
@@ -6734,7 +7137,7 @@ export default function App() {
               <Info className="h-4 w-4" />
               原型说明模式
             </button>
-            {(viewMode === 'settings' || viewMode === 'discount-rules' || viewMode === 'basic-info' || viewMode === 'event-group-management') && (
+            {(viewMode === 'settings' || viewMode === 'discount-rules' || viewMode === 'registration-public' || viewMode === 'basic-info' || viewMode === 'event-group-management') && (
               <button 
                 onClick={handleSave}
                 disabled={isSaving}
@@ -6813,14 +7216,25 @@ export default function App() {
                     onBack={() => setViewMode('basic-info')}
                   />
                 </motion.div>
-              ) : viewMode === 'records' ? (
+              ) : viewMode === 'records' || viewMode === 'records-orders' || viewMode === 'records-project-summary' || viewMode === 'records-teams' || viewMode === 'records-participants' ? (
                 <motion.div
-                  key="records-view"
+                  key={`records-view-${viewMode}`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <RegistrationRecords initialTab={recordsInitialTab} />
+                  <RegistrationRecords
+                    initialTab={
+                      viewMode === 'records-project-summary'
+                        ? 'project_summary'
+                        : viewMode === 'records-teams'
+                        ? 'teams'
+                        : viewMode === 'records-participants'
+                        ? 'participants'
+                        : recordsInitialTab
+                    }
+                    showTabs={viewMode === 'records'}
+                  />
                 </motion.div>
               ) : viewMode === 'projects' ? (
                 <motion.div
@@ -6831,9 +7245,9 @@ export default function App() {
                 >
                   <RegistrationProjects />
                 </motion.div>
-              ) : viewMode === 'announcement' ? (
+              ) : viewMode === 'announcement' || viewMode === 'project-filing' || viewMode === 'multi-event-stats' ? (
                 <motion.div
-                  key="announcement-view"
+                  key={`announcement-view-${viewMode}`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -6841,9 +7255,25 @@ export default function App() {
                   <RegistrationAnnouncement 
                     onNavigateToRecords={(tab) => {
                       setRecordsInitialTab(tab);
-                      setViewMode('records');
+                      setViewMode(
+                        tab === 'project_summary'
+                          ? 'records-project-summary'
+                          : tab === 'participants'
+                          ? 'records-participants'
+                          : tab === 'teams'
+                          ? 'records-teams'
+                          : 'records-orders'
+                      );
                     }}
                     onNavigateToRegistration={() => setViewMode('projects')}
+                    initialTab={viewMode === 'multi-event-stats' ? 'multi_event_stats' : 'projects'}
+                    pageVariant={
+                      viewMode === 'multi-event-stats'
+                        ? 'multi-event-stats'
+                        : viewMode === 'project-filing'
+                        ? 'project-filing'
+                        : 'announcement'
+                    }
                   />
                 </motion.div>
               ) : viewMode === 'scheduling' ? (
@@ -6855,7 +7285,7 @@ export default function App() {
                   className="flex-1 flex flex-col"
                 >
                   <ProjectScheduling 
-                    onNavigateToAnnouncement={() => setViewMode('announcement')} 
+                    onNavigateToAnnouncement={() => setViewMode('project-filing')} 
                     venueConfig={venueConfig}
                     schedulingConfigs={schedulingConfigs}
                     onUpdateSchedulingConfigs={setSchedulingConfigs}
@@ -7984,6 +8414,125 @@ export default function App() {
                     </div>
                   </div>
                 </motion.div>
+
+            ) : viewMode === 'registration-public' ? (
+              <motion.div
+                key="registration-public-tab"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6"
+              >
+                <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/70 px-8 py-6">
+                    <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                      <Megaphone className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">报名公示</h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        配置是否在报名阶段向用户侧展示项目报名情况，以及可公开的选手信息字段。
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="divide-y divide-slate-100">
+                    <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900">报名阶段公示</h2>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-slate-700">展示各项目报名情况</p>
+                        <p className="text-xs leading-6 text-slate-500">
+                          开启后，用户侧赛事详情页可查看各项目当前报名人数与已公开的选手信息。
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setConfig((prev) => ({ ...prev, enableRegistrationPublicity: !prev.enableRegistrationPublicity }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          config.enableRegistrationPublicity ? 'bg-indigo-600' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            config.enableRegistrationPublicity ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <AnimatePresence initial={false}>
+                      {config.enableRegistrationPublicity ? (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: 'easeInOut' }}
+                          className="overflow-hidden border-t border-slate-100"
+                        >
+                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+                            <div>
+                              <h2 className="text-base font-semibold text-slate-900">展示选手信息</h2>
+                            </div>
+                            <div className="space-y-4">
+                              <p className="text-xs leading-6 text-slate-500">
+                                勾选后，报名阶段的前台公示将展示对应字段。
+                              </p>
+                              <div className="flex flex-wrap gap-3">
+                                {REGISTRATION_PUBLIC_PLAYER_FIELD_OPTIONS.map((field) => {
+                                  const selected = config.publicVisiblePlayerFields.includes(field.id);
+                                  return (
+                                    <button
+                                      key={field.id}
+                                      onClick={() =>
+                                        setConfig((prev) => ({
+                                          ...prev,
+                                          publicVisiblePlayerFields: selected
+                                            ? prev.publicVisiblePlayerFields.filter((item) => item !== field.id)
+                                            : [...prev.publicVisiblePlayerFields, field.id],
+                                        }))
+                                      }
+                                      className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
+                                        selected
+                                          ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {field.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">前台展示示例</p>
+                                <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <p className="text-sm font-semibold text-slate-900">男子单打</p>
+                                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">已报名 32 人</span>
+                                  </div>
+                                  <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                                    {[
+                                      config.publicVisiblePlayerFields.includes('name') ? '张三' : null,
+                                      config.publicVisiblePlayerFields.includes('gender') ? '男' : null,
+                                      config.publicVisiblePlayerFields.includes('group') ? 'U12' : null,
+                                      config.publicVisiblePlayerFields.includes('team') ? '羽林军' : null,
+                                      config.publicVisiblePlayerFields.includes('organization') ? '深圳市羽毛球协会' : null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ') || '当前未选择任何展示字段'}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
+                </section>
+              </motion.div>
 
             ) : viewMode === 'discount-rules' ? (
               <motion.div

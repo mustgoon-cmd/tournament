@@ -228,6 +228,7 @@ export const MOCK_TEAMS: TeamRecord[] = [
   {
     id: 'TEAM-001',
     name: '羽林军',
+    group_name: '公开组',
     invite_code: 'YLJ2026',
     creator_name: '张三',
     creator_phone: '13800138000',
@@ -264,6 +265,7 @@ export const MOCK_TEAMS: TeamRecord[] = [
   {
     id: 'TEAM-002',
     name: '飞翔队',
+    group_name: 'U12',
     invite_code: 'FXD2026',
     creator_name: '王五',
     creator_phone: '13700137000',
@@ -299,6 +301,7 @@ export const MOCK_TEAMS: TeamRecord[] = [
   {
     id: 'TEAM-003',
     name: '闪电队',
+    group_name: 'A组',
     invite_code: 'SDD2026',
     creator_name: '钱七',
     creator_phone: '13500135000',
