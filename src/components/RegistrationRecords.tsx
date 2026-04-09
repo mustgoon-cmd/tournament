@@ -31,7 +31,9 @@ import {
   ParticipantRecord, 
   TeamRecord,
   PayStatus,
-  EntryStatus
+  EntryStatus,
+  PostDeadlineEditableField,
+  PostDeadlineEditUntilMode
 } from '../types';
 import { MOCK_ORDERS, MOCK_PROJECT_SUMMARY, MOCK_PARTICIPANTS, MOCK_TEAMS } from '../constants';
 import { TablePagination } from './TablePagination';
@@ -43,6 +45,13 @@ type EntryDetailTab = 'order' | 'team' | 'participants' | 'payments' | 'refunds'
 interface RegistrationRecordsProps {
   initialTab?: RecordTab;
   showTabs?: boolean;
+  postDeadlineEditConfig?: {
+    enabled: boolean;
+    untilMode: PostDeadlineEditUntilMode;
+    customDate?: string;
+    editableFields: PostDeadlineEditableField[];
+    eventStartTime?: string;
+  };
 }
 
 interface EntryParticipantView {
@@ -63,7 +72,18 @@ interface ParticipantEntryRelation {
   entry: RegistrationEntry;
 }
 
-export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initialTab, showTabs = true }) => {
+const POST_DEADLINE_EDIT_SCOPE_LABELS: Record<PostDeadlineEditableField, string> = {
+  [PostDeadlineEditableField.PROFILE]: '个人资料字段',
+  [PostDeadlineEditableField.IDENTITY]: '证件信息',
+  [PostDeadlineEditableField.EXTRA_FIELDS]: '报名附加字段',
+  [PostDeadlineEditableField.TEAM_INFO]: '队伍信息',
+};
+
+export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
+  initialTab,
+  showTabs = true,
+  postDeadlineEditConfig,
+}) => {
   const [activeTab, setActiveTab] = useState<RecordTab>(initialTab || 'orders');
 
   useEffect(() => {
@@ -92,6 +112,10 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
   });
   const [refundEntryTarget, setRefundEntryTarget] = useState<RegistrationEntry | null>(null);
   const [refundAmountInput, setRefundAmountInput] = useState('');
+  const [editPermissionTarget, setEditPermissionTarget] = useState<RegistrationEntry | null>(null);
+  const [entryEditPermissions, setEntryEditPermissions] = useState<Record<string, { enabled: boolean; deadline: string }>>({});
+  const [editPermissionEnabledDraft, setEditPermissionEnabledDraft] = useState(true);
+  const [editPermissionDeadlineDraft, setEditPermissionDeadlineDraft] = useState('');
   const [entryRefundedAmounts, setEntryRefundedAmounts] = useState<Record<string, number>>({});
   const [entryReplacementRecords, setEntryReplacementRecords] = useState<Record<string, { oldParticipant: EntryParticipantView; newParticipant: EntryParticipantView }>>({});
   const [teamExitedParticipantKeys, setTeamExitedParticipantKeys] = useState<Record<string, string[]>>({});
@@ -487,6 +511,40 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
   const getRefundableAmount = (entry: RegistrationEntry) =>
     Math.max(entry.actual_amount - getRefundedAmount(entry), 0);
 
+  const getDefaultPostDeadlinePermissionDeadline = () => {
+    if (!postDeadlineEditConfig) return '';
+    if (
+      postDeadlineEditConfig.untilMode === PostDeadlineEditUntilMode.CUSTOM_DATE &&
+      postDeadlineEditConfig.customDate
+    ) {
+      return postDeadlineEditConfig.customDate;
+    }
+    return postDeadlineEditConfig.eventStartTime || '';
+  };
+
+  const getEntryEditPermissionStatus = (entry: RegistrationEntry) => {
+    const override = entryEditPermissions[entry.id];
+    if (override) {
+      return {
+        enabled: override.enabled,
+        deadline: override.deadline,
+        source: 'single' as const,
+      };
+    }
+    if (postDeadlineEditConfig?.enabled) {
+      return {
+        enabled: true,
+        deadline: getDefaultPostDeadlinePermissionDeadline(),
+        source: 'event' as const,
+      };
+    }
+    return {
+      enabled: false,
+      deadline: '',
+      source: 'none' as const,
+    };
+  };
+
   const canRefundEntry = (entry: RegistrationEntry) =>
     entry.pay_status !== PayStatus.UNPAID &&
     entry.entry_status !== EntryStatus.REFUNDED &&
@@ -518,6 +576,30 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
     setRefundEntryTarget(null);
     setRefundAmountInput('');
     alert('退款申请已提交，将原路退回至用户原支付账户');
+  };
+
+  const openEditPermissionModal = (entry: RegistrationEntry) => {
+    const current = getEntryEditPermissionStatus(entry);
+    setEditPermissionTarget(entry);
+    setEditPermissionEnabledDraft(current.enabled || !postDeadlineEditConfig?.enabled);
+    setEditPermissionDeadlineDraft(current.deadline || getDefaultPostDeadlinePermissionDeadline());
+  };
+
+  const saveEditPermission = () => {
+    if (!editPermissionTarget) return;
+    if (editPermissionEnabledDraft && !editPermissionDeadlineDraft) {
+      alert('请先填写补充修改权限的截止时间');
+      return;
+    }
+    setEntryEditPermissions((prev) => ({
+      ...prev,
+      [editPermissionTarget.id]: {
+        enabled: editPermissionEnabledDraft,
+        deadline: editPermissionDeadlineDraft,
+      },
+    }));
+    setEditPermissionTarget(null);
+    alert(editPermissionEnabledDraft ? '已开放当前报名项目的补充修改权限' : '已关闭当前报名项目的补充修改权限');
   };
 
   const handleParticipantQuitTeam = (entry: RegistrationEntry, participant?: EntryParticipantView) => {
@@ -2174,6 +2256,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                   const relatedOrder = getOrderForEntry(selectedEntryForDetail);
                   const paymentRecords = relatedOrder ? getOrderPaymentRecords(relatedOrder) : [];
                   const refundRecords = relatedOrder ? getOrderRefundRecords(relatedOrder) : [];
+                  const editPermissionStatus = getEntryEditPermissionStatus(selectedEntryForDetail);
                   const paymentTime =
                     paymentRecords.find((record) => record.status !== '待支付')?.time ||
                     (relatedOrder?.pay_status !== PayStatus.UNPAID ? relatedOrder?.updated_at : '--') ||
@@ -2205,6 +2288,12 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                             }`}
                           >
                             退款
+                          </button>
+                          <button
+                            onClick={() => openEditPermissionModal(selectedEntryForDetail)}
+                            className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-600 hover:bg-indigo-100 transition-all"
+                          >
+                            {editPermissionStatus.enabled ? '修改报名信息权限' : '开放报名信息修改'}
                           </button>
                         </div>
                         <p className="mt-2 text-xs text-slate-500 font-mono">
@@ -2282,6 +2371,36 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">更新时间</p>
                         <p className="mt-1 text-sm font-mono text-slate-700">{selectedEntryForDetail.updated_at}</p>
+                      </div>
+                      <div className="xl:col-span-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">报名信息修改权限</p>
+                        <div className="mt-1 space-y-1">
+                          <p className="text-sm font-bold text-slate-800">
+                            {editPermissionStatus.enabled ? '已允许修改报名信息' : '当前未开放报名信息修改'}
+                            {editPermissionStatus.source === 'event'
+                              ? ' · 沿用赛事规则'
+                              : editPermissionStatus.source === 'single'
+                              ? ' · 单条临时授权'
+                              : ''}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {editPermissionStatus.enabled
+                              ? `截止时间：${editPermissionStatus.deadline || '未设置'}`
+                              : '报名截止后默认不可修改，后台可按需为当前报名项目临时开放。'}
+                          </p>
+                          {postDeadlineEditConfig?.editableFields?.length ? (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {postDeadlineEditConfig.editableFields.map((field) => (
+                                <span
+                                  key={field}
+                                  className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500"
+                                >
+                                  {POST_DEADLINE_EDIT_SCOPE_LABELS[field]}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2503,6 +2622,129 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({ initia
                 </div>
                   );
                 })()}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editPermissionTarget && (
+          <div className="fixed inset-0 z-[112] flex items-center justify-center p-4 md:p-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEditPermissionTarget(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 px-8 py-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">报名信息修改权限</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    为当前报名项目单独开放报名表修改权限。
+                  </p>
+                </div>
+                <button
+                  onClick={() => setEditPermissionTarget(null)}
+                  className="rounded-full p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-5 px-8 py-6">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+                  <p className="text-sm font-semibold text-slate-700">当前赛事规则</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    {postDeadlineEditConfig?.enabled
+                      ? `赛事已开启报名信息修改，默认截止到 ${
+                          postDeadlineEditConfig.untilMode === PostDeadlineEditUntilMode.EVENT_START
+                            ? '比赛开始前'
+                            : postDeadlineEditConfig.customDate || '指定时间'
+                        }。`
+                      : '赛事默认未开启报名信息修改，可为当前报名项目单独临时开放。'}
+                  </p>
+                  {postDeadlineEditConfig?.editableFields?.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {postDeadlineEditConfig.editableFields.map((field) => (
+                        <span
+                          key={field}
+                          className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow-sm"
+                        >
+                          {POST_DEADLINE_EDIT_SCOPE_LABELS[field]}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-5 rounded-2xl border border-slate-200 bg-white px-5 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                  <div>
+                    <h4 className="text-base font-semibold text-slate-900">开放报名信息修改</h4>
+                  </div>
+                  <div className="space-y-4">
+                    <p className="text-xs leading-6 text-slate-500">
+                      开启后，该报名项目在报名提交成功后仍允许用户在限定时间内修改报名表信息。
+                    </p>
+                    <AnimatePresence initial={false}>
+                      {editPermissionEnabledDraft ? (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: 'easeInOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="max-w-sm rounded-2xl bg-slate-50 px-4 py-4">
+                            <label className="space-y-2">
+                              <span className="text-sm font-medium text-slate-700">修改权限截止时间</span>
+                              <input
+                                type="datetime-local"
+                                value={editPermissionDeadlineDraft}
+                                onChange={(event) => setEditPermissionDeadlineDraft(event.target.value)}
+                                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                              />
+                            </label>
+                          </div>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
+                  <button
+                    onClick={() => setEditPermissionEnabledDraft((prev) => !prev)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      editPermissionEnabledDraft ? 'bg-indigo-600' : 'bg-slate-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        editPermissionEnabledDraft ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-8 py-5">
+                <button
+                  onClick={() => setEditPermissionTarget(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-all hover:bg-slate-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={saveEditPermission}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                >
+                  保存设置
+                </button>
               </div>
             </motion.div>
           </div>

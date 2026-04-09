@@ -56,6 +56,8 @@ import {
   QuotaBasis,
   AgeCalculationBase,
   AgeCalculationMethod,
+  PostDeadlineEditUntilMode,
+  PostDeadlineEditableField,
   DiscountRule,
   MutuallyExclusiveGroup,
   SigningMethod,
@@ -98,6 +100,13 @@ const REGISTRATION_PUBLIC_PLAYER_FIELD_OPTIONS = [
   { id: 'group', label: '组别' },
   { id: 'team', label: '所属队伍' },
   { id: 'organization', label: '所属单位' },
+] as const;
+
+const POST_DEADLINE_EDIT_FIELD_OPTIONS = [
+  { id: PostDeadlineEditableField.PROFILE, label: '个人资料字段（选手档案中的非证件类字段）' },
+  { id: PostDeadlineEditableField.IDENTITY, label: '证件信息' },
+  { id: PostDeadlineEditableField.EXTRA_FIELDS, label: '报名附加字段（报名模板中的自定义字段）' },
+  { id: PostDeadlineEditableField.TEAM_INFO, label: '队伍信息' },
 ] as const;
 
 const INITIAL_MULTI_EVENT_DISCOUNT: DiscountRule = { 
@@ -1371,6 +1380,15 @@ const ITERATION_VERSIONS: IterationVersion[] = [
         details: ['将报名模块的菜单改成：报名配置 与 报名数据管理', '新增报名公示配置页面', '修改详情页展示内容'],
       },
       {
+        id: 'registration-rules',
+        label: '报名规则',
+        area: 'detail',
+        detailView: 'settings',
+        changeType: 'updated',
+        summary: '补充报名表提交成功后的报名信息修改控制能力。',
+        details: ['新增“报名信息修改”配置', '支持设置允许修改时间截止到', '支持设置允许修改字段范围', '支持在报名订单详情里为单条报名项目临时开放报名信息修改权限'],
+      },
+      {
         id: 'records-orders',
         label: '报名订单管理',
         area: 'detail',
@@ -1389,8 +1407,8 @@ const ITERATION_VERSIONS: IterationVersion[] = [
         details: ['新增关联组别信息'],
       },
     ],
-    added: ['报名公示配置页面', '报名数据管理菜单组'],
-    updated: ['报名订单展示结构调整', '队伍列表补充关联组别信息'],
+    added: ['报名公示配置页面', '报名数据管理菜单组', '报名信息修改配置'],
+    updated: ['报名订单展示结构调整', '队伍列表补充关联组别信息', '报名截止后信息修正控制能力'],
     removed: ['报名订单主订单列表展示'],
   },
   {
@@ -1637,6 +1655,10 @@ export default function App() {
     ageCalculationBase: AgeCalculationBase.EVENT_START,
     ageCalculationMethod: AgeCalculationMethod.BIRTH_YEAR,
     ageCalculationCustomDate: '2026-05-01',
+    enablePostDeadlineEdit: false,
+    postDeadlineEditUntilMode: PostDeadlineEditUntilMode.EVENT_START,
+    postDeadlineEditCustomDate: '2026-05-02T18:00',
+    postDeadlineEditableFields: [PostDeadlineEditableField.PROFILE, PostDeadlineEditableField.EXTRA_FIELDS],
     enableSigning: true,
     selectedAgreements: [{ id: INITIAL_AGREEMENT_TEMPLATES[0].id, name: INITIAL_AGREEMENT_TEMPLATES[0].name }],
     signingMethod: SigningMethod.READ_AND_AGREE,
@@ -7346,6 +7368,13 @@ export default function App() {
                         : recordsInitialTab
                     }
                     showTabs={viewMode === 'records'}
+                    postDeadlineEditConfig={{
+                      enabled: config.enablePostDeadlineEdit,
+                      untilMode: config.postDeadlineEditUntilMode,
+                      customDate: config.postDeadlineEditCustomDate,
+                      editableFields: config.postDeadlineEditableFields,
+                      eventStartTime: basicInfo.startTime,
+                    }}
                   />
                 </motion.div>
               ) : viewMode === 'projects' ? (
@@ -7930,6 +7959,127 @@ export default function App() {
                         </p>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">报名信息修改</h2>
+                    </div>
+                    <div className="space-y-4">
+                      <p className="text-xs leading-6 text-slate-500">
+                        当选手报名表提交成功后，可统一控制是否允许用户继续修改报名表信息。
+                      </p>
+                      <AnimatePresence initial={false}>
+                        {config.enablePostDeadlineEdit ? (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="space-y-5 rounded-2xl bg-slate-50 px-5 py-4">
+                              <div className="space-y-3">
+                                <label className="text-sm font-medium text-slate-700">允许修改时间截止到</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {[
+                                    { id: PostDeadlineEditUntilMode.EVENT_START, label: '比赛开始前' },
+                                    { id: PostDeadlineEditUntilMode.CUSTOM_DATE, label: '指定时间' },
+                                  ].map((item) => (
+                                    <button
+                                      key={item.id}
+                                      onClick={() =>
+                                        setConfig({
+                                          ...config,
+                                          postDeadlineEditUntilMode: item.id as PostDeadlineEditUntilMode,
+                                        })
+                                      }
+                                      className={`px-5 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                                        config.postDeadlineEditUntilMode === item.id
+                                          ? 'bg-slate-100 text-indigo-600 shadow-sm'
+                                          : 'bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                                      }`}
+                                    >
+                                      {item.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <AnimatePresence initial={false}>
+                                  {config.postDeadlineEditUntilMode === PostDeadlineEditUntilMode.CUSTOM_DATE ? (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: 'auto', opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.22, ease: 'easeInOut' }}
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="max-w-sm pt-1">
+                                        <input
+                                          type="datetime-local"
+                                          value={config.postDeadlineEditCustomDate}
+                                          onChange={(e) =>
+                                            setConfig({ ...config, postDeadlineEditCustomDate: e.target.value })
+                                          }
+                                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                        />
+                                      </div>
+                                    </motion.div>
+                                  ) : null}
+                                </AnimatePresence>
+                              </div>
+
+                              <div className="space-y-3">
+                                <label className="text-sm font-medium text-slate-700">允许修改字段范围</label>
+                                <div className="flex flex-wrap gap-3">
+                                  {POST_DEADLINE_EDIT_FIELD_OPTIONS.map((item) => {
+                                    const selected = config.postDeadlineEditableFields.includes(item.id);
+                                    return (
+                                      <label key={item.id} className="group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                        <span
+                                          onClick={() =>
+                                            setConfig((prev) => ({
+                                              ...prev,
+                                              postDeadlineEditableFields: selected
+                                                ? prev.postDeadlineEditableFields.filter((field) => field !== item.id)
+                                                : [...prev.postDeadlineEditableFields, item.id],
+                                            }))
+                                          }
+                                          className={`flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
+                                            selected
+                                              ? 'border-indigo-600 bg-indigo-600'
+                                              : 'border-slate-300 group-hover:border-indigo-400'
+                                          }`}
+                                        >
+                                          {selected ? <span className="text-[11px] font-bold leading-none text-white">✓</span> : null}
+                                        </span>
+                                        <span className={`text-sm font-medium ${selected ? 'text-slate-900' : 'text-slate-500'}`}>
+                                          {item.label}
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                                <p className="text-xs leading-6 text-slate-500">
+                                  开启后，用户仅可在限定时间内修改上述字段，不支持修改报名项目、组别和费用相关内容。
+                                </p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
+                    <button
+                      onClick={() => setConfig({ ...config, enablePostDeadlineEdit: !config.enablePostDeadlineEdit })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        config.enablePostDeadlineEdit ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          config.enablePostDeadlineEdit ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
                   </div>
                 </div>
               </div>

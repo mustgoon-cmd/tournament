@@ -26,6 +26,18 @@ export enum AgeCalculationMethod {
   FULL_AGE = 'FULL_AGE'
 }
 
+export enum PostDeadlineEditUntilMode {
+  EVENT_START = 'EVENT_START',
+  CUSTOM_DATE = 'CUSTOM_DATE'
+}
+
+export enum PostDeadlineEditableField {
+  PROFILE = 'PROFILE',
+  IDENTITY = 'IDENTITY',
+  EXTRA_FIELDS = 'EXTRA_FIELDS',
+  TEAM_INFO = 'TEAM_INFO'
+}
+
 export enum RuleType {
   EARLY_BIRD = 'EARLY_BIRD',
   MULTI_EVENT = 'MULTI_EVENT',
@@ -155,6 +167,10 @@ export interface RegistrationConfig {
   ageCalculationBase: AgeCalculationBase;
   ageCalculationMethod: AgeCalculationMethod;
   ageCalculationCustomDate?: string;
+  enablePostDeadlineEdit: boolean;
+  postDeadlineEditUntilMode: PostDeadlineEditUntilMode;
+  postDeadlineEditCustomDate?: string;
+  postDeadlineEditableFields: PostDeadlineEditableField[];
   // Agreement Signing
   enableSigning: boolean;
   selectedAgreements: AgreementTemplate[];
