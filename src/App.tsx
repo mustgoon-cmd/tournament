@@ -1386,7 +1386,7 @@ const ITERATION_VERSIONS: IterationVersion[] = [
         detailView: 'settings',
         changeType: 'updated',
         summary: '补充报名表提交成功后的报名信息修改控制能力。',
-        details: ['新增“报名信息修改”配置', '支持设置允许修改时间截止到', '支持设置允许修改字段范围', '支持在报名订单详情里为单条报名项目临时开放报名信息修改权限'],
+        details: ['新增“报名信息修改”配置', '支持设置允许修改时间截止到', '支持设置允许修改字段范围'],
       },
       {
         id: 'records-orders',
