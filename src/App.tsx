@@ -172,6 +172,11 @@ const VIEW_SECTIONS = {
 
 type AppPage = 'tournament-list' | 'tournament-detail';
 
+type AppVersionPayload = {
+  commitTime: string;
+  commitHash: string;
+};
+
 type TournamentListItem = {
   id: string;
   name: string;
@@ -1353,7 +1358,7 @@ const ITERATION_VERSIONS: IterationVersion[] = [
     id: 'v1.2',
     name: 'v1.2 赛事详情页菜单调整与报名数据优化',
     status: '已上线',
-    updatedAt: '2026-04-09 22:10:00',
+    updatedAt: __APP_GIT_COMMIT_TIME__,
     description: '这一版聚焦赛事详情页菜单结构调整，以及报名数据查看方式的重组与细化。',
     pages: [
       {
@@ -1439,12 +1444,18 @@ const ITERATION_VERSIONS: IterationVersion[] = [
 ];
 
 export default function App() {
+  const CURRENT_APP_VERSION: AppVersionPayload = {
+    commitTime: __APP_GIT_COMMIT_TIME__,
+    commitHash: __APP_GIT_COMMIT_HASH__,
+  };
   const [appPage, setAppPage] = useState<AppPage>('tournament-list');
   const [tournaments, setTournaments] = useState<TournamentListItem[]>(TOURNAMENT_LIST);
   const [adminActiveMenu, setAdminActiveMenu] = useState('tournament-list');
   const [expandedAdminMenus, setExpandedAdminMenus] = useState<string[]>(['tournament']);
   const [adminSidebarCollapsed, setAdminSidebarCollapsed] = useState(false);
   const [prototypeMode, setPrototypeMode] = useState(false);
+  const [availableUpdateVersion, setAvailableUpdateVersion] = useState<AppVersionPayload | null>(null);
+  const [dismissedUpdateHash, setDismissedUpdateHash] = useState<string | null>(null);
   const [tournamentListPage, setTournamentListPage] = useState(1);
   const [tournamentListPageSize, setTournamentListPageSize] = useState(10);
   const [tournamentKeywordDraft, setTournamentKeywordDraft] = useState('');
@@ -1639,6 +1650,50 @@ export default function App() {
   const [showAgreementModal, setShowAgreementModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<MutuallyExclusiveGroup | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (sessionStorage.getItem('open-iteration-center-after-refresh') === '1') {
+      sessionStorage.removeItem('open-iteration-center-after-refresh');
+      setAppPage('tournament-list');
+      setAdminActiveMenu('iteration-center');
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkLatestVersion = async () => {
+      try {
+        const response = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return;
+
+        const data = (await response.json()) as Partial<AppVersionPayload>;
+        if (cancelled || !data.commitHash || !data.commitTime) return;
+
+        const hasNewVersion =
+          data.commitHash !== CURRENT_APP_VERSION.commitHash || data.commitTime !== CURRENT_APP_VERSION.commitTime;
+
+        if (hasNewVersion && dismissedUpdateHash !== data.commitHash) {
+          setAvailableUpdateVersion({
+            commitTime: data.commitTime,
+            commitHash: data.commitHash,
+          });
+        } else if (!hasNewVersion) {
+          setAvailableUpdateVersion(null);
+        }
+      } catch {
+        // Ignore transient polling failures.
+      }
+    };
+
+    checkLatestVersion();
+    const timer = window.setInterval(checkLatestVersion, 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [CURRENT_APP_VERSION.commitHash, CURRENT_APP_VERSION.commitTime, dismissedUpdateHash]);
 
   const handleSave = () => {
     setIsSaving(true);
@@ -2789,9 +2844,65 @@ export default function App() {
     }
   };
 
+  const handleOpenIterationCenterAfterRefresh = () => {
+    sessionStorage.setItem('open-iteration-center-after-refresh', '1');
+    window.location.reload();
+  };
+
+  const updateNotification = availableUpdateVersion ? (
+    <div className="fixed right-6 top-24 z-[70] w-[360px] rounded-2xl border border-indigo-200 bg-white p-4 shadow-2xl shadow-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 gap-3">
+          <div className="rounded-xl bg-indigo-50 p-2 text-indigo-600">
+            <GitBranch className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-900">当前有更新版本</p>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              检测到新版本已发布，点击刷新后将自动打开版本迭代页面查看本次改动。
+            </p>
+            <p className="mt-2 text-xs font-medium text-slate-400">
+              最新版本时间：{availableUpdateVersion.commitTime}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setDismissedUpdateHash(availableUpdateVersion.commitHash);
+            setAvailableUpdateVersion(null);
+          }}
+          className="rounded-lg p-1 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setDismissedUpdateHash(availableUpdateVersion.commitHash);
+            setAvailableUpdateVersion(null);
+          }}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50"
+        >
+          稍后
+        </button>
+        <button
+          type="button"
+          onClick={handleOpenIterationCenterAfterRefresh}
+          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+        >
+          刷新并查看迭代
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (appPage === 'tournament-list') {
     return (
       <div className="min-h-screen bg-slate-100 flex overflow-x-hidden">
+        {updateNotification}
         <aside
           className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-300 ${adminSidebarCollapsed ? 'w-24' : 'w-80'}`}
         >
@@ -6834,6 +6945,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
+      {updateNotification}
       {/* Sidebar */}
       <aside 
         className={`fixed left-6 top-24 bottom-6 z-30 rounded-[28px] border border-slate-200 bg-white/95 text-slate-500 shadow-lg shadow-slate-200/70 backdrop-blur transition-all duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'w-72' : 'w-24'}`}
