@@ -345,6 +345,11 @@ export const GROUP_OPTIONS: Record<string, string[]> = {
   '自定义': [],
 };
 
+export const EVENT_GROUP_CONFIG = {
+  category: 'U系列',
+  values: ['U10', 'U12'],
+} as const;
+
 export interface MatchFormatOption {
   value: string;
   shortName: string;

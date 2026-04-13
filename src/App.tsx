@@ -95,6 +95,7 @@ const MOCK_EVENTS = [
 ];
 
 const REGISTRATION_PUBLIC_PLAYER_FIELD_OPTIONS = [
+  { id: 'registrationOrder', label: '报名顺序' },
   { id: 'name', label: '选手姓名' },
   { id: 'gender', label: '性别' },
   { id: 'group', label: '组别' },
@@ -1368,7 +1369,7 @@ const ITERATION_VERSIONS: IterationVersion[] = [
     name: 'v1.2 赛事详情页菜单调整与报名数据优化',
     status: '已上线',
     updatedAt: __APP_GIT_COMMIT_TIME__,
-    description: '这一版聚焦赛事详情页菜单结构调整，以及报名数据查看方式的重组与细化。',
+    description: '这一版聚焦赛事组别交互重构、报名规则补充，以及报名公示展示控制的细化。',
     pages: [
       {
         id: 'detail-structure',
@@ -1380,36 +1381,36 @@ const ITERATION_VERSIONS: IterationVersion[] = [
         details: ['将报名模块的菜单改成：报名配置 与 报名数据管理', '新增报名公示配置页面', '修改详情页展示内容'],
       },
       {
+        id: 'event-group-management',
+        label: '赛事组别',
+        area: 'detail',
+        detailView: 'event-group-management',
+        changeType: 'updated',
+        summary: '重构赛事组别配置语义，并同步修改报名项目中的组别选择交互。',
+        details: ['赛事组别配置改成“组别分组 + 具体组别”的表达方式', '优化赛事组别页面卡片结构与维护路径', '报名项目页面的组别选择改成直接选择当前赛事已配置组别'],
+      },
+      {
         id: 'registration-rules',
         label: '报名规则',
         area: 'detail',
         detailView: 'settings',
         changeType: 'updated',
-        summary: '补充报名表提交成功后的报名信息修改控制能力。',
-        details: ['新增“报名信息修改”配置', '支持设置允许修改时间截止到', '支持设置允许修改字段范围'],
+        summary: '补充报名信息修改与退赛退款相关的配置能力。',
+        details: ['新增“报名信息修改”配置', '支持设置允许修改时间截止到', '支持设置允许修改字段范围', '新增“退赛退款”配置项，支持设置可退款时间截止至'],
       },
       {
-        id: 'records-orders',
-        label: '报名订单管理',
+        id: 'registration-announcement',
+        label: '报名公示',
         area: 'detail',
-        detailView: 'records-orders',
+        detailView: 'announcement',
         changeType: 'updated',
-        summary: '将报名订单页改成以报名项目明细为核心的数据视图。',
-        details: ['报名订单页面改成展示：报名项目明细表（kacat_fixture_registration_order_item）的数据', '不再单独展示主订单列表', '独立拆分出：项目报名汇总、队伍列表、选手列表页'],
-      },
-      {
-        id: 'records-teams',
-        label: '队伍列表',
-        area: 'detail',
-        detailView: 'records',
-        changeType: 'updated',
-        summary: '补充队伍与组别的关联信息，方便按组别查看报名队伍。',
-        details: ['新增关联组别信息'],
+        summary: '支持在报名公示配置中控制是否展示选手的报名顺序。',
+        details: ['新增报名公示时是否展示选手“报名顺序”的配置能力'],
       },
     ],
-    added: ['报名公示配置页面', '报名数据管理菜单组', '报名信息修改配置'],
-    updated: ['报名订单展示结构调整', '队伍列表补充关联组别信息', '报名截止后信息修正控制能力'],
-    removed: ['报名订单主订单列表展示'],
+    added: ['退赛退款配置项', '报名公示中报名顺序展示控制'],
+    updated: ['赛事组别配置交互', '报名项目页面组别选择交互', '报名规则补充退赛退款能力'],
+    removed: ['报名项目中“先选系列，再选具体组别”的旧交互'],
   },
   {
     id: 'v1.1',
@@ -1624,7 +1625,7 @@ export default function App() {
     endTime: '2026-04-20T18:00',
     channel: RegistrationChannel.UNLIMITED,
     enableRegistrationPublicity: true,
-    publicVisiblePlayerFields: ['name', 'gender', 'group'],
+    publicVisiblePlayerFields: ['name', 'gender', 'group', 'registrationOrder'],
     listRestrictions: [],
     selectedWhitelistListIds: [],
     selectedBlacklistListIds: [],
@@ -1655,6 +1656,8 @@ export default function App() {
     ageCalculationBase: AgeCalculationBase.EVENT_START,
     ageCalculationMethod: AgeCalculationMethod.BIRTH_YEAR,
     ageCalculationCustomDate: '2026-05-01',
+    enableWithdrawalRefund: false,
+    withdrawalRefundDeadline: '2026-05-01T18:00',
     enablePostDeadlineEdit: false,
     postDeadlineEditUntilMode: PostDeadlineEditUntilMode.EVENT_START,
     postDeadlineEditCustomDate: '2026-05-02T18:00',
@@ -7963,6 +7966,54 @@ export default function App() {
 
                   <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
                     <div>
+                      <h2 className="text-base font-semibold text-slate-900">退赛退款</h2>
+                    </div>
+                    <div className="space-y-4">
+                      <p className="text-xs leading-6 text-slate-500">
+                        报名成功后，统一控制用户是否可以申请退赛退款。
+                      </p>
+                      <AnimatePresence initial={false}>
+                        {config.enableWithdrawalRefund ? (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="space-y-3 rounded-2xl bg-slate-50 px-5 py-4">
+                              <label className="space-y-2">
+                                <span className="text-sm font-medium text-slate-700">可退款时间截止至</span>
+                                <div className="max-w-sm">
+                                  <input
+                                    type="datetime-local"
+                                    value={config.withdrawalRefundDeadline}
+                                    onChange={(e) => setConfig({ ...config, withdrawalRefundDeadline: e.target.value })}
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                  />
+                                </div>
+                              </label>
+                            </div>
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
+                    <button
+                      onClick={() => setConfig({ ...config, enableWithdrawalRefund: !config.enableWithdrawalRefund })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        config.enableWithdrawalRefund ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          config.enableWithdrawalRefund ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                    <div>
                       <h2 className="text-base font-semibold text-slate-900">报名信息修改</h2>
                     </div>
                     <div className="space-y-4">
@@ -8776,6 +8827,7 @@ export default function App() {
                                   </div>
                                   <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
                                     {[
+                                      config.publicVisiblePlayerFields.includes('registrationOrder') ? '报名顺序：01' : null,
                                       config.publicVisiblePlayerFields.includes('name') ? '张三' : null,
                                       config.publicVisiblePlayerFields.includes('gender') ? '男' : null,
                                       config.publicVisiblePlayerFields.includes('group') ? 'U12' : null,

@@ -9,7 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { Project } from '../types';
-import { GROUP_OPTIONS, MATCH_FORMAT_GROUPS, getMatchFormatOption } from '../constants';
+import { EVENT_GROUP_CONFIG, MATCH_FORMAT_GROUPS, getMatchFormatOption } from '../constants';
 
 interface ProjectMatrixGeneratorProps {
   onBack: () => void;
@@ -20,8 +20,8 @@ export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
   onBack,
   onGenerate,
 }) => {
-  const [matrixGroupCategory, setMatrixGroupCategory] = useState<string>('U系列');
-  const [matrixGroupValues, setMatrixGroupValues] = useState<string[]>(GROUP_OPTIONS['U系列']);
+  const [matrixGroupCategory] = useState<string>(EVENT_GROUP_CONFIG.category);
+  const [matrixGroupValues] = useState<string[]>([...EVENT_GROUP_CONFIG.values]);
   const [matrixFormatGroup, setMatrixFormatGroup] = useState<string>(MATCH_FORMAT_GROUPS[0].name);
   const [matrixFormats, setMatrixFormats] = useState<string[]>(['男子单打', '女子单打']);
   const [selectedMatrixCells, setSelectedMatrixCells] = useState<Set<string>>(new Set());
@@ -217,23 +217,12 @@ export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
                   <div className="relative">
                     <select
                       value={matrixGroupCategory}
-                      onChange={(e) => {
-                        const nextCategory = e.target.value;
-                        setMatrixGroupCategory(nextCategory);
-                        setMatrixGroupValues(GROUP_OPTIONS[nextCategory]);
-                        setSelectedMatrixCells(new Set());
-                      }}
-                      className="appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 pr-9 text-[12px] font-bold text-indigo-700 outline-none transition focus:border-indigo-300"
+                      disabled
+                      className="appearance-none rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2 pr-9 text-[12px] font-bold text-slate-500 outline-none"
                     >
-                      {Object.keys(GROUP_OPTIONS)
-                        .filter((category) => category !== '自定义')
-                        .map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
+                      <option value={EVENT_GROUP_CONFIG.category}>{EVENT_GROUP_CONFIG.category}</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-600" />
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   </div>
                 </div>
 

@@ -17,7 +17,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { Project, TeamEvent, RestrictionRule, TeamGenderRequirement } from '../types';
-import { GROUP_OPTIONS, MATCH_FORMAT_GROUPS, getMatchFormatGroupByValue } from '../constants';
+import { EVENT_GROUP_CONFIG, MATCH_FORMAT_GROUPS, getMatchFormatGroupByValue } from '../constants';
 import { ProjectMatrixGenerator } from './ProjectMatrixGenerator';
 import { TablePagination } from './TablePagination';
 
@@ -405,7 +405,7 @@ export const RegistrationProjects: React.FC = () => {
                       template: '默认模板',
                       sort: 1,
                       status: 'active',
-                      group_rule: { category: '', operator: 'in', values: [] },
+                      group_rule: { category: EVENT_GROUP_CONFIG.category, operator: 'in', values: [] },
                       match_format_rule: activeTab === 'single' ? { category: MATCH_FORMAT_GROUPS[0].name, operator: '=', value: '' } : undefined,
                       restrictions: []
                     });
@@ -819,77 +819,36 @@ export const RegistrationProjects: React.FC = () => {
                             <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                               <div className="flex items-center justify-between gap-3">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">组别</label>
-                                <span className="text-[11px] font-medium text-slate-400">先选系列，再选具体组别</span>
+                                <span className="text-[11px] font-medium text-slate-400">
+                                  当前赛事组别分组：{EVENT_GROUP_CONFIG.category}
+                                </span>
                               </div>
 
-                              <div className="flex flex-wrap gap-1.5">
-                                {Object.keys(GROUP_OPTIONS).map((cat) => (
+                              <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                                {EVENT_GROUP_CONFIG.values.map((group) => {
+                                  const selected = editingProject.group_rule?.values?.[0] === group;
+                                  return (
                                   <button
-                                    key={cat}
+                                    key={group}
                                     type="button"
                                     onClick={() => setEditingProject({
                                       ...editingProject,
                                       group_rule: {
-                                        category: cat,
+                                        category: EVENT_GROUP_CONFIG.category,
                                         operator: 'in',
-                                        values: [],
+                                        values: [group],
                                       }
                                     })}
-                                    className={`rounded-full px-3 py-1.5 text-[11px] font-bold transition-all ${
-                                      editingProject.group_rule?.category === cat
-                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                                        : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                                    className={`rounded-xl border px-3 py-2.5 text-[13px] font-bold transition-all ${
+                                      selected
+                                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40'
                                     }`}
                                   >
-                                    {cat}
+                                    {group}
                                   </button>
-                                ))}
+                                )})}
                               </div>
-
-                              {editingProject.group_rule?.category === '自定义' ? (
-                                <input
-                                  type="text"
-                                  placeholder="输入自定义组别名称"
-                                  value={editingProject.group_rule?.values?.[0] || ''}
-                                  onChange={(e) => setEditingProject({
-                                    ...editingProject,
-                                    group_rule: {
-                                      ...(editingProject.group_rule || { category: '自定义', operator: 'in' }),
-                                      values: [e.target.value.trim()],
-                                    }
-                                  })}
-                                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
-                                />
-                              ) : (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-                                  {(editingProject.group_rule?.category
-                                    ? GROUP_OPTIONS[editingProject.group_rule.category] || []
-                                    : []
-                                  ).map((g) => {
-                                    const selected = editingProject.group_rule?.values?.[0] === g;
-                                    return (
-                                      <button
-                                        key={g}
-                                        type="button"
-                                        onClick={() => setEditingProject({
-                                          ...editingProject,
-                                          group_rule: {
-                                            ...(editingProject.group_rule || { category: '', operator: 'in' }),
-                                            values: [g],
-                                          }
-                                        })}
-                                        className={`rounded-xl border px-3 py-2.5 text-[13px] font-bold transition-all ${
-                                          selected
-                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100'
-                                            : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40'
-                                        }`}
-                                      >
-                                        {g}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              )}
                             </div>
                           </div>
                         </div>

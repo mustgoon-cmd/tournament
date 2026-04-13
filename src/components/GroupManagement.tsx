@@ -1,20 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ArrowLeft,
   Copy,
   FileText,
-  PencilLine,
   Plus,
   Save,
-  Search,
   Trash2,
-  Users,
 } from 'lucide-react';
-import { TablePagination } from './TablePagination';
 
 type DateRuleOperator = 'on_or_after' | 'on_or_before' | 'between';
 type DateRuleMode = 'fixed';
-type GroupPageMode = 'list' | 'editor';
 
 type BirthDateRule = {
   id: string;
@@ -64,23 +58,12 @@ const createRule = (overrides: Partial<BirthDateRule> = {}): BirthDateRule => ({
   ...overrides,
 });
 
-const createValue = (name = '新组别值', ruleEnabled = true): GroupValue => ({
+const createValue = (name = '新组别', ruleEnabled = true): GroupValue => ({
   id: createId('value'),
   name,
   ruleEnabled,
   rules: [createRule()],
 });
-
-const createGroup = (): GroupDefinition => {
-  const firstValue = createValue('组别值1');
-  return {
-    id: createId('group'),
-    name: '新组别',
-    description: '',
-    createdAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
-    values: [firstValue],
-  };
-};
 
 const INITIAL_GROUPS: GroupDefinition[] = [
   {
@@ -174,43 +157,16 @@ const summarizeRule = (rule: BirthDateRule) => {
 };
 
 export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boolean }) {
-  const [pageMode, setPageMode] = useState<GroupPageMode>('list');
-  const [groups, setGroups] = useState<GroupDefinition[]>(INITIAL_GROUPS);
-  const [searchDraft, setSearchDraft] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [selectedGroupId, setSelectedGroupId] = useState(INITIAL_GROUPS[0].id);
+  const [eventGroup, setEventGroup] = useState<GroupDefinition>(INITIAL_GROUPS[0]);
   const [selectedValueId, setSelectedValueId] = useState(INITIAL_GROUPS[0].values[0].id);
 
-  const filteredGroups = useMemo(() => {
-    const keyword = searchQuery.trim().toLowerCase();
-    if (!keyword) return groups;
-    return groups.filter((group) => group.name.toLowerCase().includes(keyword));
-  }, [groups, searchQuery]);
-  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
-  const normalizedPage = Math.min(currentPage, totalPages);
-  const pagedGroups = filteredGroups.slice((normalizedPage - 1) * pageSize, normalizedPage * pageSize);
-
-  const applySearch = () => {
-    setSearchQuery(searchDraft);
-    setCurrentPage(1);
-  };
-
-  const resetSearch = () => {
-    setSearchDraft('');
-    setSearchQuery('');
-    setCurrentPage(1);
-  };
-
-  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0];
+  const selectedGroup = eventGroup;
   const selectedValue =
-    selectedGroup?.values.find((value) => value.id === selectedValueId) ?? selectedGroup?.values[0];
+    selectedGroup.values.find((value) => value.id === selectedValueId) ?? selectedGroup.values[0];
   const selectedRule = selectedValue?.rules[0];
 
   const updateSelectedGroup = (updater: (group: GroupDefinition) => GroupDefinition) => {
-    if (!selectedGroup) return;
-    setGroups((prev) => prev.map((group) => (group.id === selectedGroup.id ? updater(group) : group)));
+    setEventGroup((prev) => updater(prev));
   };
 
   const updateSelectedValue = (updater: (value: GroupValue) => GroupValue) => {
@@ -221,36 +177,9 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
     }));
   };
 
-  const openEditor = (groupId: string) => {
-    const targetGroup = groups.find((group) => group.id === groupId);
-    if (!targetGroup) return;
-    setSelectedGroupId(groupId);
-    setSelectedValueId(targetGroup.values[0]?.id ?? '');
-    setPageMode('editor');
-  };
-
-  const handleCreateGroup = () => {
-    const newGroup = createGroup();
-    setGroups((prev) => [newGroup, ...prev]);
-    setSelectedGroupId(newGroup.id);
-    setSelectedValueId(newGroup.values[0].id);
-    setPageMode('editor');
-  };
-
-  const handleDeleteGroup = (groupId: string) => {
-    setGroups((prev) => prev.filter((group) => group.id !== groupId));
-    if (selectedGroupId === groupId) {
-      const nextGroup = groups.find((group) => group.id !== groupId);
-      if (nextGroup) {
-        setSelectedGroupId(nextGroup.id);
-        setSelectedValueId(nextGroup.values[0]?.id ?? '');
-      }
-    }
-  };
-
   const addValue = () => {
     if (!selectedGroup) return;
-    const newValue = createValue(`组别值${selectedGroup.values.length + 1}`);
+    const newValue = createValue(`组别${selectedGroup.values.length + 1}`);
     updateSelectedGroup((group) => ({ ...group, values: [...group.values, newValue] }));
     setSelectedValueId(newValue.id);
   };
@@ -289,156 +218,15 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
     }));
   };
 
-  if (pageMode === 'list') {
-    return (
-      <div className="mx-auto w-full max-w-7xl min-w-0">
-        <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">组别管理</h3>
-                <p className="mt-1 text-sm text-slate-500">组别用于对参赛选手进行人群划分，例如分为A组、B组或者按年龄分为U12、U14等</p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleCreateGroup}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
-            >
-              <Plus className="h-4 w-4" />
-              新建组别
-            </button>
-          </div>
-
-          <div className="border-b border-slate-100 px-8 py-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="relative min-w-[280px]">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  value={searchDraft}
-                  onChange={(event) => setSearchDraft(event.target.value)}
-                  placeholder="检索组别名称"
-                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                />
-              </div>
-              <button
-                onClick={applySearch}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
-              >
-                筛选
-              </button>
-              <button
-                onClick={resetSearch}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
-              >
-                重置
-              </button>
-            </div>
-          </div>
-
-          <div className="max-w-full overflow-x-auto">
-            <table className="min-w-[1200px] w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-slate-100 bg-white">
-                  <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">组别名称</th>
-                  <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">组别说明</th>
-                  <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">组别值</th>
-                  <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">创建时间</th>
-                  <th className="sticky right-0 z-10 bg-white px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {pagedGroups.length > 0 ? (
-                  pagedGroups.map((group) => (
-                    <tr key={group.id} className="align-top transition-colors hover:bg-slate-50/60">
-                      <td className="px-8 py-6">
-                        <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{group.name}</p>
-                      </td>
-                      <td className="px-6 py-6">
-                        <p className="max-w-xl text-sm leading-6 text-slate-600">
-                          {group.description || '暂未填写组别说明'}
-                        </p>
-                      </td>
-                      <td className="px-6 py-6">
-                        <div className="flex flex-wrap gap-2">
-                          {group.values.map((value) => (
-                            <span
-                              key={value.id}
-                              className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100"
-                            >
-                              {value.name}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{group.createdAt}</td>
-                      <td className="sticky right-0 z-10 bg-white px-8 py-6 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50/60">
-                        <div className="flex flex-nowrap justify-end gap-2">
-                          <button
-                            onClick={() => openEditor(group.id)}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
-                          >
-                            <PencilLine className="h-4 w-4" />
-                            编辑
-                          </button>
-                          <button
-                            onClick={() => handleDeleteGroup(group.id)}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-500 transition-all hover:text-rose-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            删除
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="px-8 py-16 text-center text-sm text-slate-500">
-                      暂无组别数据，点击右上角“新建组别”开始配置。
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <TablePagination
-            total={filteredGroups.length}
-            page={normalizedPage}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setCurrentPage(1);
-            }}
-            itemLabel="个组别"
-            compact
-          />
-        </section>
-      </div>
-    );
-  }
-
   if (!selectedGroup || !selectedValue) return null;
 
   const resolvedRange = selectedRule ? formatRangeResolvedDates(selectedRule) : null;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex justify-end">
         <button
-          onClick={() => setPageMode('list')}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          返回组别列表
-        </button>
-        <button
-          onClick={() => window.alert(`组别「${selectedGroup.name}」已保存`)}
+          onClick={() => window.alert(`赛事组别「${selectedGroup.name}」已保存`)}
           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
         >
           <Save className="h-4 w-4" />
@@ -448,86 +236,94 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
 
       <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-4">
-          <h3 className="text-lg font-bold text-slate-900">组别配置</h3>
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-indigo-500" />
+            <h3 className="text-lg font-bold text-slate-900">组别分组</h3>
+          </div>
         </div>
 
-        <div className="space-y-10 px-6 py-6">
-            <section className="max-w-2xl space-y-6">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-indigo-500" />
-                <h2 className="text-sm font-semibold text-slate-700">组别信息</h2>
-              </div>
+        <div className="max-w-2xl space-y-6 px-6 py-6">
+          <p className="text-sm leading-6 text-slate-500">
+            为了便于管理，请先填写组别分组名称（必填）和分组说明（非必填），再在下方逐个维护具体组别。
+          </p>
 
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-600">组别名称</span>
-                <input
-                  value={selectedGroup.name}
-                  onChange={(event) =>
-                    updateSelectedGroup((group) => ({ ...group, name: event.target.value }))
-                  }
-                  placeholder="请输入组别名称"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                />
-              </label>
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-slate-600">组别分组名称</span>
+            <input
+              value={selectedGroup.name}
+              onChange={(event) =>
+                updateSelectedGroup((group) => ({ ...group, name: event.target.value }))
+              }
+              placeholder="请输入组别名称"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            />
+          </label>
 
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-600">组别说明</span>
-                <textarea
-                  value={selectedGroup.description}
-                  onChange={(event) =>
-                    updateSelectedGroup((group) => ({ ...group, description: event.target.value }))
-                  }
-                  placeholder="请填写该组别的规则说明或设置目的，非必填"
-                  rows={4}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                />
-              </label>
-            </section>
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-slate-600">分组说明</span>
+            <textarea
+              value={selectedGroup.description}
+              onChange={(event) =>
+                updateSelectedGroup((group) => ({ ...group, description: event.target.value }))
+              }
+              placeholder="请填写该组别的规则说明或设置目的，非必填"
+              rows={4}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            />
+          </label>
+        </div>
+      </section>
 
-            <section className="space-y-6">
-            <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
-            <div className="bg-white px-5 py-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  {selectedGroup.values.map((value, index) => {
-                    const isActive = value.id === selectedValueId;
-                    return (
-                      <button
-                        key={value.id}
-                        onClick={() => setSelectedValueId(value.id)}
-                        className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ${
-                          isActive
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                            : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span
-                          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                            isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          {index + 1}
-                        </span>
-                        {value.name}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  onClick={addValue}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  新增组别值
-                </button>
-              </div>
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-4">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-indigo-500" />
+            <h3 className="text-lg font-bold text-slate-900">组别管理</h3>
+          </div>
+        </div>
+
+        <div className="space-y-6 px-6 py-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {selectedGroup.values.map((value, index) => {
+                const isActive = value.id === selectedValueId;
+                return (
+                  <button
+                    key={value.id}
+                    onClick={() => setSelectedValueId(value.id)}
+                    className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                        : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    {value.name}
+                  </button>
+                );
+              })}
             </div>
+            <button
+              onClick={addValue}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50"
+            >
+              <Plus className="h-4 w-4" />
+              新增组别
+            </button>
+          </div>
 
-            <div className="space-y-5 bg-white px-5 pb-5 pt-2">
+          <div className="border-t border-slate-100 pt-6">
+            <div className="space-y-5">
               <div className="flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-white p-4 lg:flex-row lg:items-end lg:justify-between">
                 <div className="flex-1">
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-600">组别值名称</span>
+                    <span className="text-sm font-medium text-slate-600">组别名称</span>
                     <input
                       value={selectedValue.name}
                       onChange={(event) =>
@@ -583,7 +379,7 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
                 <h5 className="text-sm font-semibold text-slate-700">校验规则</h5>
                 {!selectedValue.ruleEnabled ? (
                   <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-sm text-slate-500">
-                    当前未启用校验规则。该组别值将仅作为人群分组使用，不限制出生日期等条件。
+                    当前未启用校验规则。该组别将仅作为人群分组使用，不限制出生日期等条件。
                   </div>
                 ) : selectedRule ? (
                   <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -667,9 +463,8 @@ export function GroupManagement({ prototypeMode = false }: { prototypeMode?: boo
               </div>
             </div>
           </div>
-        </section>
-      </div>
-    </section>
+        </div>
+      </section>
   </div>
   );
 }

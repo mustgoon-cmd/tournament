@@ -65,17 +65,25 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
       ...p,
       is_public: Math.random() > 0.5, // Randomly set some as public for demo
       team_events: p.type === 'team' ? [
-        { 
-          id: 'TE-1', 
+        {
+          id: 'TE-1',
+          name: '男子单打',
+          short_name: '男单',
+          code: 'MS',
           match_format_rule: { category: '常规赛制', operator: '=', value: '男子单打' },
           group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
-          restrictions: [] 
+          restrictions: [],
+          created_at: '2026-04-01 11:52:02',
         },
-        { 
-          id: 'TE-2', 
+        {
+          id: 'TE-2',
+          name: '女子单打',
+          short_name: '女单',
+          code: 'WS',
           match_format_rule: { category: '常规赛制', operator: '=', value: '女子单打' },
           group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
-          restrictions: [] 
+          restrictions: [],
+          created_at: '2026-04-01 11:58:16',
         }
       ] : []
     }))
@@ -91,6 +99,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [editingProject, setEditingProject] = useState<any | null>(null);
   const [configuringTeamEvent, setConfiguringTeamEvent] = useState<any | null>(null);
+  const [editingTeamEventIndex, setEditingTeamEventIndex] = useState<number | null>(null);
   const [finalizingProject, setFinalizingProject] = useState<any | null>(null);
   const [isBatchAddModalOpen, setIsBatchAddModalOpen] = useState(false);
   const [batchSelectedGroups, setBatchSelectedGroups] = useState<string[]>(['公开组']);
@@ -164,7 +173,23 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
     match_format_rule: { category: MATCH_FORMAT_GROUPS[0].name, operator: '=', value: '' },
     group_rule: { category: '', operator: 'in', values: [] },
     restrictions: [],
+    created_at: new Date()
+      .toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      })
+      .replace(/\//g, '-'),
   });
+
+  const formatRestrictionSummary = (restrictions: any[] = []) =>
+    restrictions.length === 0
+      ? '未配置'
+      : restrictions.map((rule) => `${rule.field}${rule.operator}${rule.value || '未填写'}`).join('；');
 
   const openNewCompetitionProject = (type: 'single' | 'team') => {
     setConfiguringTeamEvent({
@@ -320,6 +345,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                                   restrictions: []
                                 }];
                               }
+                              setEditingTeamEventIndex(null);
                               setConfiguringTeamEvent(configProject);
                             }}
                             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-600 transition-all hover:text-emerald-700"
@@ -840,11 +866,23 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                           code: formatOption?.code || '',
                           match_format_rule: { category: formatOption?.groupName || batchFormatGroup, operator: '=', value: f },
                           group_rule: { category: batchGroupCategory, operator: 'in', values: [g] },
-                          restrictions: []
+                          restrictions: [],
+                          created_at: new Date()
+                            .toLocaleString('zh-CN', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: false,
+                            })
+                            .replace(/\//g, '-')
                         });
                       });
                     });
                     if (configuringTeamEvent) {
+                      setEditingTeamEventIndex(null);
                       setConfiguringTeamEvent({
                         ...configuringTeamEvent,
                         team_events: [...(configuringTeamEvent.team_events || []), ...newEvents]
@@ -1038,14 +1076,19 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setConfiguringTeamEvent(null)}
+              onClick={() => {
+                setEditingTeamEventIndex(null);
+                setConfiguringTeamEvent(null);
+              }}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+              className={`relative w-full ${
+                configuringTeamEvent.type === 'team' ? 'max-w-[1360px]' : 'max-w-3xl'
+              } max-h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col`}
             >
               <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white z-10">
                 <div className="flex items-center gap-4">
@@ -1054,15 +1097,26 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">
-                      {configuringTeamEvent.isNew ? '直接创建项目' : (configuringTeamEvent.type === 'team' ? '团体赛制配置' : '项目赛制配置')}
+                      {configuringTeamEvent.type === 'team'
+                        ? '团体单项配置'
+                        : configuringTeamEvent.isNew
+                          ? '直接创建项目'
+                          : '项目赛制配置'}
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {configuringTeamEvent.isNew ? '填写项目基本信息并配置赛制' : configuringTeamEvent.name}
+                      {configuringTeamEvent.type === 'team'
+                        ? '配置该团体项目下的单项比赛'
+                        : configuringTeamEvent.isNew
+                          ? '填写项目基本信息并配置赛制'
+                          : configuringTeamEvent.name}
                     </p>
                   </div>
                 </div>
                 <button 
-                  onClick={() => setConfiguringTeamEvent(null)}
+                  onClick={() => {
+                    setEditingTeamEventIndex(null);
+                    setConfiguringTeamEvent(null);
+                  }}
                   className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-400 hover:text-slate-600"
                 >
                   <X className="w-6 h-6" />
@@ -1072,6 +1126,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
               <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-50/30">
                 <div className="space-y-6">
                   {/* Basic Info */}
+                  {configuringTeamEvent.type !== 'team' && (
                   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -1154,8 +1209,10 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
 
 
                   </div>
+                  )}
 
                   {/* Rules Configuration */}
+                  {configuringTeamEvent.type !== 'team' && (
                   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                     <h3 className="text-lg font-bold text-slate-900">赛制参数配置</h3>
 
@@ -1399,31 +1456,38 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* Team Events (Only for Team Project) */}
                   {configuringTeamEvent.type === 'team' && (
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                      <div className="flex items-center justify-between">
+                    <div className="px-8 py-6 space-y-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">团体赛单项配置</h3>
-                          <p className="text-xs text-slate-500 mt-1">直接新建该团体项目下的单项比赛配置</p>
+                          <h3 className="text-base font-bold text-slate-900">单项列表</h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            当前已配置 {(configuringTeamEvent.team_events || []).length} 个单项，可继续添加、编辑或删除。
+                          </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={() => setIsBatchAddModalOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all"
+                            className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-all"
                           >
                             <LayoutGrid className="w-4 h-4" />
                             批量添加
                           </button>
                           <button
                             type="button"
-                            onClick={() => setConfiguringTeamEvent({
-                              ...configuringTeamEvent,
-                              team_events: [...(configuringTeamEvent.team_events || []), createEmptyTeamEvent()],
-                            })}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors"
+                            onClick={() => {
+                              const nextEvents = [...(configuringTeamEvent.team_events || []), createEmptyTeamEvent()];
+                              setConfiguringTeamEvent({
+                                ...configuringTeamEvent,
+                                team_events: nextEvents,
+                              });
+                              setEditingTeamEventIndex(nextEvents.length - 1);
+                            }}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors"
                           >
                             <Plus className="w-4 h-4" />
                             添加单项
@@ -1431,347 +1495,310 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        {(!configuringTeamEvent.team_events || configuringTeamEvent.team_events.length === 0) ? (
-                          <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
-                            <p className="text-sm text-slate-500">暂无单项配置，请点击上方按钮添加</p>
+                      {(!configuringTeamEvent.team_events || configuringTeamEvent.team_events.length === 0) ? (
+                        <div className="text-center py-14 bg-white border border-slate-200 rounded-2xl">
+                          <p className="text-sm text-slate-500">暂无单项配置，请点击上方按钮添加</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div className="max-w-full overflow-x-auto">
+                              <div className="min-w-[1180px]">
+                                <table className="w-full text-left border-collapse">
+                                  <colgroup>
+                                    <col className="w-[220px]" />
+                                    <col className="w-[120px]" />
+                                    <col className="w-[120px]" />
+                                    <col className="w-[180px]" />
+                                    <col className="w-[180px]" />
+                                    <col className="w-[180px]" />
+                                    <col className="w-[180px]" />
+                                  </colgroup>
+                                  <thead>
+                                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">项目名称</th>
+                                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">简称</th>
+                                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">代码</th>
+                                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">比赛形式</th>
+                                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">附加规则限制</th>
+                                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">创建时间</th>
+                                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap text-right">操作</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {(configuringTeamEvent.team_events || []).map((event: any, index: number) => (
+                                      <tr key={event.id} className="hover:bg-slate-50 transition-colors group">
+                                        <td className="px-6 py-4 text-sm font-bold text-slate-900 whitespace-nowrap">{event.name || '--'}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{event.short_name || '--'}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-600 font-mono whitespace-nowrap">{event.code || '--'}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{event.match_format_rule?.value || '未设置'}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{formatRestrictionSummary(event.restrictions || [])}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{event.created_at || '--'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                                          <div className="flex flex-nowrap items-center justify-end gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => setEditingTeamEventIndex(index)}
+                                              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:text-blue-700"
+                                            >
+                                              <Edit3 className="w-4 h-4" />
+                                              编辑
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const nextEvents = (configuringTeamEvent.team_events || []).filter((_: any, eventIndex: number) => eventIndex !== index);
+                                                setConfiguringTeamEvent({
+                                                  ...configuringTeamEvent,
+                                                  team_events: nextEvents,
+                                                });
+                                                setEditingTeamEventIndex((prev) => {
+                                                  if (prev === null) return prev;
+                                                  if (prev === index) return null;
+                                                  return prev > index ? prev - 1 : prev;
+                                                });
+                                              }}
+                                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-500 transition-all hover:text-red-600"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                              删除
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
                           </div>
-                        ) : (
-                          configuringTeamEvent.team_events.map((event: any, index: number) => {
-                            const eventFormatGroup = getFormatGroupName(
-                              event.match_format_rule?.value,
-                              event.match_format_rule?.category,
-                            );
-                            const eventFormatOptions = getFormatOptionsByGroup(eventFormatGroup);
 
-                            return (
-                              <div key={event.id} className="flex items-start gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
-                                  {index + 1}
+                          {editingTeamEventIndex !== null && configuringTeamEvent.team_events?.[editingTeamEventIndex] && (
+                            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                              <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                                <div>
+                                  <h4 className="text-sm font-bold text-slate-900">
+                                    编辑单项：{configuringTeamEvent.team_events[editingTeamEventIndex].name || `单项${editingTeamEventIndex + 1}`}
+                                  </h4>
+                                  <p className="text-xs text-slate-500 mt-1">修改单项名称、比赛形式与附加规则限制</p>
                                 </div>
-                                <div className="flex-1 space-y-4">
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="space-y-1.5">
-                                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">项目名称</label>
-                                      <input
-                                        type="text"
-                                        value={event.name || ''}
-                                        onChange={(e) => {
-                                          const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                          nextEvents[index] = { ...nextEvents[index], name: e.target.value };
-                                          setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                        }}
-                                        placeholder="例如：男子单打"
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
-                                      />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">项目简称</label>
-                                      <input
-                                        type="text"
-                                        value={event.short_name || ''}
-                                        onChange={(e) => {
-                                          const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                          nextEvents[index] = { ...nextEvents[index], short_name: e.target.value };
-                                          setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                        }}
-                                        placeholder="例如：男单"
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
-                                      />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">代码标识</label>
-                                      <input
-                                        type="text"
-                                        value={event.code || ''}
-                                        onChange={(e) => {
-                                          const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                          nextEvents[index] = { ...nextEvents[index], code: e.target.value };
-                                          setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                        }}
-                                        placeholder="例如：MS"
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 transition-all"
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">比赛形式</label>
-                                      <span className="text-[10px] text-slate-400">先选分组，再选规格</span>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {MATCH_FORMAT_GROUPS.map((group) => (
-                                        <button
-                                          key={group.id}
-                                          type="button"
-                                          onClick={() => {
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingTeamEventIndex(null)}
+                                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-xl transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                              {(() => {
+                                const event = configuringTeamEvent.team_events[editingTeamEventIndex];
+                                const eventFormatGroup = getFormatGroupName(
+                                  event.match_format_rule?.value,
+                                  event.match_format_rule?.category,
+                                );
+                                const eventFormatOptions = getFormatOptionsByGroup(eventFormatGroup);
+                                return (
+                                  <div className="p-5 space-y-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">项目名称</label>
+                                        <input
+                                          type="text"
+                                          value={event.name || ''}
+                                          onChange={(e) => {
                                             const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                            nextEvents[index] = {
-                                              ...nextEvents[index],
+                                            nextEvents[editingTeamEventIndex] = { ...nextEvents[editingTeamEventIndex], name: e.target.value };
+                                            setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
+                                          }}
+                                          placeholder="例如：男子单打"
+                                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">简称</label>
+                                        <input
+                                          type="text"
+                                          value={event.short_name || ''}
+                                          onChange={(e) => {
+                                            const nextEvents = [...(configuringTeamEvent.team_events || [])];
+                                            nextEvents[editingTeamEventIndex] = { ...nextEvents[editingTeamEventIndex], short_name: e.target.value };
+                                            setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
+                                          }}
+                                          placeholder="例如：男单"
+                                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">代码</label>
+                                        <input
+                                          type="text"
+                                          value={event.code || ''}
+                                          onChange={(e) => {
+                                            const nextEvents = [...(configuringTeamEvent.team_events || [])];
+                                            nextEvents[editingTeamEventIndex] = { ...nextEvents[editingTeamEventIndex], code: e.target.value.toUpperCase() };
+                                            setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
+                                          }}
+                                          placeholder="例如：MS"
+                                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">比赛形式分组</label>
+                                        <select
+                                          value={eventFormatGroup}
+                                          onChange={(e) => {
+                                            const nextEvents = [...(configuringTeamEvent.team_events || [])];
+                                            nextEvents[editingTeamEventIndex] = {
+                                              ...nextEvents[editingTeamEventIndex],
                                               match_format_rule: {
-                                                category: group.name,
+                                                category: e.target.value,
                                                 operator: '=',
                                                 value: '',
                                               },
                                             };
                                             setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
                                           }}
-                                          className={`rounded-full px-3 py-1.5 text-[11px] font-bold transition-all ${
-                                            eventFormatGroup === group.name
-                                              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                                              : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
-                                          }`}
+                                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700"
                                         >
-                                          {group.name}
-                                        </button>
-                                      ))}
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2.5">
-                                      {eventFormatOptions.map((option) => {
-                                        const selected = event.match_format_rule?.value === option.value;
-                                        return (
-                                          <button
-                                            key={option.value}
-                                            type="button"
-                                            onClick={() => {
-                                              const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                              nextEvents[index] = {
-                                                ...nextEvents[index],
-                                                match_format_rule: {
-                                                  category: eventFormatGroup,
-                                                  operator: '=',
-                                                  value: option.value,
-                                                },
-                                              };
-                                              setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                            }}
-                                            className={`rounded-xl border px-3 py-2.5 text-[13px] font-bold text-left transition-all ${
-                                              selected
-                                                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100'
-                                                : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40'
-                                            }`}
-                                          >
-                                            {option.value}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">组别</label>
-                                      <span className="text-[10px] text-slate-400">先选系列，再选具体组别</span>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {Object.keys(GROUP_OPTIONS).map((category) => (
-                                        <button
-                                          key={category}
-                                          type="button"
-                                          onClick={() => {
+                                          <option value="">选择比赛形式分组</option>
+                                          {MATCH_FORMAT_GROUPS.map((group) => (
+                                            <option key={group.id} value={group.name}>
+                                              {group.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">比赛形式</label>
+                                        <select
+                                          value={event.match_format_rule?.value || ''}
+                                          onChange={(e) => {
                                             const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                            nextEvents[index] = {
-                                              ...nextEvents[index],
-                                              group_rule: {
-                                                category,
-                                                operator: 'in',
-                                                values: [],
+                                            nextEvents[editingTeamEventIndex] = {
+                                              ...nextEvents[editingTeamEventIndex],
+                                              match_format_rule: {
+                                                category: eventFormatGroup,
+                                                operator: '=',
+                                                value: e.target.value,
                                               },
                                             };
                                             setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
                                           }}
-                                          className={`rounded-full px-3 py-1.5 text-[11px] font-bold transition-all ${
-                                            event.group_rule?.category === category
-                                              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                                              : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
-                                          }`}
+                                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700"
+                                          disabled={!eventFormatGroup}
                                         >
-                                          {category}
-                                        </button>
-                                      ))}
-                                    </div>
-                                    {event.group_rule?.category === '自定义' ? (
-                                      <input
-                                        type="text"
-                                        placeholder="输入自定义组别名称"
-                                        value={event.group_rule?.values?.[0] || ''}
-                                        onChange={(e) => {
-                                          const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                          nextEvents[index] = {
-                                            ...nextEvents[index],
-                                            group_rule: {
-                                              ...(nextEvents[index].group_rule || { category: '自定义', operator: 'in' }),
-                                              values: [e.target.value.trim()],
-                                            },
-                                          };
-                                          setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                        }}
-                                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
-                                      />
-                                    ) : (
-                                      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-                                        {(event.group_rule?.category
-                                          ? GROUP_OPTIONS[event.group_rule.category] || []
-                                          : []
-                                        ).map((group) => {
-                                          const selected = event.group_rule?.values?.[0] === group;
-                                          return (
-                                            <button
-                                              key={group}
-                                              type="button"
-                                              onClick={() => {
-                                                const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                                nextEvents[index] = {
-                                                  ...nextEvents[index],
-                                                  group_rule: {
-                                                    ...(nextEvents[index].group_rule || { category: '', operator: 'in' }),
-                                                    values: [group],
-                                                  },
-                                                };
-                                                setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                              }}
-                                              className={`rounded-xl border px-3 py-2.5 text-[13px] font-bold transition-all ${
-                                                selected
-                                                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100'
-                                                  : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40'
-                                              }`}
-                                            >
-                                              {group}
-                                            </button>
-                                          );
-                                        })}
+                                          <option value="">选择比赛形式</option>
+                                          {eventFormatOptions.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                              {option.value}
+                                            </option>
+                                          ))}
+                                        </select>
                                       </div>
-                                    )}
-                                  </div>
-
-                                  <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">附加限制规则</label>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                          nextEvents[index] = {
-                                            ...nextEvents[index],
-                                            restrictions: [...(nextEvents[index].restrictions || []), createRestriction()],
-                                          };
-                                          setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                        }}
-                                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 uppercase tracking-wider flex items-center gap-1"
-                                      >
-                                        <Plus className="w-2.5 h-2.5" />
-                                        添加规则
-                                      </button>
                                     </div>
-                                    <div className="space-y-2">
+
+                                    <div className="space-y-3">
+                                      <div className="flex items-center justify-between">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">附加规则限制</label>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nextEvents = [...(configuringTeamEvent.team_events || [])];
+                                            nextEvents[editingTeamEventIndex] = {
+                                              ...nextEvents[editingTeamEventIndex],
+                                              restrictions: [...(nextEvents[editingTeamEventIndex].restrictions || []), createRestriction()],
+                                            };
+                                            setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
+                                          }}
+                                          className="text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                                        >
+                                          添加规则
+                                        </button>
+                                      </div>
                                       {(event.restrictions || []).length === 0 ? (
-                                        <div className="text-center py-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                                          <p className="text-[10px] text-slate-400">暂无限制规则</p>
+                                        <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-400">
+                                          暂无限制规则
                                         </div>
                                       ) : (
-                                        (event.restrictions || []).map((rule: any, ruleIdx: number) => (
-                                          <div key={rule.id || ruleIdx} className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                                            <select
-                                              value={rule.field}
-                                              onChange={(e) => {
-                                                const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                                const nextRestrictions = [...(nextEvents[index].restrictions || [])];
-                                                nextRestrictions[ruleIdx] = {
-                                                  ...nextRestrictions[ruleIdx],
-                                                  field: e.target.value,
-                                                };
-                                                nextEvents[index] = {
-                                                  ...nextEvents[index],
-                                                  restrictions: nextRestrictions,
-                                                };
-                                                setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                              }}
-                                              className="flex-1 px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-bold text-slate-700"
-                                            >
-                                              <option value="户籍">户籍</option>
-                                              <option value="年龄">年龄</option>
-                                              <option value="积分">积分</option>
-                                              <option value="性别">性别</option>
-                                              <option value="地区">地区</option>
-                                            </select>
-                                            <select
-                                              value={rule.operator}
-                                              onChange={(e) => {
-                                                const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                                const nextRestrictions = [...(nextEvents[index].restrictions || [])];
-                                                nextRestrictions[ruleIdx] = {
-                                                  ...nextRestrictions[ruleIdx],
-                                                  operator: e.target.value,
-                                                };
-                                                nextEvents[index] = {
-                                                  ...nextEvents[index],
-                                                  restrictions: nextRestrictions,
-                                                };
-                                                setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                              }}
-                                              className="w-16 px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-bold text-slate-700"
-                                            >
-                                              <option value="=">=</option>
-                                              <option value="!=">!=</option>
-                                              <option value=">">&gt;</option>
-                                              <option value="<">&lt;</option>
-                                              <option value="contains">包含</option>
-                                            </select>
-                                            <input
-                                              type="text"
-                                              value={rule.value}
-                                              onChange={(e) => {
-                                                const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                                const nextRestrictions = [...(nextEvents[index].restrictions || [])];
-                                                nextRestrictions[ruleIdx] = {
-                                                  ...nextRestrictions[ruleIdx],
-                                                  value: e.target.value,
-                                                };
-                                                nextEvents[index] = {
-                                                  ...nextEvents[index],
-                                                  restrictions: nextRestrictions,
-                                                };
-                                                setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                              }}
-                                              placeholder="值"
-                                              className="flex-1 px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] text-slate-700"
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                const nextEvents = [...(configuringTeamEvent.team_events || [])];
-                                                nextEvents[index] = {
-                                                  ...nextEvents[index],
-                                                  restrictions: (nextEvents[index].restrictions || []).filter((_: any, currentRuleIdx: number) => currentRuleIdx !== ruleIdx),
-                                                };
-                                                setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
-                                              }}
-                                              className="p-1.5 text-slate-400 hover:text-red-600 transition-all"
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                          </div>
-                                        ))
+                                        <div className="space-y-2">
+                                          {(event.restrictions || []).map((rule: any, ruleIdx: number) => (
+                                            <div key={rule.id || ruleIdx} className="grid grid-cols-[1fr_72px_1fr_40px] gap-2 items-center">
+                                              <select
+                                                value={rule.field}
+                                                onChange={(e) => {
+                                                  const nextEvents = [...(configuringTeamEvent.team_events || [])];
+                                                  const nextRestrictions = [...(nextEvents[editingTeamEventIndex].restrictions || [])];
+                                                  nextRestrictions[ruleIdx] = { ...nextRestrictions[ruleIdx], field: e.target.value };
+                                                  nextEvents[editingTeamEventIndex] = { ...nextEvents[editingTeamEventIndex], restrictions: nextRestrictions };
+                                                  setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
+                                                }}
+                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700"
+                                              >
+                                                <option value="户籍">户籍</option>
+                                                <option value="年龄">年龄</option>
+                                                <option value="积分">积分</option>
+                                                <option value="性别">性别</option>
+                                                <option value="地区">地区</option>
+                                              </select>
+                                              <select
+                                                value={rule.operator}
+                                                onChange={(e) => {
+                                                  const nextEvents = [...(configuringTeamEvent.team_events || [])];
+                                                  const nextRestrictions = [...(nextEvents[editingTeamEventIndex].restrictions || [])];
+                                                  nextRestrictions[ruleIdx] = { ...nextRestrictions[ruleIdx], operator: e.target.value };
+                                                  nextEvents[editingTeamEventIndex] = { ...nextEvents[editingTeamEventIndex], restrictions: nextRestrictions };
+                                                  setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
+                                                }}
+                                                className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700"
+                                              >
+                                                <option value="=">=</option>
+                                                <option value="!=">!=</option>
+                                                <option value=">">&gt;</option>
+                                                <option value="<">&lt;</option>
+                                                <option value="contains">包含</option>
+                                              </select>
+                                              <input
+                                                type="text"
+                                                value={rule.value}
+                                                onChange={(e) => {
+                                                  const nextEvents = [...(configuringTeamEvent.team_events || [])];
+                                                  const nextRestrictions = [...(nextEvents[editingTeamEventIndex].restrictions || [])];
+                                                  nextRestrictions[ruleIdx] = { ...nextRestrictions[ruleIdx], value: e.target.value };
+                                                  nextEvents[editingTeamEventIndex] = { ...nextEvents[editingTeamEventIndex], restrictions: nextRestrictions };
+                                                  setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
+                                                }}
+                                                placeholder="值"
+                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nextEvents = [...(configuringTeamEvent.team_events || [])];
+                                                  nextEvents[editingTeamEventIndex] = {
+                                                    ...nextEvents[editingTeamEventIndex],
+                                                    restrictions: (nextEvents[editingTeamEventIndex].restrictions || []).filter((_: any, currentRuleIdx: number) => currentRuleIdx !== ruleIdx),
+                                                  };
+                                                  setConfiguringTeamEvent({ ...configuringTeamEvent, team_events: nextEvents });
+                                                }}
+                                                className="p-2 text-slate-400 hover:text-red-600 transition-all"
+                                              >
+                                                <Trash2 className="w-4 h-4" />
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
                                       )}
                                     </div>
                                   </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfiguringTeamEvent({
-                                    ...configuringTeamEvent,
-                                    team_events: (configuringTeamEvent.team_events || []).filter((_: any, eventIndex: number) => eventIndex !== index),
-                                  })}
-                                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0 mt-6"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1779,7 +1806,10 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
 
               <div className="px-8 py-6 border-t border-slate-100 bg-white flex items-center justify-end gap-3">
                 <button 
-                  onClick={() => setConfiguringTeamEvent(null)}
+                  onClick={() => {
+                    setEditingTeamEventIndex(null);
+                    setConfiguringTeamEvent(null);
+                  }}
                   className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
                 >
                   取消
@@ -1812,6 +1842,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                       if (!expandedProjects.has(configuringTeamEvent.id)) {
                         toggleExpand(configuringTeamEvent.id);
                       }
+                      setEditingTeamEventIndex(null);
                       setConfiguringTeamEvent(null);
                     }}
                     className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2"

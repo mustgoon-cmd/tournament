@@ -167,6 +167,8 @@ export interface RegistrationConfig {
   ageCalculationBase: AgeCalculationBase;
   ageCalculationMethod: AgeCalculationMethod;
   ageCalculationCustomDate?: string;
+  enableWithdrawalRefund: boolean;
+  withdrawalRefundDeadline?: string;
   enablePostDeadlineEdit: boolean;
   postDeadlineEditUntilMode: PostDeadlineEditUntilMode;
   postDeadlineEditCustomDate?: string;
