@@ -102,6 +102,59 @@ const RegistrationOrderInfoTip: React.FC<{ text: string }> = ({ text }) => {
   );
 };
 
+const TeamUniformGallery: React.FC<{
+  uniforms?: TeamRecord['uniforms'];
+  compact?: boolean;
+}> = ({ uniforms, compact = false }) => {
+  if (!uniforms || uniforms.length === 0) return null;
+
+  return (
+    <div className={compact ? '' : 'mt-4'}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] font-bold uppercase text-indigo-400">队服信息</p>
+        <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-slate-500`}>
+          共 {uniforms.length} 件，录入时需填写主色调
+        </span>
+      </div>
+      <div className={`mt-2 grid gap-3 ${compact ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
+        {uniforms.map((uniform, index) => (
+          <div
+            key={uniform.id}
+            className={`overflow-hidden rounded-2xl border ${compact ? 'border-slate-200' : 'border-white/80'} bg-white shadow-sm`}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-3">
+              <p className={`${compact ? 'text-xs' : 'text-sm'} font-bold text-slate-800`}>
+                {uniform.name || `队服 ${index + 1}`}
+              </p>
+              <span
+                className={`inline-flex items-center rounded-full bg-slate-100 ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]'} font-semibold text-slate-600`}
+              >
+                主色调：{uniform.primary_color_name || '未填写'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 p-3">
+              {['正面', '反面'].map((side) => (
+                <div
+                  key={`${uniform.id}-${side}`}
+                  className={`rounded-2xl border border-dashed border-slate-200 bg-slate-50 ${compact ? 'p-3' : 'p-4'}`}
+                >
+                  <div className={`flex ${compact ? 'h-24' : 'h-28'} flex-col items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 via-white to-slate-100 text-slate-400`}>
+                    <Layers3 className={`${compact ? 'h-5 w-5' : 'h-6 w-6'}`} />
+                    <span className="mt-2 text-[10px] font-semibold tracking-[0.12em] text-slate-500">
+                      {side}
+                    </span>
+                    <span className="mt-1 text-[10px] text-slate-400">队服占位图</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
   initialTab,
   showTabs = true,
@@ -2385,7 +2438,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                                 {teamDetail?.member_count || getEntryParticipants(selectedEntryForDetail).length} 人
                               </span>
                             </div>
-                            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
                               <div>
                                 <p className="text-[10px] font-bold text-indigo-400 uppercase">邀请码</p>
                                 <p className="mt-1 text-sm font-bold text-slate-800 font-mono">{teamDetail?.invite_code || '--'}</p>
@@ -2401,14 +2454,6 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                               <div>
                                 <p className="text-[10px] font-bold text-indigo-400 uppercase">领队电话</p>
                                 <p className="mt-1 text-sm font-bold text-slate-800 font-mono">{teamDetail?.leader_phone || '--'}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold text-indigo-400 uppercase">联络员</p>
-                                <p className="mt-1 text-sm font-bold text-slate-800">{teamDetail?.liaison_name || '--'}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold text-indigo-400 uppercase">联络电话</p>
-                                <p className="mt-1 text-sm font-bold text-slate-800 font-mono">{teamDetail?.liaison_phone || '--'}</p>
                               </div>
                               <div>
                                 <p className="text-[10px] font-bold text-indigo-400 uppercase">队伍总人数</p>
@@ -2449,25 +2494,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                                 )}
                               </div>
                             )}
-                            {teamDetail?.uniforms && teamDetail.uniforms.length > 0 && (
-                              <div className="mt-4">
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="text-[10px] font-bold text-indigo-400 uppercase">队伍队服</p>
-                                  <span className="text-[11px] text-slate-500">支持多款录入，可后台修改主色调名称</span>
-                                </div>
-                                <div className="mt-2 grid gap-3 md:grid-cols-2">
-                                  {teamDetail.uniforms.map((uniform) => (
-                                    <div key={uniform.id} className="overflow-hidden rounded-2xl border border-white/80 bg-white shadow-sm">
-                                      <img src={uniform.image_url} alt={uniform.name || '队服'} className="h-32 w-full object-cover" />
-                                      <div className="space-y-1 px-3 py-3">
-                                        <p className="text-sm font-bold text-slate-800">{uniform.name || '队服款式'}</p>
-                                        <p className="text-xs text-slate-500">主色调：{uniform.primary_color_name}</p>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
+                            <TeamUniformGallery uniforms={teamDetail?.uniforms} compact />
                             {teamDetail?.members && teamDetail.members.length > 0 && (
                               <div className="mt-4">
                                 <p className="text-[10px] font-bold text-indigo-400 uppercase">队伍成员</p>
@@ -2838,10 +2865,6 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                           <p className="mt-1 text-sm font-bold text-slate-700">{teamDetail?.leader || '--'}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] font-bold text-indigo-400 uppercase">联络员</p>
-                          <p className="mt-1 text-sm font-bold text-slate-700">{teamDetail?.liaison_name || '--'}</p>
-                        </div>
-                        <div>
                           <p className="text-[10px] font-bold text-indigo-400 uppercase">队伍总人数</p>
                           <p className="mt-1 text-sm font-bold text-slate-700">{teamDetail?.member_count || '--'} 人</p>
                         </div>
@@ -2880,25 +2903,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                           )}
                         </div>
                       )}
-                      {teamDetail?.uniforms && teamDetail.uniforms.length > 0 && (
-                        <div>
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-[10px] font-bold text-indigo-400 uppercase">队伍队服</p>
-                            <span className="text-[10px] text-slate-500">支持多款与主色调名称维护</span>
-                          </div>
-                          <div className="mt-2 grid gap-3 md:grid-cols-2">
-                            {teamDetail.uniforms.map((uniform) => (
-                              <div key={uniform.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                <img src={uniform.image_url} alt={uniform.name || '队服'} className="h-28 w-full object-cover" />
-                                <div className="space-y-1 px-3 py-3">
-                                  <p className="text-xs font-bold text-slate-700">{uniform.name || '队服款式'}</p>
-                                  <p className="text-[11px] text-slate-500">主色调：{uniform.primary_color_name}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <TeamUniformGallery uniforms={teamDetail?.uniforms} compact />
                       {teamDetail?.members && teamDetail.members.length > 0 && (
                         <div>
                           <p className="text-[10px] font-bold text-indigo-400 uppercase">队伍成员</p>
@@ -3004,7 +3009,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                           {selectedTeamForDetail.member_count} 人
                         </span>
                       </div>
-                      <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
                         <div>
                           <p className="text-[10px] font-bold text-indigo-400 uppercase">邀请码</p>
                           <p className="mt-1 text-sm font-bold text-slate-800 font-mono">{selectedTeamForDetail.invite_code || '--'}</p>
@@ -3024,14 +3029,6 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                         <div>
                           <p className="text-[10px] font-bold text-indigo-400 uppercase">领队电话</p>
                           <p className="mt-1 text-sm font-bold text-slate-800 font-mono">{selectedTeamForDetail.leader_phone}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-indigo-400 uppercase">联络员</p>
-                          <p className="mt-1 text-sm font-bold text-slate-800">{selectedTeamForDetail.liaison_name || '--'}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-indigo-400 uppercase">联络电话</p>
-                          <p className="mt-1 text-sm font-bold text-slate-800 font-mono">{selectedTeamForDetail.liaison_phone || '--'}</p>
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-indigo-400 uppercase">队伍总人数</p>
@@ -3072,25 +3069,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                           )}
                         </div>
                       )}
-                      {selectedTeamForDetail.uniforms && selectedTeamForDetail.uniforms.length > 0 && (
-                        <div className="mt-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-[10px] font-bold text-indigo-400 uppercase">队伍队服</p>
-                            <span className="text-[11px] text-slate-500">支持多款上传，并可后台修改主色调名称</span>
-                          </div>
-                          <div className="mt-2 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                            {selectedTeamForDetail.uniforms.map((uniform) => (
-                              <div key={uniform.id} className="overflow-hidden rounded-2xl border border-white/80 bg-white shadow-sm">
-                                <img src={uniform.image_url} alt={uniform.name || '队服'} className="h-36 w-full object-cover" />
-                                <div className="space-y-1 px-3 py-3">
-                                  <p className="text-sm font-bold text-slate-800">{uniform.name || '队服款式'}</p>
-                                  <p className="text-xs text-slate-500">主色调：{uniform.primary_color_name}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <TeamUniformGallery uniforms={selectedTeamForDetail.uniforms} />
                     </div>
                   </div>
 

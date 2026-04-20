@@ -222,6 +222,38 @@ export interface TeamGenderRequirement {
   max_female?: number;
 }
 
+export type EventGroupRuleOperator = 'on_or_after' | 'on_or_before' | 'between';
+
+export interface EventGroupRule {
+  id: string;
+  operator: EventGroupRuleOperator;
+  fixedDate: string;
+  fixedStartDate: string;
+  fixedEndDate: string;
+}
+
+export interface EventGroupValue {
+  id: string;
+  name: string;
+  ruleEnabled: boolean;
+  rules: EventGroupRule[];
+}
+
+export interface EventGroupDefinition {
+  id: string;
+  name: string;
+  description: string;
+  values: EventGroupValue[];
+  createdAt: string;
+}
+
+export interface EventGroupOption {
+  groupId: string;
+  valueId: string;
+  category: string;
+  value: string;
+}
+
 export interface Project {
   id: string;
   name: string;

@@ -1,9 +1,11 @@
 import { 
-  RegistrationOrder, 
+  EntryStatus,
+  EventGroupDefinition,
+  EventGroupOption,
   ParticipantRecord, 
-  TeamRecord,
   PayStatus,
-  EntryStatus
+  RegistrationOrder, 
+  TeamRecord
 } from './types';
 
 export const MOCK_ORDERS: RegistrationOrder[] = [
@@ -197,19 +199,19 @@ export const MOCK_PROJECT_SUMMARY = [
       { 
         id: 'TE-1', 
         match_format_rule: { category: '单项', operator: '=', value: '男单' },
-        group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+        group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
         restrictions: [] 
       },
       { 
         id: 'TE-2', 
         match_format_rule: { category: '单项', operator: '=', value: '女单' },
-        group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+        group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
         restrictions: [] 
       },
       { 
         id: 'TE-3', 
         match_format_rule: { category: '单项', operator: '=', value: '男双' },
-        group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+        group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
         restrictions: [] 
       }
     ]
@@ -337,18 +339,159 @@ export const MOCK_TEAMS: TeamRecord[] = [
   }
 ];
 
-export const GROUP_OPTIONS: Record<string, string[]> = {
-  'U系列': ['U8', 'U10', 'U12', 'U14', 'U16', 'U18'],
-  '公开组': ['公开组'],
-  '精英组': ['精英组'],
-  '大师组': ['大师组'],
-  '自定义': [],
+export const INITIAL_EVENT_GROUPS: EventGroupDefinition[] = [
+  {
+    id: 'group-u',
+    name: 'U系列',
+    description: '青少年分龄组，按出生日期区间划分对应年龄段。',
+    createdAt: '2026-03-24 16:20:00',
+    values: [
+      {
+        id: 'u10',
+        name: 'U10',
+        ruleEnabled: true,
+        rules: [
+          {
+            id: 'rule-u10',
+            operator: 'between',
+            fixedDate: '',
+            fixedStartDate: '2016-01-01',
+            fixedEndDate: '2016-12-31',
+          },
+        ],
+      },
+      {
+        id: 'u12',
+        name: 'U12',
+        ruleEnabled: true,
+        rules: [
+          {
+            id: 'rule-u12',
+            operator: 'between',
+            fixedDate: '',
+            fixedStartDate: '2014-01-01',
+            fixedEndDate: '2014-12-31',
+          },
+        ],
+      },
+      {
+        id: 'u14',
+        name: 'U14',
+        ruleEnabled: true,
+        rules: [
+          {
+            id: 'rule-u14',
+            operator: 'between',
+            fixedDate: '',
+            fixedStartDate: '2012-01-01',
+            fixedEndDate: '2012-12-31',
+          },
+        ],
+      },
+      {
+        id: 'u16',
+        name: 'U16',
+        ruleEnabled: true,
+        rules: [
+          {
+            id: 'rule-u16',
+            operator: 'between',
+            fixedDate: '',
+            fixedStartDate: '2010-01-01',
+            fixedEndDate: '2010-12-31',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'group-open',
+    name: '常规分组',
+    description: '适用于公开组、精英组与大师组等按资格或赛道划分的人群分组。',
+    createdAt: '2026-03-18 10:40:00',
+    values: [
+      {
+        id: 'open',
+        name: '公开组',
+        ruleEnabled: false,
+        rules: [
+          {
+            id: 'rule-open',
+            operator: 'between',
+            fixedDate: '',
+            fixedStartDate: '',
+            fixedEndDate: '',
+          },
+        ],
+      },
+      {
+        id: 'elite',
+        name: '精英组',
+        ruleEnabled: false,
+        rules: [
+          {
+            id: 'rule-elite',
+            operator: 'between',
+            fixedDate: '',
+            fixedStartDate: '',
+            fixedEndDate: '',
+          },
+        ],
+      },
+      {
+        id: 'masters',
+        name: '大师组',
+        ruleEnabled: false,
+        rules: [
+          {
+            id: 'rule-masters',
+            operator: 'between',
+            fixedDate: '',
+            fixedStartDate: '',
+            fixedEndDate: '',
+          },
+        ],
+      },
+    ],
+  },
+];
+
+export const getEventGroupCategories = (groups: EventGroupDefinition[]) =>
+  groups.map((group) => group.name);
+
+export const getEventGroupValuesByCategory = (
+  groups: EventGroupDefinition[],
+  category: string,
+): EventGroupOption[] => {
+  const targetGroup = groups.find((group) => group.name === category);
+  if (!targetGroup) return [];
+
+  return targetGroup.values.map((value) => ({
+    groupId: targetGroup.id,
+    valueId: value.id,
+    category: targetGroup.name,
+    value: value.name,
+  }));
 };
 
+export const getEventGroupOptions = (groups: EventGroupDefinition[]): EventGroupOption[] =>
+  groups.flatMap((group) =>
+    group.values.map((value) => ({
+      groupId: group.id,
+      valueId: value.id,
+      category: group.name,
+      value: value.name,
+    })),
+  );
+
+export const GROUP_OPTIONS: Record<string, string[]> = Object.fromEntries(
+  INITIAL_EVENT_GROUPS.map((group) => [group.name, group.values.map((value) => value.name)]),
+);
+
 export const EVENT_GROUP_CONFIG = {
-  category: 'U系列',
-  values: ['U10', 'U12'],
-} as const;
+  category: INITIAL_EVENT_GROUPS[0]?.name ?? '',
+  values: INITIAL_EVENT_GROUPS[0]?.values.map((value) => value.name) ?? [],
+};
 
 export interface MatchFormatOption {
   value: string;

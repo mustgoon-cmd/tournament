@@ -71,7 +71,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
           short_name: '男单',
           code: 'MS',
           match_format_rule: { category: '常规赛制', operator: '=', value: '男子单打' },
-          group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+          group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
           restrictions: [],
           created_at: '2026-04-01 11:52:02',
         },
@@ -81,7 +81,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
           short_name: '女单',
           code: 'WS',
           match_format_rule: { category: '常规赛制', operator: '=', value: '女子单打' },
-          group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+          group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
           restrictions: [],
           created_at: '2026-04-01 11:58:16',
         }
@@ -341,7 +341,7 @@ export const RegistrationAnnouncement: React.FC<RegistrationAnnouncementProps> =
                                   short_name: p.short_name,
                                   code: p.code,
                                   match_format_rule: { category: '单项', operator: '=', value: p.short_name || '男单' },
-                                  group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+                                  group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
                                   restrictions: []
                                 }];
                               }

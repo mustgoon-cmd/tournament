@@ -12,7 +12,6 @@ import {
   Settings2, 
   Info, 
   ChevronRight,
-  Clock,
   LayoutGrid,
   UserCheck,
   UserMinus,
@@ -84,7 +83,8 @@ import { PageDecorationConfig } from './components/PageDecorationConfig';
 import { TablePagination } from './components/TablePagination';
 import { GroupManagement } from './components/GroupManagement';
 import { InteractionHelp } from './components/InteractionHelp';
-import { VenueConfig, ProjectSchedulingConfig, TournamentBasicInfo } from './types';
+import { EventGroupDefinition, VenueConfig, ProjectSchedulingConfig, TournamentBasicInfo } from './types';
+import { INITIAL_EVENT_GROUPS } from './constants';
 
 const MOCK_EVENTS = [
   { id: 'e1', name: 'A组男子单打' },
@@ -152,7 +152,9 @@ const VIEW_TITLES = {
   'match-management': '比赛管理',
   'player-management': '选手管理',
   'schedule-config': '赛程安排',
-  'referee-management': '裁判管理',
+  'referee-recruitment': '招募规则',
+  'referee-officials': '录用管理',
+  'referee-task-assignment': '任务分配',
   'venue-config': '场地资源',
 } as const;
 
@@ -172,11 +174,13 @@ const VIEW_SECTIONS = {
   'multi-event-stats': '报名数据',
   records: '报名数据',
   announcement: '报名数据',
+  'referee-recruitment': '技术官员管理',
+  'referee-officials': '技术官员管理',
+  'referee-task-assignment': '技术官员管理',
   scheduling: '赛事编排',
   'match-management': '赛事编排',
   'player-management': '赛事编排',
   'schedule-config': '赛事编排',
-  'referee-management': '赛事编排',
   'venue-config': '赛事编排',
 } as const;
 
@@ -310,6 +314,46 @@ type TeamBattleRuleRow = {
 
 type OfficialStatus = 'pending' | 'approved' | 'rejected' | 'disabled';
 type OfficialSource = 'mini-program' | 'admin';
+type TournamentRefereeStatus = 'pending' | 'hired' | 'disabled' | 'not-hired';
+
+type TournamentRefereeDecision = {
+  result: TournamentRefereeStatus;
+  operatorName: string;
+  operatedAt: string;
+  remark: string;
+};
+
+type RefereeRecruitmentConfig = {
+  publicVisible: boolean;
+  publicScope: 'all' | 'organization-only';
+  registrationOpen: boolean;
+  recruitmentStatus: 'open' | 'closed';
+  remark: string;
+  minimumTechnicalLevel: string;
+  requiredSportCertificate: string;
+};
+
+type TournamentRefereeRow = {
+  id: string;
+  name: string;
+  phone: string;
+  applyCount: number;
+  hiredCount: number;
+  notHiredCount: number;
+  totalMatchCount: number;
+  status: TournamentRefereeStatus;
+  latestDecision?: TournamentRefereeDecision;
+};
+
+type TournamentRefereeAssignment = {
+  refereeId: string;
+  role: string;
+  projectName: string;
+  sections: string[];
+  court: string;
+  timeSlot: string;
+  remark: string;
+};
 
 type OfficialCertificate = {
   id: string;
@@ -861,6 +905,130 @@ const TECHNICAL_OFFICIALS: TechnicalOfficialRow[] = [
   },
 ];
 
+const INITIAL_REFEREE_RECRUITMENT_CONFIG: RefereeRecruitmentConfig = {
+  publicVisible: true,
+  publicScope: 'all',
+  registrationOpen: true,
+  recruitmentStatus: 'open',
+  remark: '面向持有效裁判证书的技术官员开放报名，赛事方将结合执裁经历统一审核录用。',
+  minimumTechnicalLevel: 'level-2-up',
+  requiredSportCertificate: 'badminton',
+};
+
+const REFEREE_TECHNICAL_LEVEL_OPTIONS = [
+  { value: 'none', label: '不限制' },
+  { value: 'level-3-up', label: '三级裁判及以上' },
+  { value: 'level-2-up', label: '二级裁判及以上' },
+  { value: 'level-1-up', label: '一级裁判及以上' },
+  { value: 'national-up', label: '国家级裁判及以上' },
+];
+
+const REFEREE_CERTIFICATE_SPORT_OPTIONS = [
+  { value: 'none', label: '不限制' },
+  { value: 'badminton', label: '羽毛球' },
+  { value: 'basketball', label: '篮球' },
+  { value: 'table-tennis', label: '乒乓球' },
+  { value: 'tennis', label: '网球' },
+];
+
+const REFEREE_PUBLIC_SCOPE_OPTIONS = [
+  { value: 'all', label: '对所有人展示', description: '所有技术官员都可在裁判端小程序赛事列表看到该赛事。' },
+  { value: 'organization-only', label: '仅对已加入机构的技术官员展示', description: '只有已加入机构的技术官员可见该赛事。' },
+] as const;
+
+const REFEREE_RECRUITMENT_STATUS_OPTIONS = [
+  { value: 'open', label: '公开招募中', description: '用户侧展示招募中状态，并允许技术官员报名。' },
+  { value: 'closed', label: '招募结束', description: '裁判端不再允许报名，用户侧展示招募结束状态。' },
+] as const;
+
+const TOURNAMENT_REFEREES: TournamentRefereeRow[] = [
+  {
+    id: 'TR001',
+    name: '王静',
+    phone: '13900139001',
+    applyCount: 3,
+    hiredCount: 1,
+    notHiredCount: 1,
+    totalMatchCount: 18,
+    status: 'pending',
+  },
+  {
+    id: 'TR002',
+    name: '李晨',
+    phone: '13800138000',
+    applyCount: 5,
+    hiredCount: 4,
+    notHiredCount: 0,
+    totalMatchCount: 46,
+    status: 'hired',
+    latestDecision: {
+      result: 'hired',
+      operatorName: '赛事管理员',
+      operatedAt: '2026-04-12 10:32:18',
+      remark: '证书等级符合本次赛事需求，已确认录用进入执裁名单。',
+    },
+  },
+  {
+    id: 'TR003',
+    name: '陈楠',
+    phone: '13700137002',
+    applyCount: 2,
+    hiredCount: 0,
+    notHiredCount: 2,
+    totalMatchCount: 7,
+    status: 'not-hired',
+    latestDecision: {
+      result: 'not-hired',
+      operatorName: '赛事管理员',
+      operatedAt: '2026-04-11 16:18:40',
+      remark: '本次赛事招募名额已满，暂不录用。',
+    },
+  },
+  {
+    id: 'TR004',
+    name: '周倩',
+    phone: '13600136008',
+    applyCount: 6,
+    hiredCount: 3,
+    notHiredCount: 1,
+    totalMatchCount: 31,
+    status: 'disabled',
+    latestDecision: {
+      result: 'disabled',
+      operatorName: '赛事管理员',
+      operatedAt: '2026-04-15 18:26:08',
+      remark: '已录用，但因临时档期冲突暂停本次赛事任务安排。',
+    },
+  },
+];
+
+const TOURNAMENT_REFEREE_ASSIGNMENTS: TournamentRefereeAssignment[] = [
+  {
+    refereeId: 'TR002',
+    role: '裁判长助理',
+    projectName: '混合团体赛 A 组循环赛',
+    sections: ['第一节', '第二节'],
+    court: '1-3 号场',
+    timeSlot: '2026-05-01 09:00-12:00',
+    remark: '优先负责关键场次的现场协调与结果确认。',
+  },
+];
+
+const REFEREE_ASSIGNMENT_ROLE_OPTIONS = ['裁判长', '裁判长助理', '主裁判', '发球裁判', '检录员', '编排记录员'];
+const REFEREE_ASSIGNMENT_PROJECT_OPTIONS = ['混合团体赛 A 组循环赛', '混合团体赛 B 组循环赛', '公开组淘汰赛', '半决赛及决赛'];
+const REFEREE_ASSIGNMENT_COURT_OPTIONS = ['1 号场', '2 号场', '3 号场', '4 号场', '1-2 号场', '1-3 号场'];
+const REFEREE_ASSIGNMENT_SECTION_OPTIONS = ['第一节', '第二节', '第三节', '第四节', '第五节', '第六节'] as const;
+
+const createEmptyTournamentRefereeAssignment = (refereeId: string): TournamentRefereeAssignment => ({
+  refereeId,
+  role: '主裁判',
+  projectName: REFEREE_ASSIGNMENT_PROJECT_OPTIONS[0],
+  sections: ['第一节'],
+  court: REFEREE_ASSIGNMENT_COURT_OPTIONS[0],
+  timeSlot: '2026-05-01 09:00-12:00',
+  remark: '',
+});
+
 const REGISTRATION_TEMPLATE_PROFILE_FIELDS: Array<{
   key: RegistrationTemplateProfileKey;
   label: string;
@@ -1313,10 +1481,11 @@ const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
   },
   {
     key: 'official',
-    label: '技术官员',
+    label: '技术官员资源',
     icon: ShieldCheck,
     children: [
-      { key: 'official-list', label: '技术官员列表' },
+      { key: 'official-list', label: '技术官员档案' },
+      { key: 'official-review', label: '认证审核' },
       { key: 'official-stats', label: '执裁统计' },
     ],
   },
@@ -1512,6 +1681,22 @@ export default function App() {
   const [technicalOfficials, setTechnicalOfficials] = useState<TechnicalOfficialRow[]>(TECHNICAL_OFFICIALS);
   const [technicalOfficialPageMode, setTechnicalOfficialPageMode] = useState<TechnicalOfficialPageMode>('list');
   const [technicalOfficialDraft, setTechnicalOfficialDraft] = useState<TechnicalOfficialRow>(TECHNICAL_OFFICIALS[0]);
+  const [refereeRecruitmentConfig, setRefereeRecruitmentConfig] = useState<RefereeRecruitmentConfig>(INITIAL_REFEREE_RECRUITMENT_CONFIG);
+  const [tournamentReferees, setTournamentReferees] = useState<TournamentRefereeRow[]>(TOURNAMENT_REFEREES);
+  const [tournamentRefereeAssignments, setTournamentRefereeAssignments] = useState<TournamentRefereeAssignment[]>(TOURNAMENT_REFEREE_ASSIGNMENTS);
+  const [tournamentRefereeSearchDraft, setTournamentRefereeSearchDraft] = useState('');
+  const [tournamentRefereeSearchQuery, setTournamentRefereeSearchQuery] = useState('');
+  const [tournamentRefereeStatusFilter, setTournamentRefereeStatusFilter] = useState<'all' | TournamentRefereeStatus>('all');
+  const [tournamentRefereePage, setTournamentRefereePage] = useState(1);
+  const [tournamentRefereePageSize, setTournamentRefereePageSize] = useState(10);
+  const [refereeDecisionTargetId, setRefereeDecisionTargetId] = useState<string | null>(null);
+  const [refereeDecisionResult, setRefereeDecisionResult] = useState<'hired' | 'not-hired'>('hired');
+  const [refereeDecisionRemark, setRefereeDecisionRemark] = useState('');
+  const [refereeHistoryTargetId, setRefereeHistoryTargetId] = useState<string | null>(null);
+  const [refereeAssignmentTargetId, setRefereeAssignmentTargetId] = useState<string | null>(null);
+  const [refereeAssignmentDraft, setRefereeAssignmentDraft] = useState<TournamentRefereeAssignment>(
+    createEmptyTournamentRefereeAssignment(TOURNAMENT_REFEREES.find((item) => item.status === 'hired')?.id ?? 'TR002')
+  );
   const [registrationTemplateSearchDraft, setRegistrationTemplateSearchDraft] = useState('');
   const [registrationTemplateSearchQuery, setRegistrationTemplateSearchQuery] = useState('');
   const [registrationTemplatePage, setRegistrationTemplatePage] = useState(1);
@@ -1567,18 +1752,27 @@ export default function App() {
     | 'match-management'
     | 'player-management'
     | 'schedule-config'
-    | 'referee-management'
+    | 'referee-recruitment'
+    | 'referee-officials'
+    | 'referee-task-assignment'
     | 'venue-config'
   >('basic-info');
   const [recordsInitialTab, setRecordsInitialTab] = useState<'orders' | 'project_summary' | 'participants' | 'teams'>('orders');
   const [activeTab, setActiveTab] = useState<'config' | 'team-limit' | 'restriction' | 'signing'>('config');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['basic', 'registration-config', 'registration-data', 'scheduling']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['basic', 'registration-config', 'registration-data', 'referee', 'scheduling']);
   const detailContentRef = useRef<HTMLDivElement | null>(null);
   const registrationLimitSectionRef = useRef<HTMLDivElement | null>(null);
   const teamLimitSectionRef = useRef<HTMLDivElement | null>(null);
   const restrictionSectionRef = useRef<HTMLDivElement | null>(null);
   const signingSectionRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (adminActiveMenu === 'official-list' || adminActiveMenu === 'official-review') {
+      setTechnicalOfficialStatusFilter('all');
+      setTechnicalOfficialPage(1);
+    }
+  }, [adminActiveMenu]);
 
   const [venueConfig, setVenueConfig] = useState<VenueConfig>({
     court_count: 8,
@@ -1590,6 +1784,7 @@ export default function App() {
   });
 
   const [schedulingConfigs, setSchedulingConfigs] = useState<Record<string, ProjectSchedulingConfig>>({});
+  const [eventGroups, setEventGroups] = useState<EventGroupDefinition[]>(INITIAL_EVENT_GROUPS);
   const [basicInfo, setBasicInfo] = useState<TournamentBasicInfo>({
     tournamentName: '2026 城市羽毛球公开赛',
     tournamentSubtitle: '城市俱乐部联赛暨全民健身系列赛',
@@ -1937,11 +2132,24 @@ export default function App() {
     (normalizedTeamBattleRulePage - 1) * teamBattleRulePageSize,
     normalizedTeamBattleRulePage * teamBattleRulePageSize
   );
+  const isOfficialReviewMenu = adminActiveMenu === 'official-review';
+  const technicalOfficialMenuStatuses = useMemo(
+    () => (isOfficialReviewMenu ? (['pending', 'rejected'] as const) : (['approved', 'disabled'] as const)),
+    [isOfficialReviewMenu]
+  );
+  const technicalOfficialBaseList = useMemo(
+    () => technicalOfficials.filter((item) => technicalOfficialMenuStatuses.includes(item.status)),
+    [technicalOfficials, technicalOfficialMenuStatuses]
+  );
+  const normalizedTechnicalOfficialStatusFilter =
+    technicalOfficialStatusFilter === 'all' || technicalOfficialMenuStatuses.includes(technicalOfficialStatusFilter)
+      ? technicalOfficialStatusFilter
+      : 'all';
   const filteredTechnicalOfficials = useMemo(() => {
     const keyword = technicalOfficialSearchQuery.trim().toLowerCase();
-    return technicalOfficials.filter((item) => {
+    return technicalOfficialBaseList.filter((item) => {
       const matchesStatus =
-        technicalOfficialStatusFilter === 'all' || item.status === technicalOfficialStatusFilter;
+        normalizedTechnicalOfficialStatusFilter === 'all' || item.status === normalizedTechnicalOfficialStatusFilter;
       const matchesKeyword =
         !keyword ||
         item.name.toLowerCase().includes(keyword) ||
@@ -1949,7 +2157,7 @@ export default function App() {
         item.organization.toLowerCase().includes(keyword);
       return matchesStatus && matchesKeyword;
     });
-  }, [technicalOfficials, technicalOfficialSearchQuery, technicalOfficialStatusFilter]);
+  }, [technicalOfficialBaseList, technicalOfficialSearchQuery, normalizedTechnicalOfficialStatusFilter]);
   const technicalOfficialTotalPages = Math.max(
     1,
     Math.ceil(filteredTechnicalOfficials.length / technicalOfficialPageSize)
@@ -1961,14 +2169,61 @@ export default function App() {
   );
   const technicalOfficialStatusCounts = useMemo(
     () => ({
-      all: technicalOfficials.length,
-      pending: technicalOfficials.filter((item) => item.status === 'pending').length,
-      approved: technicalOfficials.filter((item) => item.status === 'approved').length,
-      rejected: technicalOfficials.filter((item) => item.status === 'rejected').length,
-      disabled: technicalOfficials.filter((item) => item.status === 'disabled').length,
+      all: technicalOfficialBaseList.length,
+      pending: technicalOfficialBaseList.filter((item) => item.status === 'pending').length,
+      approved: technicalOfficialBaseList.filter((item) => item.status === 'approved').length,
+      rejected: technicalOfficialBaseList.filter((item) => item.status === 'rejected').length,
+      disabled: technicalOfficialBaseList.filter((item) => item.status === 'disabled').length,
     }),
-    [technicalOfficials]
+    [technicalOfficialBaseList]
   );
+  const filteredTournamentReferees = useMemo(() => {
+    const keyword = tournamentRefereeSearchQuery.trim().toLowerCase();
+    return tournamentReferees.filter((item) => {
+      const matchesStatus = tournamentRefereeStatusFilter === 'all' || item.status === tournamentRefereeStatusFilter;
+      const matchesKeyword = !keyword || item.name.toLowerCase().includes(keyword) || item.phone.includes(keyword);
+      return matchesStatus && matchesKeyword;
+    });
+  }, [tournamentReferees, tournamentRefereeSearchQuery, tournamentRefereeStatusFilter]);
+  const tournamentRefereeTotalPages = Math.max(1, Math.ceil(filteredTournamentReferees.length / tournamentRefereePageSize));
+  const normalizedTournamentRefereePage = Math.min(tournamentRefereePage, tournamentRefereeTotalPages);
+  const pagedTournamentReferees = filteredTournamentReferees.slice(
+    (normalizedTournamentRefereePage - 1) * tournamentRefereePageSize,
+    normalizedTournamentRefereePage * tournamentRefereePageSize
+  );
+  const tournamentRefereeStatusCounts = useMemo(
+    () => ({
+      all: tournamentReferees.length,
+      pending: tournamentReferees.filter((item) => item.status === 'pending').length,
+      hired: tournamentReferees.filter((item) => item.status === 'hired').length,
+      disabled: tournamentReferees.filter((item) => item.status === 'disabled').length,
+      'not-hired': tournamentReferees.filter((item) => item.status === 'not-hired').length,
+    }),
+    [tournamentReferees]
+  );
+  const tournamentRefereeAssignmentMap = useMemo(
+    () => new Map(tournamentRefereeAssignments.map((item) => [item.refereeId, item])),
+    [tournamentRefereeAssignments]
+  );
+  const hiredTournamentReferees = useMemo(
+    () => tournamentReferees.filter((item) => item.status === 'hired'),
+    [tournamentReferees]
+  );
+  const technicalOfficialListTitle = isOfficialReviewMenu ? '认证审核' : '技术官员档案';
+  const technicalOfficialListDescription = isOfficialReviewMenu
+    ? '集中处理技术官员通过小程序提交的实名与证书认证申请。'
+    : '统一维护技术官员的档案资料、实名信息与证书信息。';
+  const technicalOfficialStatusTabs = isOfficialReviewMenu
+    ? [
+        { key: 'all' as const, label: '全部', count: technicalOfficialStatusCounts.all },
+        { key: 'pending' as const, label: '待审核', count: technicalOfficialStatusCounts.pending },
+        { key: 'rejected' as const, label: '已驳回', count: technicalOfficialStatusCounts.rejected },
+      ]
+    : [
+        { key: 'all' as const, label: '全部', count: technicalOfficialStatusCounts.all },
+        { key: 'approved' as const, label: '已通过', count: technicalOfficialStatusCounts.approved },
+        { key: 'disabled' as const, label: '已停用', count: technicalOfficialStatusCounts.disabled },
+      ];
   const selectedRegistrationProfileKeys = registrationTemplateDraft.fields
     .filter((field): field is RegistrationTemplateField & { profileKey: RegistrationTemplateProfileKey } => Boolean(field.profileKey))
     .map((field) => field.profileKey);
@@ -2180,6 +2435,130 @@ export default function App() {
   };
 
   const getOfficialSourceLabel = (source: OfficialSource) => (source === 'admin' ? '后台新建' : '小程序注册');
+
+  const getTournamentRefereeStatusLabel = (status: TournamentRefereeStatus) => {
+    if (status === 'pending') return '待确认';
+    if (status === 'hired') return '已录用';
+    if (status === 'disabled') return '已停用';
+    return '未录用';
+  };
+
+  const getTournamentRefereeStatusClass = (status: TournamentRefereeStatus) => {
+    if (status === 'pending') return 'bg-amber-50 text-amber-600 ring-1 ring-amber-100';
+    if (status === 'hired') return 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100';
+    if (status === 'disabled') return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
+    return 'bg-rose-50 text-rose-600 ring-1 ring-rose-100';
+  };
+
+  const applyTournamentRefereeSearch = () => {
+    setTournamentRefereeSearchQuery(tournamentRefereeSearchDraft);
+    setTournamentRefereePage(1);
+  };
+
+  const resetTournamentRefereeSearch = () => {
+    setTournamentRefereeSearchDraft('');
+    setTournamentRefereeSearchQuery('');
+    setTournamentRefereeStatusFilter('all');
+    setTournamentRefereePage(1);
+  };
+
+  const openRefereeDecisionModal = (refereeId: string) => {
+    setRefereeDecisionTargetId(refereeId);
+    setRefereeDecisionResult('hired');
+    setRefereeDecisionRemark('');
+  };
+
+  const openRefereeAssignmentModal = (refereeId: string) => {
+    const existingAssignment =
+      tournamentRefereeAssignments.find((item) => item.refereeId === refereeId) ??
+      createEmptyTournamentRefereeAssignment(refereeId);
+    setRefereeAssignmentDraft(existingAssignment);
+    setRefereeAssignmentTargetId(refereeId);
+  };
+
+  const toggleRefereeAssignmentSection = (section: (typeof REFEREE_ASSIGNMENT_SECTION_OPTIONS)[number]) => {
+    setRefereeAssignmentDraft((prev) => {
+      const alreadySelected = prev.sections.includes(section);
+      const nextSections = alreadySelected
+        ? prev.sections.filter((item) => item !== section)
+        : [...prev.sections, section];
+
+      return {
+        ...prev,
+        sections: nextSections.length > 0 ? nextSections : [section],
+      };
+    });
+  };
+
+  const saveRefereeAssignment = () => {
+    if (!refereeAssignmentTargetId) return;
+    setTournamentRefereeAssignments((prev) => {
+      const nextAssignment = {
+        ...refereeAssignmentDraft,
+        refereeId: refereeAssignmentTargetId,
+      };
+      const exists = prev.some((item) => item.refereeId === refereeAssignmentTargetId);
+      return exists
+        ? prev.map((item) => (item.refereeId === refereeAssignmentTargetId ? nextAssignment : item))
+        : [...prev, nextAssignment];
+    });
+    setRefereeAssignmentTargetId(null);
+  };
+
+  const updateTournamentRefereeStatus = (
+    refereeId: string,
+    nextStatus: Extract<TournamentRefereeStatus, 'hired' | 'disabled'>,
+    remark: string
+  ) => {
+    const operatedAt = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
+    setTournamentReferees((prev) =>
+      prev.map((item) =>
+        item.id === refereeId
+          ? {
+              ...item,
+              status: nextStatus,
+              latestDecision: {
+                result: nextStatus,
+                operatorName: '赛事管理员',
+                operatedAt,
+                remark,
+              },
+            }
+          : item
+      )
+    );
+  };
+
+  const saveRefereeDecision = () => {
+    if (!refereeDecisionTargetId) return;
+    const decisionStatus: TournamentRefereeStatus = refereeDecisionResult === 'hired' ? 'hired' : 'not-hired';
+    const operatedAt = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
+    const decision: TournamentRefereeDecision = {
+      result: decisionStatus,
+      operatorName: '赛事管理员',
+      operatedAt,
+      remark:
+        refereeDecisionRemark.trim() ||
+        (decisionStatus === 'hired' ? '已确认录用进入本次赛事执裁名单。' : '本次赛事暂不录用。'),
+    };
+
+    setTournamentReferees((prev) =>
+      prev.map((item) =>
+        item.id === refereeDecisionTargetId
+          ? {
+              ...item,
+              status: decisionStatus,
+              hiredCount: decisionStatus === 'hired' ? item.hiredCount + 1 : item.hiredCount,
+              notHiredCount: decisionStatus === 'not-hired' ? item.notHiredCount + 1 : item.notHiredCount,
+              latestDecision: decision,
+            }
+          : item
+      )
+    );
+
+    setRefereeDecisionTargetId(null);
+    setRefereeDecisionRemark('');
+  };
 
   const getOfficialCertificateSummary = (official: TechnicalOfficialRow) => {
     const validCertificates = official.certificates.filter(
@@ -2567,6 +2946,24 @@ export default function App() {
     if (!targetOfficial) return;
     setTechnicalOfficialDraft(targetOfficial);
     setTechnicalOfficialPageMode('editor');
+  };
+
+  const openTechnicalOfficialArchiveFromReferee = (referee: TournamentRefereeRow) => {
+    const targetOfficial =
+      technicalOfficials.find((item) => item.name === referee.name && item.phone === referee.phone) ??
+      technicalOfficials.find((item) => item.name === referee.name) ??
+      technicalOfficials.find((item) => item.phone === referee.phone);
+
+    if (!targetOfficial) {
+      alert('当前报名裁判尚未找到对应的技术官员档案。');
+      return;
+    }
+
+    setTechnicalOfficialDraft(targetOfficial);
+    setTechnicalOfficialPageMode('editor');
+    setAdminActiveMenu('official-list');
+    setExpandedAdminMenus((prev) => (prev.includes('official') ? prev : [...prev, 'official']));
+    setAppPage('tournament-list');
   };
 
   const saveTechnicalOfficial = () => {
@@ -4826,7 +5223,7 @@ export default function App() {
                   </section>
                 </div>
               )
-            ) : adminActiveMenu === 'official-list' ? (
+            ) : adminActiveMenu === 'official-list' || adminActiveMenu === 'official-review' ? (
               technicalOfficialPageMode === 'list' ? (
                 <div className="mx-auto w-full max-w-7xl min-w-0">
                   <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
@@ -4836,30 +5233,24 @@ export default function App() {
                           <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">技术官员列表</h3>
-                          <p className="mt-1 text-sm text-slate-500">
-                            统一维护技术官员的档案资料、实名信息与证书信息，并支持处理小程序注册审核。
-                          </p>
+                          <h3 className="text-lg font-bold text-slate-900">{technicalOfficialListTitle}</h3>
+                          <p className="mt-1 text-sm text-slate-500">{technicalOfficialListDescription}</p>
                         </div>
                       </div>
-                      <button
-                        onClick={openCreateTechnicalOfficial}
-                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
-                      >
-                        新建技术官员
-                      </button>
+                      {!isOfficialReviewMenu && (
+                        <button
+                          onClick={openCreateTechnicalOfficial}
+                          className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                        >
+                          新建技术官员
+                        </button>
+                      )}
                     </div>
 
                     <div className="border-b border-slate-100 px-8 py-5">
                       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                         <div className="flex flex-wrap gap-2 rounded-full bg-white p-1.5 shadow-lg shadow-slate-200/70 ring-1 ring-slate-200 w-fit">
-                          {[
-                            { key: 'all' as const, label: '全部', count: technicalOfficialStatusCounts.all },
-                            { key: 'pending' as const, label: '待审核', count: technicalOfficialStatusCounts.pending },
-                            { key: 'approved' as const, label: '已通过', count: technicalOfficialStatusCounts.approved },
-                            { key: 'rejected' as const, label: '已驳回', count: technicalOfficialStatusCounts.rejected },
-                            { key: 'disabled' as const, label: '已停用', count: technicalOfficialStatusCounts.disabled },
-                          ].map((tab) => (
+                          {technicalOfficialStatusTabs.map((tab) => (
                             <button
                               key={tab.key}
                               onClick={() => {
@@ -4867,13 +5258,13 @@ export default function App() {
                                 setTechnicalOfficialPage(1);
                               }}
                               className={`px-4 py-2.5 rounded-full text-xs font-bold transition-all ${
-                                technicalOfficialStatusFilter === tab.key
+                                normalizedTechnicalOfficialStatusFilter === tab.key
                                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
                                   : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
                               }`}
                             >
                               {tab.label}
-                              <span className={`ml-1.5 ${technicalOfficialStatusFilter === tab.key ? 'text-white/80' : 'text-slate-400'}`}>
+                              <span className={`ml-1.5 ${normalizedTechnicalOfficialStatusFilter === tab.key ? 'text-white/80' : 'text-slate-400'}`}>
                                 {tab.count}
                               </span>
                             </button>
@@ -5068,8 +5459,10 @@ export default function App() {
                           <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">技术官员档案</h3>
-                          <p className="mt-1 text-sm text-slate-500">维护技术官员的个人资料、实名信息与证书信息。</p>
+                          <h3 className="text-lg font-bold text-slate-900">{isOfficialReviewMenu ? '认证审核详情' : '技术官员档案'}</h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {isOfficialReviewMenu ? '查看并处理当前技术官员提交的实名与证书认证资料。' : '维护技术官员的个人资料、实名信息与证书信息。'}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -7137,7 +7530,52 @@ export default function App() {
             </AnimatePresence>
           </div>
 
-          {/* 4. 赛事编排 */}
+          {/* 4. 技术官员管理 */}
+          <div className="space-y-1">
+            <button 
+              onClick={() => toggleMenu('referee')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-2xl transition-all hover:bg-slate-100 group ${!isSidebarOpen && 'justify-center'}`}
+            >
+              <div className="flex items-center gap-3">
+                <ShieldCheck className={`w-5 h-5 ${expandedMenus.includes('referee') ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-700'}`} />
+                {isSidebarOpen && <span className={`text-sm font-bold ${expandedMenus.includes('referee') ? 'text-slate-900' : 'text-slate-600'}`}>技术官员管理</span>}
+              </div>
+              {isSidebarOpen && (
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedMenus.includes('referee') ? 'rotate-180' : ''}`} />
+              )}
+            </button>
+            <AnimatePresence>
+              {expandedMenus.includes('referee') && isSidebarOpen && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="ml-4 pl-4 border-l border-slate-200 space-y-1 overflow-hidden"
+                >
+                  <button 
+                    onClick={() => setViewMode('referee-recruitment')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'referee-recruitment' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    招募规则
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('referee-officials')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'referee-officials' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    录用管理
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('referee-task-assignment')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'referee-task-assignment' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    任务分配
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 5. 赛事编排 */}
           <div className="space-y-1">
             <button 
               onClick={() => toggleMenu('scheduling')}
@@ -7189,24 +7627,13 @@ export default function App() {
                   >
                     赛程安排
                   </button>
-                  <button 
-                    onClick={() => setViewMode('referee-management')}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'referee-management' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                  >
-                    裁判管理
-                  </button>
+
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* 5. 成绩排名 */}
-          <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all hover:bg-slate-100 group ${!isSidebarOpen && 'justify-center'}`}>
-            <Database className="w-5 h-5 text-slate-400 group-hover:text-slate-700" />
-            {isSidebarOpen && <span className="text-sm font-medium text-slate-600">成绩排名</span>}
-          </button>
-
-          {/* 7. 数据统计 */}
+          {/* 6. 数据统计 */}
           <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all hover:bg-slate-100 group ${!isSidebarOpen && 'justify-center'}`}>
             <LayoutDashboard className="w-5 h-5 text-slate-400 group-hover:text-slate-700" />
             {isSidebarOpen && <span className="text-sm font-medium text-slate-600">数据统计</span>}
@@ -7274,7 +7701,7 @@ export default function App() {
               <Info className="h-4 w-4" />
               原型说明模式
             </button>
-            {(viewMode === 'settings' || viewMode === 'discount-rules' || viewMode === 'registration-public' || viewMode === 'basic-info' || viewMode === 'event-group-management') && (
+            {(viewMode === 'settings' || viewMode === 'discount-rules' || viewMode === 'registration-public' || viewMode === 'basic-info' || viewMode === 'event-group-management' || viewMode === 'referee-recruitment') && (
               <button 
                 onClick={handleSave}
                 disabled={isSaving}
@@ -7339,7 +7766,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <GroupManagement prototypeMode={prototypeMode} />
+                  <GroupManagement prototypeMode={prototypeMode} value={eventGroups} onChange={setEventGroups} />
                 </motion.div>
               ) : viewMode === 'page-decoration' ? (
                 <motion.div
@@ -7387,7 +7814,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <RegistrationProjects />
+                  <RegistrationProjects eventGroups={eventGroups} />
                 </motion.div>
               ) : viewMode === 'announcement' || viewMode === 'project-filing' || viewMode === 'multi-event-stats' ? (
                 <motion.div
@@ -7481,63 +7908,887 @@ export default function App() {
                     onSave={() => alert('赛程配置已保存')}
                   />
                 </motion.div>
-              ) : viewMode === 'referee-management' ? (
+              ) : viewMode === 'referee-recruitment' ? (
                 <motion.div
-                  key="referee-management-view"
+                  key="referee-recruitment-view"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   className="space-y-6"
                 >
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
-                    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <h3 className="text-2xl font-bold text-slate-900">裁判管理</h3>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                          这一页先接入一个可用工作台，避免菜单点击后回落到报名配置。下一轮我们可以继续补裁判档案、排班冲突校验和执裁统计。
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        {[
-                          { label: '待分配场次', value: '12' },
-                          { label: '已指派裁判', value: '8' },
-                          { label: '冲突提醒', value: '2' },
-                        ].map((item) => (
-                          <div key={item.label} className="rounded-2xl bg-slate-50 px-4 py-3 text-center">
-                            <div className="text-lg font-bold text-slate-900">{item.value}</div>
-                            <div className="mt-1 text-xs font-medium text-slate-500">{item.label}</div>
-                          </div>
-                        ))}
+                  <div className="rounded-3xl border border-slate-200 bg-white px-8 py-6 shadow-sm">
+                    <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-900">招募规则</h2>
+                          <p className="mt-0.5 text-sm text-slate-500">统一配置当前赛事在裁判端小程序的公开展示、招募状态与技术官员资格要求。</p>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-6 lg:grid-cols-2">
-                    <section className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                      <h4 className="text-sm font-bold text-slate-800">建议优先补的能力</h4>
-                      <div className="mt-4 space-y-3">
-                        {[
-                          '裁判档案列表与等级筛选',
-                          '按日期 / 场地自动推荐可用裁判',
-                          '和比赛管理联动的指派面板',
-                          '冲突检测与执裁负载统计',
-                        ].map((item) => (
-                          <div key={item} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                            <span>{item}</span>
+                  <div className="space-y-6">
+                    <div className="space-y-1 px-1">
+                      <h3 className="text-xl font-bold text-slate-900">展示与报名</h3>
+                    </div>
+                    <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-visible">
+                      <div className="divide-y divide-slate-100">
+                        <div className="grid gap-5 px-6 py-5 lg:grid-cols-[200px_minmax(0,1fr)_auto] lg:items-center">
+                          <div>
+                            <h2 className="text-base font-semibold text-slate-900">公开展示</h2>
                           </div>
+                          <div className="space-y-1">
+                            <p className="text-xs leading-6 text-slate-500">
+                              开启后，该赛事会在“裁判端”小程序的赛事列表中展示出来。
+                            </p>
+                            <AnimatePresence initial={false}>
+                              {refereeRecruitmentConfig.publicVisible ? (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.22, ease: 'easeInOut' }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="pt-3">
+                                    <div className="grid gap-3 rounded-2xl bg-slate-50 px-5 py-4">
+                                      <div className="space-y-2">
+                                        <span className="text-sm font-medium text-slate-700">公开对象</span>
+                                        <div className="flex flex-wrap gap-2">
+                                          {REFEREE_PUBLIC_SCOPE_OPTIONS.map((option) => {
+                                            const active = refereeRecruitmentConfig.publicScope === option.value;
+                                            return (
+                                              <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() =>
+                                                  setRefereeRecruitmentConfig((prev) => ({
+                                                    ...prev,
+                                                    publicScope: option.value,
+                                                  }))
+                                                }
+                                                className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                                                  active
+                                                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm'
+                                                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700'
+                                                }`}
+                                              >
+                                                {option.label}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                        <p className="text-xs leading-5 text-slate-500">
+                                          {REFEREE_PUBLIC_SCOPE_OPTIONS.find((option) => option.value === refereeRecruitmentConfig.publicScope)?.description}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              ) : null}
+                            </AnimatePresence>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={refereeRecruitmentConfig.publicVisible}
+                            onClick={() =>
+                              setRefereeRecruitmentConfig((prev) => ({
+                                ...prev,
+                                publicVisible: !prev.publicVisible,
+                              }))
+                            }
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                              refereeRecruitmentConfig.publicVisible ? 'bg-indigo-600' : 'bg-slate-200'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                refereeRecruitmentConfig.publicVisible ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        <div className="grid gap-5 px-6 py-5 lg:grid-cols-[200px_minmax(0,1fr)_auto] lg:items-start">
+                          <div>
+                            <h2 className="text-base font-semibold text-slate-900">是否开放报名</h2>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs leading-6 text-slate-500">
+                              关闭后，“裁判端”小程序该赛事详情页禁用“报名”按钮。
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={refereeRecruitmentConfig.registrationOpen}
+                            onClick={() =>
+                              setRefereeRecruitmentConfig((prev) => ({
+                                ...prev,
+                                registrationOpen: !prev.registrationOpen,
+                              }))
+                            }
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                              refereeRecruitmentConfig.registrationOpen ? 'bg-indigo-600' : 'bg-slate-200'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                refereeRecruitmentConfig.registrationOpen ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        <div className="grid gap-5 px-6 py-5 lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start">
+                          <div>
+                            <h2 className="text-base font-semibold text-slate-900">招募状态</h2>
+                          </div>
+                          <div className="space-y-4">
+                            {refereeRecruitmentConfig.registrationOpen ? (
+                              <>
+                                <p className="text-xs leading-6 text-slate-500">
+                                  设置为“公开招募中”时，用户侧展示对应状态并允许技术官员报名；设置为“招募结束”后裁判端不再报名。
+                                </p>
+                                <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                                  <div className="grid gap-4">
+                                    <div className="space-y-2">
+                                      <span className="text-sm font-medium text-slate-700">招募状态</span>
+                                      <div className="flex flex-wrap gap-2">
+                                        {REFEREE_RECRUITMENT_STATUS_OPTIONS.map((option) => {
+                                          const active = refereeRecruitmentConfig.recruitmentStatus === option.value;
+                                          return (
+                                            <button
+                                              key={option.value}
+                                              type="button"
+                                              onClick={() =>
+                                                setRefereeRecruitmentConfig((prev) => ({
+                                                  ...prev,
+                                                  recruitmentStatus: option.value,
+                                                }))
+                                              }
+                                              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                                                active
+                                                  ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm'
+                                                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700'
+                                              }`}
+                                            >
+                                              {option.label}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                      <p className="text-xs leading-5 text-slate-500">
+                                        {REFEREE_RECRUITMENT_STATUS_OPTIONS.find((option) => option.value === refereeRecruitmentConfig.recruitmentStatus)?.description}
+                                      </p>
+                                    </div>
+
+                                    {refereeRecruitmentConfig.recruitmentStatus === 'open' ? (
+                                      <label className="block space-y-2">
+                                        <span className="text-sm font-medium text-slate-700">招募说明</span>
+                                        <textarea
+                                          value={refereeRecruitmentConfig.remark}
+                                          onChange={(event) =>
+                                            setRefereeRecruitmentConfig((prev) => ({ ...prev, remark: event.target.value }))
+                                          }
+                                          rows={5}
+                                          placeholder="请输入用户侧展示的招募说明"
+                                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                        />
+                                      </label>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="rounded-2xl bg-slate-50 px-5 py-4 text-sm text-slate-500">
+                                当前未开放报名，暂不需要配置招募状态与招募说明。
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 px-1">
+                      <h3 className="text-xl font-bold text-slate-900">技术官员资格要求</h3>
+                    </div>
+                    <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-visible">
+                      <div className="divide-y divide-slate-100">
+                        <div className="grid gap-5 px-6 py-5 lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start">
+                          <div>
+                            <h2 className="text-base font-semibold text-slate-900">资格要求</h2>
+                          </div>
+                          <div className="space-y-4">
+                            <p className="text-xs leading-6 text-slate-500">
+                              用于限制哪些技术官员可以报名当前赛事。
+                            </p>
+                            {refereeRecruitmentConfig.registrationOpen && refereeRecruitmentConfig.recruitmentStatus === 'open' ? (
+                              <div className="grid gap-4 rounded-2xl bg-slate-50 px-5 py-4 md:grid-cols-2">
+                                <label className="space-y-2">
+                                  <span className="text-sm font-medium text-slate-700">技术等级要求</span>
+                                  <select
+                                    value={refereeRecruitmentConfig.minimumTechnicalLevel}
+                                    onChange={(event) =>
+                                      setRefereeRecruitmentConfig((prev) => ({
+                                        ...prev,
+                                        minimumTechnicalLevel: event.target.value,
+                                      }))
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                  >
+                                    {REFEREE_TECHNICAL_LEVEL_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+
+                                <label className="space-y-2">
+                                  <span className="text-sm font-medium text-slate-700">证书适用运动项目</span>
+                                  <select
+                                    value={refereeRecruitmentConfig.requiredSportCertificate}
+                                    onChange={(event) =>
+                                      setRefereeRecruitmentConfig((prev) => ({
+                                        ...prev,
+                                        requiredSportCertificate: event.target.value,
+                                      }))
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                  >
+                                    {REFEREE_CERTIFICATE_SPORT_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl bg-slate-50 px-5 py-4 text-sm text-slate-500">
+                                当前未开放报名，或招募已结束。技术等级要求和运动项目证书要求仅在“开放报名”且“公开招募中”时生效。
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : viewMode === 'referee-officials' ? (
+                <motion.div
+                  key="referee-officials-view"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="space-y-6"
+                >
+                  <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <UserCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">录用管理</h3>
+                          <p className="mt-1 text-sm text-slate-500">查看当前赛事技术官员报名情况，并处理待确认、已录用、已停用与未录用名单。</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 rounded-full bg-white p-1.5 shadow-lg shadow-slate-200/70 ring-1 ring-slate-200 w-fit">
+                        {[
+                          { key: 'all' as const, label: '全部', count: tournamentRefereeStatusCounts.all },
+                          { key: 'pending' as const, label: '待确认', count: tournamentRefereeStatusCounts.pending },
+                          { key: 'hired' as const, label: '已录用', count: tournamentRefereeStatusCounts.hired },
+                          { key: 'disabled' as const, label: '已停用', count: tournamentRefereeStatusCounts.disabled },
+                          { key: 'not-hired' as const, label: '未录用', count: tournamentRefereeStatusCounts['not-hired'] },
+                        ].map((tab) => (
+                          <button
+                            key={tab.key}
+                            onClick={() => {
+                              setTournamentRefereeStatusFilter(tab.key);
+                              setTournamentRefereePage(1);
+                            }}
+                            className={`px-4 py-2.5 rounded-full text-xs font-bold transition-all ${
+                              tournamentRefereeStatusFilter === tab.key
+                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                            }`}
+                          >
+                            {tab.label}
+                            <span className={`ml-1.5 ${tournamentRefereeStatusFilter === tab.key ? 'text-white/80' : 'text-slate-400'}`}>
+                              {tab.count}
+                            </span>
+                          </button>
                         ))}
                       </div>
-                    </section>
+                    </div>
 
-                    <section className="bg-white rounded-3xl border border-dashed border-slate-300 shadow-sm p-6">
-                      <h4 className="text-sm font-bold text-slate-800">当前接入状态</h4>
-                      <div className="mt-4 space-y-3 text-sm text-slate-500">
-                        <p>比赛管理页里已经存在裁判字段和快速指派入口，因此数据基础是有的。</p>
-                        <p>这一页现在先作为独立入口兜底，后续适合把裁判数据抽成共享状态，再把指派和排班串起来。</p>
+                    <div className="border-b border-slate-100 px-8 py-5">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                        <div className="relative min-w-[280px] flex-1 max-w-[420px]">
+                          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={tournamentRefereeSearchDraft}
+                            onChange={(event) => setTournamentRefereeSearchDraft(event.target.value)}
+                            placeholder="检索姓名 / 手机号"
+                            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </div>
+                        <button
+                          onClick={applyTournamentRefereeSearch}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          筛选
+                        </button>
+                        <button
+                          onClick={resetTournamentRefereeSearch}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          重置
+                        </button>
                       </div>
-                    </section>
-                  </div>
+                    </div>
+
+                    <div className="max-w-full overflow-x-auto">
+                      <table className="min-w-[1260px] w-full border-collapse text-left">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-white">
+                            <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">姓名</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">手机号</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">报名次数</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">已被录用次数</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">未被录用次数</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">累计执裁比赛数量</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">状态</th>
+                            <th className="sticky right-0 z-10 w-[240px] bg-white px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
+                              操作
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {pagedTournamentReferees.length > 0 ? (
+                            pagedTournamentReferees.map((referee) => (
+                              <tr key={referee.id} className="group align-top transition-colors hover:bg-slate-50">
+                                <td className="px-8 py-6">
+                                  <button
+                                    type="button"
+                                    onClick={() => openTechnicalOfficialArchiveFromReferee(referee)}
+                                    className="text-left text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700 hover:underline"
+                                  >
+                                    {referee.name}
+                                  </button>
+                                </td>
+                                <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{referee.phone}</td>
+                                <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{referee.applyCount}</td>
+                                <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{referee.hiredCount}</td>
+                                <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{referee.notHiredCount}</td>
+                                <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{referee.totalMatchCount}</td>
+                                <td className="px-6 py-6">
+                                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getTournamentRefereeStatusClass(referee.status)}`}>
+                                    {getTournamentRefereeStatusLabel(referee.status)}
+                                  </span>
+                                </td>
+                                <td className="sticky right-0 z-10 bg-white px-8 py-6 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50">
+                                  <div className="flex justify-end gap-2 whitespace-nowrap">
+                                    {referee.status === 'pending' ? (
+                                      <button
+                                        onClick={() => openRefereeDecisionModal(referee.id)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-600 transition-all hover:text-indigo-700"
+                                      >
+                                        <UserCheck className="h-4 w-4" />
+                                        确认录用
+                                      </button>
+                                    ) : (
+                                      <>
+                                        {referee.status === 'hired' && (
+                                          <button
+                                            onClick={() =>
+                                              updateTournamentRefereeStatus(
+                                                referee.id,
+                                                'disabled',
+                                                '已录用，但因临时原因暂停本次赛事执裁安排。'
+                                              )
+                                            }
+                                            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-all hover:text-slate-700"
+                                          >
+                                            <UserMinus className="h-4 w-4" />
+                                            停用
+                                          </button>
+                                        )}
+                                        {referee.status === 'disabled' && (
+                                          <button
+                                            onClick={() =>
+                                              updateTournamentRefereeStatus(
+                                                referee.id,
+                                                'hired',
+                                                '已重新启用，恢复进入本次赛事执裁安排。'
+                                              )
+                                            }
+                                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-600 transition-all hover:text-emerald-700"
+                                          >
+                                            <UserCheck className="h-4 w-4" />
+                                            重新启用
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => setRefereeHistoryTargetId(referee.id)}
+                                          className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-600 transition-all hover:text-sky-700"
+                                        >
+                                          <FileText className="h-4 w-4" />
+                                          查看录用情况
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={8} className="px-8 py-16 text-center text-sm text-slate-500">
+                                暂无符合条件的报名裁判记录，试试调整检索条件后再查看。
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <TablePagination
+                      total={filteredTournamentReferees.length}
+                      page={normalizedTournamentRefereePage}
+                      pageSize={tournamentRefereePageSize}
+                      onPageChange={setTournamentRefereePage}
+                      onPageSizeChange={(size) => {
+                        setTournamentRefereePageSize(size);
+                        setTournamentRefereePage(1);
+                      }}
+                      itemLabel="位技术官员"
+                      compact
+                    />
+                  </section>
+
+                  <AnimatePresence>
+                    {refereeDecisionTargetId && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          onClick={() => setRefereeDecisionTargetId(null)}
+                          className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                        />
+                        <motion.div
+                          initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                          animate={{ scale: 1, opacity: 1, y: 0 }}
+                          exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                          className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+                        >
+                          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-6 py-5">
+                            <div>
+                              <h3 className="text-lg font-bold text-slate-900">确认录用</h3>
+                              <p className="mt-1 text-sm text-slate-500">请填写当前技术官员的录用结果与备注信息。</p>
+                            </div>
+                            <button
+                              onClick={() => setRefereeDecisionTargetId(null)}
+                              className="rounded-full p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="space-y-6 px-6 py-6">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              {[
+                                { key: 'hired' as const, label: '录用', description: '加入本次赛事技术官员名单' },
+                                { key: 'not-hired' as const, label: '不录用', description: '本次赛事不录用该技术官员' },
+                              ].map((option) => (
+                                <button
+                                  key={option.key}
+                                  type="button"
+                                  onClick={() => setRefereeDecisionResult(option.key)}
+                                  className={`rounded-[24px] border px-5 py-4 text-left transition-all ${
+                                    refereeDecisionResult === option.key
+                                      ? 'border-indigo-200 bg-indigo-50 shadow-sm'
+                                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <p className="text-sm font-semibold text-slate-800">{option.label}</p>
+                                  <p className="mt-1 text-sm text-slate-500">{option.description}</p>
+                                </button>
+                              ))}
+                            </div>
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">备注</span>
+                              <textarea
+                                value={refereeDecisionRemark}
+                                onChange={(event) => setRefereeDecisionRemark(event.target.value)}
+                                rows={4}
+                                placeholder="可填写录用原因、未录用原因或补充说明"
+                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-white px-6 py-5">
+                            <button
+                              onClick={() => setRefereeDecisionTargetId(null)}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={saveRefereeDecision}
+                              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                            >
+                              保存录用结果
+                            </button>
+                          </div>
+                        </motion.div>
+                      </div>
+                    )}
+                  </AnimatePresence>
+
+                  <AnimatePresence>
+                    {refereeHistoryTargetId && (() => {
+                      const targetReferee = tournamentReferees.find((item) => item.id === refereeHistoryTargetId);
+                      if (!targetReferee || !targetReferee.latestDecision) return null;
+                      return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setRefereeHistoryTargetId(null)}
+                            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                          />
+                          <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+                          >
+                            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-6 py-5">
+                              <div>
+                                <h3 className="text-lg font-bold text-slate-900">录用情况</h3>
+                                <p className="mt-1 text-sm text-slate-500">查看当前技术官员最近一次录用处理结果。</p>
+                              </div>
+                              <button
+                                onClick={() => setRefereeHistoryTargetId(null)}
+                                className="rounded-full p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <div className="space-y-4 px-6 py-6">
+                              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">处理结果</p>
+                                <div className="mt-3 flex items-center gap-3">
+                                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getTournamentRefereeStatusClass(targetReferee.latestDecision.result)}`}>
+                                    {getTournamentRefereeStatusLabel(targetReferee.latestDecision.result)}
+                                  </span>
+                                  <span className="text-sm font-semibold text-slate-800">{targetReferee.name}</span>
+                                </div>
+                              </div>
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">操作人</p>
+                                  <p className="mt-2 text-sm font-semibold text-slate-800">{targetReferee.latestDecision.operatorName}</p>
+                                </div>
+                                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">操作时间</p>
+                                  <p className="mt-2 text-sm font-semibold text-slate-800">{targetReferee.latestDecision.operatedAt}</p>
+                                </div>
+                              </div>
+                              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">备注</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-700">{targetReferee.latestDecision.remark || '未填写备注'}</p>
+                              </div>
+                            </div>
+                            <div className="flex justify-end border-t border-slate-100 bg-white px-6 py-5">
+                              <button
+                                onClick={() => setRefereeHistoryTargetId(null)}
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                              >
+                                关闭
+                              </button>
+                            </div>
+                          </motion.div>
+                        </div>
+                      );
+                    })()}
+                  </AnimatePresence>
+                </motion.div>
+              ) : viewMode === 'referee-task-assignment' ? (
+                <motion.div
+                  key="referee-task-assignment-view"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="space-y-6"
+                >
+                  <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-5 border-b border-slate-100 bg-slate-50/70 px-8 py-6 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                          <ClipboardList className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">任务分配</h3>
+                          <p className="mt-1 text-sm text-slate-500">为本赛事当前可上岗的技术官员分配岗位角色、负责场地与执裁场次范围。</p>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+                        仅展示当前处于“已录用”状态的技术官员；已停用人员不会进入任务分配。
+                      </div>
+                    </div>
+
+                    <div className="max-w-full overflow-x-auto">
+                      <table className="min-w-[1380px] w-full border-collapse text-left">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-white">
+                            <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">技术官员</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">当前状态</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">分配角色</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">执裁项目</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">执裁节次</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">负责场地</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">时间安排</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">备注</th>
+                            <th className="px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {hiredTournamentReferees.length > 0 ? (
+                            hiredTournamentReferees.map((referee) => {
+                              const assignment = tournamentRefereeAssignmentMap.get(referee.id);
+                              return (
+                                <tr key={referee.id} className="align-top transition-colors hover:bg-slate-50">
+                                  <td className="px-8 py-6">
+                                    <button
+                                      type="button"
+                                      onClick={() => openTechnicalOfficialArchiveFromReferee(referee)}
+                                      className="text-left transition-colors hover:text-indigo-700"
+                                    >
+                                      <p className="text-sm font-semibold text-indigo-600 hover:underline">{referee.name}</p>
+                                      <p className="mt-1 text-xs text-slate-400 whitespace-nowrap">{referee.phone}</p>
+                                    </button>
+                                  </td>
+                                  <td className="px-6 py-6">
+                                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getTournamentRefereeStatusClass(referee.status)}`}>
+                                      {getTournamentRefereeStatusLabel(referee.status)}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-6 text-sm font-medium text-slate-700 whitespace-nowrap">{assignment?.role || '待分配'}</td>
+                                  <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{assignment?.projectName || '待配置'}</td>
+                                  <td className="px-6 py-6">
+                                    {assignment?.sections?.length ? (
+                                      <div className="flex flex-wrap gap-2">
+                                        {assignment.sections.map((section) => (
+                                          <span
+                                            key={section}
+                                            className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 ring-1 ring-indigo-100"
+                                          >
+                                            {section}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-slate-400">待配置</span>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{assignment?.court || '待配置'}</td>
+                                  <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{assignment?.timeSlot || '待配置'}</td>
+                                  <td className="px-6 py-6 text-sm leading-6 text-slate-500">{assignment?.remark || '暂未填写任务备注'}</td>
+                                  <td className="px-8 py-6">
+                                    <div className="flex justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => openRefereeAssignmentModal(referee.id)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-600 transition-all hover:text-indigo-700"
+                                      >
+                                        <ClipboardList className="h-4 w-4" />
+                                        {assignment ? '调整分配' : '分配任务'}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            <tr>
+                              <td colSpan={9} className="px-8 py-16 text-center text-sm text-slate-500">
+                                当前暂无可分配任务的技术官员，请先在录用管理中确认录用或重新启用相关人员。
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <AnimatePresence>
+                    {refereeAssignmentTargetId && (() => {
+                      const targetReferee = hiredTournamentReferees.find((item) => item.id === refereeAssignmentTargetId);
+                      if (!targetReferee) return null;
+                      return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setRefereeAssignmentTargetId(null)}
+                            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                          />
+                          <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+                          >
+                            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-6 py-5">
+                              <div>
+                                <h3 className="text-lg font-bold text-slate-900">任务分配</h3>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  为 {targetReferee.name} 配置本赛事的岗位角色、执裁项目、节次与场地安排。
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => setRefereeAssignmentTargetId(null)}
+                                className="rounded-full p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+
+                            <div className="space-y-6 px-6 py-6">
+                              <div className="grid gap-5 md:grid-cols-2">
+                                <label className="block space-y-2">
+                                  <span className="text-sm font-medium text-slate-600">分配角色</span>
+                                  <select
+                                    value={refereeAssignmentDraft.role}
+                                    onChange={(event) =>
+                                      setRefereeAssignmentDraft((prev) => ({ ...prev, role: event.target.value }))
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                  >
+                                    {REFEREE_ASSIGNMENT_ROLE_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="block space-y-2">
+                                  <span className="text-sm font-medium text-slate-600">执裁项目</span>
+                                  <select
+                                    value={refereeAssignmentDraft.projectName}
+                                    onChange={(event) =>
+                                      setRefereeAssignmentDraft((prev) => ({ ...prev, projectName: event.target.value }))
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                  >
+                                    {REFEREE_ASSIGNMENT_PROJECT_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="block space-y-2">
+                                  <span className="text-sm font-medium text-slate-600">负责场地</span>
+                                  <select
+                                    value={refereeAssignmentDraft.court}
+                                    onChange={(event) =>
+                                      setRefereeAssignmentDraft((prev) => ({ ...prev, court: event.target.value }))
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                  >
+                                    {REFEREE_ASSIGNMENT_COURT_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="block space-y-2">
+                                  <span className="text-sm font-medium text-slate-600">时间安排</span>
+                                  <input
+                                    value={refereeAssignmentDraft.timeSlot}
+                                    onChange={(event) =>
+                                      setRefereeAssignmentDraft((prev) => ({ ...prev, timeSlot: event.target.value }))
+                                    }
+                                    placeholder="如：2026-05-01 09:00-12:00"
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                  />
+                                </label>
+                              </div>
+
+                              <div className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-800">执裁范围按节次配置</p>
+                                    <p className="mt-1 text-sm text-slate-500">可为同一位技术官员选择多个节次，例如第一节、第二节连续执裁。</p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {REFEREE_ASSIGNMENT_SECTION_OPTIONS.map((section) => {
+                                    const selected = refereeAssignmentDraft.sections.includes(section);
+                                    return (
+                                      <button
+                                        key={section}
+                                        type="button"
+                                        onClick={() => toggleRefereeAssignmentSection(section)}
+                                        className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                                          selected
+                                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                            : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100 hover:text-slate-800'
+                                        }`}
+                                      >
+                                        {section}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              <label className="block space-y-2">
+                                <span className="text-sm font-medium text-slate-600">备注</span>
+                                <textarea
+                                  value={refereeAssignmentDraft.remark}
+                                  onChange={(event) =>
+                                    setRefereeAssignmentDraft((prev) => ({ ...prev, remark: event.target.value }))
+                                  }
+                                  rows={4}
+                                  placeholder="可填写执裁提醒、岗位说明或协同备注"
+                                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                />
+                              </label>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-white px-6 py-5">
+                              <button
+                                onClick={() => setRefereeAssignmentTargetId(null)}
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                              >
+                                取消
+                              </button>
+                              <button
+                                onClick={saveRefereeAssignment}
+                                className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                              >
+                                保存分配
+                              </button>
+                            </div>
+                          </motion.div>
+                        </div>
+                      );
+                    })()}
+                  </AnimatePresence>
                 </motion.div>
               ) : viewMode === 'settings' ? (
                 <motion.div

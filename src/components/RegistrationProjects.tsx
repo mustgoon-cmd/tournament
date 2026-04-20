@@ -16,8 +16,8 @@ import {
   CheckCircle2,
   ChevronDown
 } from 'lucide-react';
-import { Project, TeamEvent, RestrictionRule, TeamGenderRequirement } from '../types';
-import { EVENT_GROUP_CONFIG, MATCH_FORMAT_GROUPS, getMatchFormatGroupByValue } from '../constants';
+import { EventGroupDefinition, Project, RestrictionRule, TeamEvent, TeamGenderRequirement } from '../types';
+import { MATCH_FORMAT_GROUPS, getEventGroupOptions, getMatchFormatGroupByValue } from '../constants';
 import { ProjectMatrixGenerator } from './ProjectMatrixGenerator';
 import { TablePagination } from './TablePagination';
 
@@ -29,7 +29,7 @@ const MOCK_PROJECTS: Project[] = [
     code: 'MS', 
     type: 'single', 
     match_format_rule: { category: '常规赛制', operator: '=', value: '男子单打' },
-    group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+    group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
     fee: 100, 
     deposit: 50, 
     max_seats: 32, 
@@ -61,7 +61,7 @@ const MOCK_PROJECTS: Project[] = [
     template: '团体模板', 
     sort: 2, 
     status: 'active', 
-    group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+    group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
     restrictions: [
       { id: 'r1', field: '户籍', operator: '=', value: '厦门市' }
     ],
@@ -69,19 +69,19 @@ const MOCK_PROJECTS: Project[] = [
       { 
         id: 'te-1', 
         match_format_rule: { category: '常规赛制', operator: '=', value: '男子单打' },
-        group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+        group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
         restrictions: [] 
       },
       { 
         id: 'te-2', 
         match_format_rule: { category: '常规赛制', operator: '=', value: '女子单打' },
-        group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+        group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
         restrictions: [] 
       },
       { 
         id: 'te-3', 
         match_format_rule: { category: '常规赛制', operator: '=', value: '混合双打' },
-        group_rule: { category: '年龄组', operator: 'in', values: ['公开组'] },
+        group_rule: { category: '常规分组', operator: 'in', values: ['公开组'] },
         restrictions: [] 
       },
     ]
@@ -131,7 +131,11 @@ const getRestrictionHint = (field: string) => {
   return '';
 };
 
-export const RegistrationProjects: React.FC = () => {
+interface RegistrationProjectsProps {
+  eventGroups: EventGroupDefinition[];
+}
+
+export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ eventGroups }) => {
   const [activeTab, setActiveTab] = useState<'single' | 'team'>('single');
   const [pageMode, setPageMode] = useState<'list' | 'matrix-generator'>('list');
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
@@ -156,6 +160,13 @@ export const RegistrationProjects: React.FC = () => {
   const [isBatchAddingTeamEvents, setIsBatchAddingTeamEvents] = useState(false);
   const [batchTeamGroups, setBatchTeamGroups] = useState<string[]>(['公开组']);
   const [batchTeamFormats, setBatchTeamFormats] = useState<string[]>(['男子单打', '女子单打', '混合双打']);
+
+  const eventGroupOptions = useMemo(() => getEventGroupOptions(eventGroups), [eventGroups]);
+  const groupedEventGroups = useMemo(
+    () => eventGroups.filter((group) => group.values.length > 0),
+    [eventGroups],
+  );
+  const defaultEventGroupOption = eventGroupOptions[0];
 
   const toggleExpand = (projectId: string) => {
     setExpandedProjects(prev => {
@@ -326,6 +337,7 @@ export const RegistrationProjects: React.FC = () => {
   if (pageMode === 'matrix-generator') {
     return (
       <ProjectMatrixGenerator
+        eventGroups={eventGroups}
         onBack={() => setPageMode('list')}
         onGenerate={(newProjects) => {
           setProjects((prev) => [...prev, ...newProjects]);
@@ -405,7 +417,9 @@ export const RegistrationProjects: React.FC = () => {
                       template: '默认模板',
                       sort: 1,
                       status: 'active',
-                      group_rule: { category: EVENT_GROUP_CONFIG.category, operator: 'in', values: [] },
+                      group_rule: defaultEventGroupOption
+                        ? { category: defaultEventGroupOption.category, operator: 'in', values: [defaultEventGroupOption.value] }
+                        : { category: '', operator: 'in', values: [] },
                       match_format_rule: activeTab === 'single' ? { category: MATCH_FORMAT_GROUPS[0].name, operator: '=', value: '' } : undefined,
                       restrictions: []
                     });
@@ -453,14 +467,14 @@ export const RegistrationProjects: React.FC = () => {
             <select 
               value={searchGroupDraft}
               onChange={(e) => setSearchGroupDraft(e.target.value)}
-              className="min-w-[180px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none"
+              className="min-w-[220px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none"
             >
               <option value="">所有组别</option>
-              <option value="U8">U8</option>
-              <option value="U10">U10</option>
-              <option value="U12">U12</option>
-              <option value="U14">U14</option>
-              <option value="U16">U16</option>
+              {eventGroupOptions.map((option) => (
+                <option key={`${option.category}-${option.value}`} value={option.value}>
+                  {option.value}（{option.category}）
+                </option>
+              ))}
             </select>
           </>
         )}
@@ -820,35 +834,53 @@ export const RegistrationProjects: React.FC = () => {
                               <div className="flex items-center justify-between gap-3">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">组别</label>
                                 <span className="text-[11px] font-medium text-slate-400">
-                                  当前赛事组别分组：{EVENT_GROUP_CONFIG.category}
+                                  当前赛事已配置 {eventGroupOptions.length} 个组别
                                 </span>
                               </div>
 
-                              <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-                                {EVENT_GROUP_CONFIG.values.map((group) => {
-                                  const selected = editingProject.group_rule?.values?.[0] === group;
-                                  return (
-                                  <button
-                                    key={group}
-                                    type="button"
-                                    onClick={() => setEditingProject({
-                                      ...editingProject,
-                                      group_rule: {
-                                        category: EVENT_GROUP_CONFIG.category,
-                                        operator: 'in',
-                                        values: [group],
-                                      }
-                                    })}
-                                    className={`rounded-xl border px-3 py-2.5 text-[13px] font-bold transition-all ${
-                                      selected
-                                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100'
-                                        : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40'
-                                    }`}
-                                  >
-                                    {group}
-                                  </button>
-                                )})}
-                              </div>
+                              {groupedEventGroups.length > 0 ? (
+                                <div className="space-y-4">
+                                  {groupedEventGroups.map((group) => (
+                                    <div key={group.id} className="space-y-2.5">
+                                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{group.name}</p>
+                                      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                                        {group.values.map((groupValue) => {
+                                          const selected =
+                                            editingProject.group_rule?.category === group.name &&
+                                            editingProject.group_rule?.values?.[0] === groupValue.name;
+                                          return (
+                                            <button
+                                              key={groupValue.id}
+                                              type="button"
+                                              onClick={() =>
+                                                setEditingProject({
+                                                  ...editingProject,
+                                                  group_rule: {
+                                                    category: group.name,
+                                                    operator: 'in',
+                                                    values: [groupValue.name],
+                                                  },
+                                                })
+                                              }
+                                              className={`rounded-xl border px-3 py-2.5 text-[13px] font-bold transition-all ${
+                                                selected
+                                                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100'
+                                                  : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40'
+                                              }`}
+                                            >
+                                              {groupValue.name}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
+                                  当前赛事还没有配置组别，请先前往“赛事组别”页面完成设置。
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -8,20 +8,27 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { Project } from '../types';
-import { EVENT_GROUP_CONFIG, MATCH_FORMAT_GROUPS, getMatchFormatOption } from '../constants';
+import { EventGroupDefinition, Project } from '../types';
+import {
+  MATCH_FORMAT_GROUPS,
+  getEventGroupCategories,
+  getEventGroupValuesByCategory,
+  getMatchFormatOption,
+} from '../constants';
 
 interface ProjectMatrixGeneratorProps {
   onBack: () => void;
   onGenerate: (projects: Project[]) => void;
+  eventGroups: EventGroupDefinition[];
 }
 
 export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
   onBack,
   onGenerate,
+  eventGroups,
 }) => {
-  const [matrixGroupCategory] = useState<string>(EVENT_GROUP_CONFIG.category);
-  const [matrixGroupValues] = useState<string[]>([...EVENT_GROUP_CONFIG.values]);
+  const eventGroupCategories = useMemo(() => getEventGroupCategories(eventGroups), [eventGroups]);
+  const [matrixGroupCategory, setMatrixGroupCategory] = useState<string>(eventGroupCategories[0] || '');
   const [matrixFormatGroup, setMatrixFormatGroup] = useState<string>(MATCH_FORMAT_GROUPS[0].name);
   const [matrixFormats, setMatrixFormats] = useState<string[]>(['男子单打', '女子单打']);
   const [selectedMatrixCells, setSelectedMatrixCells] = useState<Set<string>>(new Set());
@@ -33,6 +40,24 @@ export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
   const [matrixMaxMembersPerTeam, setMatrixMaxMembersPerTeam] = useState(1);
   const [matrixMinSeats, setMatrixMinSeats] = useState(8);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    if (!eventGroupCategories.length) {
+      setMatrixGroupCategory('');
+      setSelectedMatrixCells(new Set());
+      return;
+    }
+
+    if (!eventGroupCategories.includes(matrixGroupCategory)) {
+      setMatrixGroupCategory(eventGroupCategories[0]);
+      setSelectedMatrixCells(new Set());
+    }
+  }, [eventGroupCategories, matrixGroupCategory]);
+
+  const matrixGroupValues = useMemo(
+    () => getEventGroupValuesByCategory(eventGroups, matrixGroupCategory).map((item) => item.value),
+    [eventGroups, matrixGroupCategory],
+  );
 
   const selectedPreview = useMemo(
     () => Array.from(selectedMatrixCells).slice(0, 6),
@@ -217,31 +242,44 @@ export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
                   <div className="relative">
                     <select
                       value={matrixGroupCategory}
-                      disabled
-                      className="appearance-none rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2 pr-9 text-[12px] font-bold text-slate-500 outline-none"
+                      onChange={(e) => {
+                        setMatrixGroupCategory(e.target.value);
+                        setSelectedMatrixCells(new Set());
+                      }}
+                      className="appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 pr-9 text-[12px] font-bold text-indigo-700 outline-none transition focus:border-indigo-300"
                     >
-                      <option value={EVENT_GROUP_CONFIG.category}>{EVENT_GROUP_CONFIG.category}</option>
+                      {eventGroupCategories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-600" />
                   </div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {matrixGroupValues.map((group) => (
-                    <button
-                      key={group}
-                      type="button"
-                      onClick={() => toggleMatrixRow(group)}
-                      className={`rounded-xl px-3.5 py-2.5 text-[13px] font-bold transition ${
-                        matrixFormats.every((format) => selectedMatrixCells.has(`${group}|${format}`))
-                          ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
-                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                      }`}
-                    >
-                      {group}
-                    </button>
-                  ))}
-                </div>
+                {matrixGroupValues.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {matrixGroupValues.map((group) => (
+                      <button
+                        key={group}
+                        type="button"
+                        onClick={() => toggleMatrixRow(group)}
+                        className={`rounded-xl px-3.5 py-2.5 text-[13px] font-bold transition ${
+                          matrixFormats.every((format) => selectedMatrixCells.has(`${group}|${format}`))
+                            ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        {group}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                    当前赛事还没有可用于矩阵生成的组别，请先去“赛事组别”页面完成配置。
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -258,242 +296,243 @@ export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
             </div>
 
             <div className="mt-6 space-y-4.5">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-slate-700">报名模板</span>
+                <input
+                  value={matrixTemplate}
+                  onChange={(e) => setMatrixTemplate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                />
+              </label>
+
+              <div className="grid gap-4 md:grid-cols-2">
                 <label className="block space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">基础报名费 (CNY)</span>
+                  <span className="text-sm font-semibold text-slate-700">基础报名费</span>
                   <input
                     type="number"
                     value={matrixBaseFee}
-                    onChange={(e) => setMatrixBaseFee(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xl font-black text-slate-900 outline-none transition focus:border-indigo-300"
+                    onChange={(e) => setMatrixBaseFee(Number(e.target.value || 0))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                   />
                 </label>
-
                 <label className="block space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">押金</span>
+                  <span className="text-sm font-semibold text-slate-700">押金</span>
                   <input
                     type="number"
                     value={matrixBaseDeposit}
-                    onChange={(e) => setMatrixBaseDeposit(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-bold text-slate-900 outline-none transition focus:border-indigo-300"
+                    onChange={(e) => setMatrixBaseDeposit(Number(e.target.value || 0))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                   />
                 </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">名额上限</span>
-                  <input
-                    type="number"
-                    value={matrixMaxSeats}
-                    onChange={(e) => setMatrixMaxSeats(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-bold text-slate-900 outline-none transition focus:border-indigo-300"
-                  />
-                </label>
-
-                <label className="block space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">最少立项人数</span>
+                  <span className="text-sm font-semibold text-slate-700">最少成赛人数</span>
                   <input
                     type="number"
                     value={matrixMinSeats}
-                    onChange={(e) => setMatrixMinSeats(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-bold text-slate-900 outline-none transition focus:border-indigo-300"
+                    onChange={(e) => setMatrixMinSeats(Number(e.target.value || 0))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  />
+                </label>
+                <label className="block space-y-2">
+                  <span className="text-sm font-semibold text-slate-700">席位上限</span>
+                  <input
+                    type="number"
+                    value={matrixMaxSeats}
+                    onChange={(e) => setMatrixMaxSeats(Number(e.target.value || 0))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                   />
                 </label>
               </div>
 
-              <label className="block space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">报名模板</span>
-                <select
-                  value={matrixTemplate}
-                  onChange={(e) => setMatrixTemplate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-900 outline-none transition focus:border-indigo-300"
-                >
-                  <option value="通用报名模板">通用报名模板</option>
-                  <option value="精英赛模板">精英赛模板</option>
-                  <option value="默认模板">默认模板</option>
-                </select>
-              </label>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-[13px] font-bold text-slate-800">报名需加入队伍</p>
-                    <p className="mt-1 text-[11px] leading-5 text-slate-400">开启后，则报名页面队伍为必填项</p>
+                    <p className="text-sm font-semibold text-slate-800">报名需加入队伍</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">适用于需要先创建队伍再报名的项目。</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setMatrixTeamJoin((prev) => !prev)}
-                    className={`relative h-6 w-11 rounded-full transition ${matrixTeamJoin ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                    className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
+                      matrixTeamJoin ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
+                    }`}
                   >
-                    <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${matrixTeamJoin ? 'left-5.5' : 'left-0.5'}`} />
+                    <span>{matrixTeamJoin ? '开' : '关'}</span>
+                    <span
+                      className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
+                        matrixTeamJoin ? 'right-1' : 'left-1'
+                      }`}
+                    />
                   </button>
                 </div>
+                {matrixTeamJoin && (
+                  <label className="mt-4 block space-y-2">
+                    <span className="text-sm font-semibold text-slate-700">每队人数</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={matrixMaxMembersPerTeam}
+                      onChange={(e) => setMatrixMaxMembersPerTeam(Number(e.target.value || 1))}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    />
+                  </label>
+                )}
               </div>
-
-              {matrixTeamJoin && (
-                <label className="block space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">每队最多报名人数</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={matrixMaxMembersPerTeam}
-                    onChange={(e) => setMatrixMaxMembersPerTeam(Math.max(1, Number(e.target.value) || 1))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-bold text-slate-900 outline-none transition focus:border-indigo-300"
-                  />
-                </label>
-              )}
             </div>
           </section>
         </div>
 
-        <section className="rounded-[24px] border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-7 py-5">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">矩阵生成器</h2>
-              <p className="mt-1 text-[13px] text-slate-500">勾选需要生成的项目组合</p>
-            </div>
-            <div className="flex items-center gap-4 text-[11px] font-bold uppercase tracking-[0.16em]">
-              <button type="button" onClick={handleSelectAll} className="text-indigo-600 transition hover:text-indigo-700">
-                全选
-              </button>
-              <button type="button" onClick={() => setSelectedMatrixCells(new Set())} className="text-slate-400 transition hover:text-slate-600">
-                清空
-              </button>
-            </div>
-          </div>
-
-          <div className="px-7 py-5">
-            <div className="overflow-hidden rounded-[20px] border border-slate-200">
-              <div className="overflow-x-auto">
-                <table className="w-full border-separate border-spacing-0 text-[13px]">
-                  <thead className="bg-slate-50 text-slate-400">
-                    <tr>
-                      <th className="w-24 border-b border-slate-200 px-4 py-4 text-left text-[11px] font-bold uppercase tracking-[0.16em]">
-                        组别
-                      </th>
-                      {matrixFormats.map((format) => (
-                        <th key={format} className="border-b border-slate-200 px-6 py-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => toggleMatrixCol(format)}
-                            className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 transition hover:text-indigo-600"
-                          >
-                            {format}
-                          </button>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {matrixGroupValues.map((group) => (
-                      <tr key={group} className="bg-white">
-                        <td className="border-b border-slate-100 px-4 py-5">
-                          <button
-                            type="button"
-                            onClick={() => toggleMatrixRow(group)}
-                            className="text-base font-bold text-slate-700 transition hover:text-indigo-600"
-                          >
-                            {group}
-                          </button>
-                        </td>
-                        {matrixFormats.map((format) => {
-                          const cellId = `${group}|${format}`;
-                          const isSelected = selectedMatrixCells.has(cellId);
-                          return (
-                            <td key={cellId} className="border-b border-slate-100 px-6 py-4 text-center">
-                              <button
-                                type="button"
-                                onClick={() => toggleMatrixCell(group, format)}
-                                className={`mx-auto flex h-10 w-10 items-center justify-center rounded-xl border-2 transition ${
-                                  isSelected
-                                    ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-100'
-                                    : 'border-slate-200 bg-slate-50 text-transparent hover:border-indigo-200'
-                                }`}
-                              >
-                                <CheckCircle2 className="h-4.5 w-4.5" />
-                              </button>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        <div className="space-y-6">
+          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">矩阵选择</h2>
+                <p className="mt-1 text-sm text-slate-500">按行列勾选需要生成的组别与比赛形式组合。</p>
               </div>
-            </div>
-
-            <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div className="text-[13px] leading-6 text-slate-400">
-                将批量生成 <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-sm font-black text-indigo-600">{selectedMatrixCells.size}</span> 个单项项目，生成后可在列表页修改单个项目的名称、代码、模板和限制规则。
-              </div>
-
               <button
                 type="button"
-                onClick={() => setIsConfirmOpen(true)}
-                disabled={selectedMatrixCells.size === 0}
-                className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-indigo-600 px-7 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-100 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                onClick={handleSelectAll}
+                disabled={matrixGroupValues.length === 0 || matrixFormats.length === 0}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
               >
-                <Sparkles className="h-4.5 w-4.5" />
-                一键生成项目
+                全选当前矩阵
               </button>
             </div>
-          </div>
-        </section>
+
+            <div className="mt-6 overflow-x-auto">
+              <table className="min-w-full border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/60">
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">组别</th>
+                    {matrixFormats.map((format) => (
+                      <th key={format} className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleMatrixCol(format)}
+                          className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                        >
+                          {format}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {matrixGroupValues.map((group) => (
+                    <tr key={group} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleMatrixRow(group)}
+                          className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                        >
+                          {group}
+                        </button>
+                      </td>
+                      {matrixFormats.map((format) => {
+                        const cellId = `${group}|${format}`;
+                        const selected = selectedMatrixCells.has(cellId);
+                        return (
+                          <td key={cellId} className="px-4 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleMatrixCell(group, format)}
+                              className={`inline-flex h-11 min-w-[96px] items-center justify-center rounded-xl border px-3 text-sm font-semibold transition ${
+                                selected
+                                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100'
+                                  : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:bg-indigo-50/40'
+                              }`}
+                            >
+                              {selected ? '已选中' : '选择'}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-600">
+                <Sparkles className="h-4.5 w-4.5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">生成预览</h2>
+                <p className="mt-1 text-sm text-slate-500">当前已选择 {selectedMatrixCells.size} 个项目组合。</p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {selectedPreview.length > 0 ? (
+                selectedPreview.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100"
+                  >
+                    {item.replace('|', ' / ')}
+                  </span>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">还没有选择任何矩阵组合。</p>
+              )}
+              {selectedProjects.length > selectedPreview.length && (
+                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                  +{selectedProjects.length - selectedPreview.length}
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsConfirmOpen(true)}
+              disabled={selectedMatrixCells.size === 0}
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+            >
+              <CheckCircle2 className="h-4.5 w-4.5" />
+              生成报名项目
+            </button>
+          </section>
+        </div>
       </div>
 
       {isConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-lg rounded-[24px] border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
               <div>
-                <h3 className="text-xl font-bold text-slate-900">确认批量生成项目</h3>
-                <p className="mt-1 text-[13px] leading-6 text-slate-500">
-                  本次将按照当前矩阵选择结果，批量创建以下 {selectedProjects.length} 个报名项目。
-                </p>
+                <h3 className="text-lg font-bold text-slate-900">确认生成</h3>
+                <p className="mt-1 text-sm text-slate-500">将批量创建 {selectedProjects.length} 个单项报名项目。</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsConfirmOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
               >
-                <X className="h-4.5 w-4.5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-
             <div className="px-6 py-5">
-              <div className="max-h-[320px] overflow-y-auto rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-                <div className="flex flex-wrap gap-2.5">
-                  {selectedProjects.map((projectName) => (
-                    <span
-                      key={projectName}
-                      className="rounded-full bg-white px-3 py-1.5 text-[12px] font-bold text-slate-700 shadow-sm ring-1 ring-slate-200"
-                    >
-                      {projectName}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-6 text-amber-800">
-                请确认项目名称、组别与比赛形式组合无误。确认后将一次性写入报名项目列表。
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600">
+                生成后会直接写入项目列表，仍可在“报名项目管理”中继续调整费用、模板、席位与限制规则。
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+            <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
               <button
                 type="button"
                 onClick={() => setIsConfirmOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                返回检查
+                取消
               </button>
               <button
                 type="button"
                 onClick={confirmGenerate}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-100 transition hover:bg-indigo-700"
+                className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
               >
-                <Sparkles className="h-4.5 w-4.5" />
                 确认生成
               </button>
             </div>
