@@ -23,6 +23,7 @@ interface GroupManagementProps {
   prototypeMode?: boolean;
   value: EventGroupDefinition[];
   onChange: (groups: EventGroupDefinition[]) => void;
+  singleGroupMode?: boolean;
 }
 
 const createId = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -75,14 +76,29 @@ const summarizeRule = (rule: EventGroupRule) => {
   return `出生日期 ${operatorLabel} ${formatSingleResolvedDate(rule)}`;
 };
 
-export function GroupManagement({ prototypeMode = false, value, onChange }: GroupManagementProps) {
+export function GroupManagement({
+  prototypeMode = false,
+  value,
+  onChange,
+  singleGroupMode = false,
+}: GroupManagementProps) {
   void prototypeMode;
 
-  const [pageMode, setPageMode] = useState<GroupPageMode>('list');
+  const [pageMode, setPageMode] = useState<GroupPageMode>(singleGroupMode ? 'editor' : 'list');
   const [searchDraft, setSearchDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState(value[0]?.id ?? '');
   const [selectedValueId, setSelectedValueId] = useState(value[0]?.values[0]?.id ?? '');
+
+  useEffect(() => {
+    if (!singleGroupMode) return;
+    if (value.length > 0) return;
+
+    const initialGroup = createGroup();
+    onChange([initialGroup]);
+    setSelectedGroupId(initialGroup.id);
+    setSelectedValueId(initialGroup.values[0]?.id ?? '');
+  }, [onChange, singleGroupMode, value]);
 
   useEffect(() => {
     if (value.length === 0) {
@@ -95,6 +111,16 @@ export function GroupManagement({ prototypeMode = false, value, onChange }: Grou
       setSelectedGroupId(value[0].id);
     }
   }, [selectedGroupId, value]);
+
+  useEffect(() => {
+    if (!singleGroupMode || value.length === 0) return;
+    if (selectedGroupId !== value[0].id) {
+      setSelectedGroupId(value[0].id);
+    }
+    if (pageMode !== 'editor') {
+      setPageMode('editor');
+    }
+  }, [pageMode, selectedGroupId, singleGroupMode, value]);
 
   const selectedGroup = value.find((group) => group.id === selectedGroupId) ?? value[0];
 
@@ -218,7 +244,7 @@ export function GroupManagement({ prototypeMode = false, value, onChange }: Grou
     }));
   };
 
-  if (pageMode === 'list') {
+  if (pageMode === 'list' && !singleGroupMode) {
     return (
       <div className="max-w-7xl mx-auto">
         <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
@@ -346,13 +372,19 @@ export function GroupManagement({ prototypeMode = false, value, onChange }: Grou
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <button
-          onClick={() => setPageMode('list')}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          返回组别列表
-        </button>
+        {singleGroupMode ? (
+          <div className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-500 ring-1 ring-slate-200">
+            当前赛事仅维护 1 个组别分组，可在下方直接配置多个具体组别。
+          </div>
+        ) : (
+          <button
+            onClick={() => setPageMode('list')}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            返回组别列表
+          </button>
+        )}
         <button
           onClick={() => window.alert(`组别分组「${selectedGroup.name}」已保存`)}
           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"

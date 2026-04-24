@@ -74,7 +74,6 @@ import { RegistrationAnnouncement } from './components/RegistrationAnnouncement'
 import { ProjectScheduling } from './components/ProjectScheduling';
 import MatchManagement from './components/MatchManagement';
 import { RegistrationProjects } from './components/RegistrationProjects';
-import { VenueResourceConfig } from './components/VenueResourceConfig';
 import { MatchCodeConfig } from './components/MatchCodeConfig';
 import { PlayerManagement } from './components/PlayerManagement';
 import { ScheduleConfig } from './components/ScheduleConfig';
@@ -147,6 +146,7 @@ const VIEW_TITLES = {
   'multi-event-stats': '兼项统计',
   records: '报名记录',
   announcement: '报名公示',
+  'match-code-config': '比赛规则',
   scheduling: '项目编排',
   projects: '项目配置',
   'match-management': '比赛管理',
@@ -155,7 +155,6 @@ const VIEW_TITLES = {
   'referee-recruitment': '招募规则',
   'referee-officials': '录用管理',
   'referee-task-assignment': '任务分配',
-  'venue-config': '场地资源',
 } as const;
 
 const VIEW_SECTIONS = {
@@ -177,11 +176,11 @@ const VIEW_SECTIONS = {
   'referee-recruitment': '技术官员管理',
   'referee-officials': '技术官员管理',
   'referee-task-assignment': '技术官员管理',
+  'match-code-config': '赛事编排',
   scheduling: '赛事编排',
   'match-management': '赛事编排',
   'player-management': '赛事编排',
   'schedule-config': '赛事编排',
-  'venue-config': '赛事编排',
 } as const;
 
 type AppPage = 'tournament-list' | 'tournament-detail';
@@ -269,7 +268,9 @@ type ScoreRuleRow = {
   deuceEnabled: boolean;
   leadTriggerScore: number;
   leadWinScore: number;
+  capScoreEnabled: boolean;
   capScore: number;
+  remark: string;
   midgameEnabled: boolean;
   swapTriggerScore: number;
   breakEnabled: boolean;
@@ -281,23 +282,19 @@ type SingleMatchRuleRow = {
   id: string;
   ruleName: string;
   outcomeMethod: '局分胜' | '总分胜';
-  matchFormat: '多局胜制' | '单局定胜负' | '固定局数';
+  matchFormat: '多局胜制' | '单局定胜负';
   totalGames: number;
   gamesToWin: number;
-  scoreRuleMode: 'global' | 'per-game';
-  globalScoreRuleId: string;
   perGameScoreRuleIds: string[];
-  swapAfterGame: boolean;
   intervalRestEnabled: boolean;
   intervalRestSeconds: number;
   forfeitWinGames: number;
   forfeitPointsPerGame: number;
+  remark: string;
   createdAt: string;
 };
 
 type TeamBattleOutcomeMethod = '胜场制' | '总分制';
-type TeamBattleEndStrategy = 'play-all' | 'finish-running' | 'stop-immediately';
-type TeamBattleSingleMatchRuleMode = 'global' | 'per-match';
 
 type TeamBattleRuleRow = {
   id: string;
@@ -305,10 +302,9 @@ type TeamBattleRuleRow = {
   outcomeMethod: TeamBattleOutcomeMethod;
   totalMatches: number;
   matchesToWin: number | null;
-  singleMatchRuleMode: TeamBattleSingleMatchRuleMode;
-  singleMatchRuleId: string;
-  perMatchSingleMatchRuleIds: string[];
-  endStrategy: TeamBattleEndStrategy;
+  playAllMatches: boolean;
+  remark: string;
+  enabled: boolean;
   createdAt: string;
 };
 
@@ -326,8 +322,7 @@ type TournamentRefereeDecision = {
 type RefereeRecruitmentConfig = {
   publicVisible: boolean;
   publicScope: 'all' | 'organization-only';
-  registrationOpen: boolean;
-  recruitmentStatus: 'open' | 'closed';
+  recruitmentStatus: 'upcoming' | 'open' | 'closed';
   remark: string;
   minimumTechnicalLevel: string;
   requiredSportCertificate: string;
@@ -640,13 +635,15 @@ const SCORE_RULES: ScoreRuleRow[] = [
   {
     id: 'SR001',
     ruleName: '21分标准分',
-    summary: '本局目标分 [20] 分，若出现平分，需领先 [2] 分获胜；如分数僵持，则先到 [30] 分者直接获胜。',
+    summary: '本局目标分 [20] 分，若双方达到 [20] 分平分，则进入平分加赛，需领先 [2] 分获胜；如分数僵持，则先到 [30] 分者直接获胜。',
     updatedAt: '2026-03-22 14:20:36',
     targetScore: 20,
     deuceEnabled: true,
     leadTriggerScore: 20,
     leadWinScore: 2,
+    capScoreEnabled: true,
     capScore: 30,
+    remark: '标准羽毛球单局计分规则，适用于多数正式比赛场景。',
     midgameEnabled: true,
     swapTriggerScore: 11,
     breakEnabled: true,
@@ -656,13 +653,15 @@ const SCORE_RULES: ScoreRuleRow[] = [
   {
     id: 'SR002',
     ruleName: '15分单淘汰',
-    summary: '本局目标分 [15] 分，若出现平分，需领先 [2] 分获胜；如分数僵持，则先到 [21] 分者直接获胜。',
+    summary: '本局目标分 [15] 分，若双方达到 [15] 分平分，则进入平分加赛，需领先 [2] 分获胜；如分数僵持，则先到 [21] 分者直接获胜。',
     updatedAt: '2026-03-18 09:12:08',
     targetScore: 15,
     deuceEnabled: true,
     leadTriggerScore: 15,
     leadWinScore: 2,
+    capScoreEnabled: true,
     capScore: 21,
+    remark: '适用于淘汰赛或赛程紧凑场景，缩短单局耗时。',
     midgameEnabled: true,
     swapTriggerScore: 8,
     breakEnabled: true,
@@ -672,13 +671,15 @@ const SCORE_RULES: ScoreRuleRow[] = [
   {
     id: 'SR003',
     ruleName: '11分快节奏',
-    summary: '本局目标分 [11] 分，若出现平分，需领先 [2] 分获胜；如分数僵持，则先到 [15] 分者直接获胜。',
+    summary: '本局目标分 [11] 分，若双方达到 [11] 分平分，则进入平分加赛，需领先 [2] 分获胜；如分数僵持，则先到 [15] 分者直接获胜。',
     updatedAt: '2026-03-09 18:45:20',
     targetScore: 11,
     deuceEnabled: true,
     leadTriggerScore: 11,
     leadWinScore: 2,
+    capScoreEnabled: true,
     capScore: 15,
+    remark: '适用于体验赛或快节奏项目，便于快速完成比赛。',
     midgameEnabled: false,
     swapTriggerScore: 6,
     breakEnabled: true,
@@ -695,14 +696,12 @@ const SINGLE_MATCH_RULES: SingleMatchRuleRow[] = [
     matchFormat: '多局胜制',
     totalGames: 3,
     gamesToWin: 2,
-    scoreRuleMode: 'global',
-    globalScoreRuleId: 'SR001',
     perGameScoreRuleIds: ['SR001', 'SR001', 'SR001'],
-    swapAfterGame: true,
     intervalRestEnabled: true,
     intervalRestSeconds: 60,
     forfeitWinGames: 2,
     forfeitPointsPerGame: 21,
+    remark: '适用于常规羽毛球单场比赛。',
     createdAt: '2026-03-20 10:20:18',
   },
   {
@@ -712,14 +711,12 @@ const SINGLE_MATCH_RULES: SingleMatchRuleRow[] = [
     matchFormat: '多局胜制',
     totalGames: 3,
     gamesToWin: 2,
-    scoreRuleMode: 'global',
-    globalScoreRuleId: 'SR002',
     perGameScoreRuleIds: ['SR002', 'SR002', 'SR002'],
-    swapAfterGame: true,
     intervalRestEnabled: true,
     intervalRestSeconds: 45,
     forfeitWinGames: 2,
     forfeitPointsPerGame: 15,
+    remark: '适用于青少年项目，局间节奏更紧凑。',
     createdAt: '2026-03-18 09:42:10',
   },
   {
@@ -729,14 +726,12 @@ const SINGLE_MATCH_RULES: SingleMatchRuleRow[] = [
     matchFormat: '多局胜制',
     totalGames: 5,
     gamesToWin: 3,
-    scoreRuleMode: 'global',
-    globalScoreRuleId: 'SR003',
     perGameScoreRuleIds: ['SR003', 'SR003', 'SR003', 'SR003', 'SR003'],
-    swapAfterGame: false,
     intervalRestEnabled: true,
     intervalRestSeconds: 60,
     forfeitWinGames: 3,
     forfeitPointsPerGame: 11,
+    remark: '用于企业邀请赛，便于裁判组赛前沟通执行口径。',
     createdAt: '2026-03-12 16:08:55',
   },
 ];
@@ -744,14 +739,13 @@ const SINGLE_MATCH_RULES: SingleMatchRuleRow[] = [
 const TEAM_BATTLE_RULES: TeamBattleRuleRow[] = [
   {
     id: 'TBR001',
-    ruleName: '5场3胜（分出胜负后已开赛继续）',
+    ruleName: '5场3胜（不要求打满）',
     outcomeMethod: '胜场制',
     totalMatches: 5,
     matchesToWin: 3,
-    singleMatchRuleMode: 'global',
-    singleMatchRuleId: 'SMR001',
-    perMatchSingleMatchRuleIds: ['SMR001', 'SMR001', 'SMR001', 'SMR001', 'SMR001'],
-    endStrategy: 'finish-running',
+    playAllMatches: false,
+    remark: '适用于大多数团体赛场景，分出胜负后是否继续未完场次由裁判决定。',
+    enabled: true,
     createdAt: '2026-03-24 10:18:22',
   },
   {
@@ -760,10 +754,9 @@ const TEAM_BATTLE_RULES: TeamBattleRuleRow[] = [
     outcomeMethod: '胜场制',
     totalMatches: 5,
     matchesToWin: 3,
-    singleMatchRuleMode: 'per-match',
-    singleMatchRuleId: 'SMR001',
-    perMatchSingleMatchRuleIds: ['SMR001', 'SMR002', 'SMR001', 'SMR002', 'SMR001'],
-    endStrategy: 'play-all',
+    playAllMatches: true,
+    remark: '适用于需要完整积分或统计全部单场结果的赛事。',
+    enabled: true,
     createdAt: '2026-03-18 15:42:08',
   },
   {
@@ -772,10 +765,9 @@ const TEAM_BATTLE_RULES: TeamBattleRuleRow[] = [
     outcomeMethod: '总分制',
     totalMatches: 3,
     matchesToWin: null,
-    singleMatchRuleMode: 'global',
-    singleMatchRuleId: 'SMR003',
-    perMatchSingleMatchRuleIds: ['SMR003', 'SMR003', 'SMR003'],
-    endStrategy: 'play-all',
+    playAllMatches: true,
+    remark: '适用于展示赛或需要按整场累计总分判定胜负的团体活动。',
+    enabled: true,
     createdAt: '2026-03-10 09:36:15',
   },
 ];
@@ -908,8 +900,7 @@ const TECHNICAL_OFFICIALS: TechnicalOfficialRow[] = [
 const INITIAL_REFEREE_RECRUITMENT_CONFIG: RefereeRecruitmentConfig = {
   publicVisible: true,
   publicScope: 'all',
-  registrationOpen: true,
-  recruitmentStatus: 'open',
+  recruitmentStatus: 'upcoming',
   remark: '面向持有效裁判证书的技术官员开放报名，赛事方将结合执裁经历统一审核录用。',
   minimumTechnicalLevel: 'level-2-up',
   requiredSportCertificate: 'badminton',
@@ -937,6 +928,7 @@ const REFEREE_PUBLIC_SCOPE_OPTIONS = [
 ] as const;
 
 const REFEREE_RECRUITMENT_STATUS_OPTIONS = [
+  { value: 'upcoming', label: '未开始招募', description: '用户可查看招募说明和资格要求，但暂不可报名。' },
   { value: 'open', label: '公开招募中', description: '用户侧展示招募中状态，并允许技术官员报名。' },
   { value: 'closed', label: '招募结束', description: '裁判端不再允许报名，用户侧展示招募结束状态。' },
 ] as const;
@@ -1358,7 +1350,9 @@ const createEmptyScoreRule = (): ScoreRuleRow => ({
   deuceEnabled: true,
   leadTriggerScore: 20,
   leadWinScore: 2,
+  capScoreEnabled: true,
   capScore: 30,
+  remark: '',
   midgameEnabled: true,
   swapTriggerScore: 11,
   breakEnabled: true,
@@ -1373,14 +1367,12 @@ const createEmptySingleMatchRule = (): SingleMatchRuleRow => ({
   matchFormat: '多局胜制',
   totalGames: 3,
   gamesToWin: 2,
-  scoreRuleMode: 'global',
-  globalScoreRuleId: 'SR001',
   perGameScoreRuleIds: ['SR001', 'SR001', 'SR001'],
-  swapAfterGame: true,
   intervalRestEnabled: true,
   intervalRestSeconds: 60,
   forfeitWinGames: 2,
   forfeitPointsPerGame: 21,
+  remark: '',
   createdAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
 });
 
@@ -1390,10 +1382,9 @@ const createEmptyTeamBattleRule = (): TeamBattleRuleRow => ({
   outcomeMethod: '胜场制',
   totalMatches: 5,
   matchesToWin: 3,
-  singleMatchRuleMode: 'global',
-  singleMatchRuleId: 'SMR001',
-  perMatchSingleMatchRuleIds: ['SMR001', 'SMR001', 'SMR001', 'SMR001', 'SMR001'],
-  endStrategy: 'finish-running',
+  playAllMatches: false,
+  remark: '',
+  enabled: true,
   createdAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
 });
 
@@ -1491,13 +1482,12 @@ const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
   },
   {
     key: 'template',
-    label: '竞赛规则管理',
+    label: '竞赛规则模板',
     icon: FileText,
     children: [
       { key: 'score-rule-template', label: '单局计分规则' },
-      { key: 'single-match-rule-template', label: '单项胜负规则' },
-      { key: 'team-battle-rule-template', label: '团体对抗规则' },
-      { key: 'match-code-rule-template', label: '比赛代码规则' },
+      { key: 'single-match-rule-template', label: '单场胜负规则' },
+      { key: 'team-battle-rule-template', label: '团体胜负规则' },
     ],
   },
   {
@@ -1747,6 +1737,7 @@ export default function App() {
     | 'multi-event-stats'
     | 'records'
     | 'announcement'
+    | 'match-code-config'
     | 'scheduling'
     | 'projects'
     | 'match-management'
@@ -1755,7 +1746,6 @@ export default function App() {
     | 'referee-recruitment'
     | 'referee-officials'
     | 'referee-task-assignment'
-    | 'venue-config'
   >('basic-info');
   const [recordsInitialTab, setRecordsInitialTab] = useState<'orders' | 'project_summary' | 'participants' | 'teams'>('orders');
   const [activeTab, setActiveTab] = useState<'config' | 'team-limit' | 'restriction' | 'signing'>('config');
@@ -3007,7 +2997,10 @@ export default function App() {
   const buildScoreRuleSummary = (rule: ScoreRuleRow) => {
     const targetScore = rule.targetScore;
     if (rule.deuceEnabled) {
-      return `本局目标分 [${targetScore}] 分，若出现平分，需领先 [${rule.leadWinScore}] 分获胜；如分数僵持，则先到 [${rule.capScore}] 分者直接获胜。`;
+      if (rule.capScoreEnabled) {
+        return `本局目标分 [${targetScore}] 分，若双方达到 [${rule.leadTriggerScore}] 分平分，则进入平分加赛，需领先 [${rule.leadWinScore}] 分获胜；如分数僵持，则先到 [${rule.capScore}] 分者直接获胜。`;
+      }
+      return `本局目标分 [${targetScore}] 分，若双方达到 [${rule.leadTriggerScore}] 分平分，则进入平分加赛，需领先 [${rule.leadWinScore}] 分获胜。`;
     }
     return `本局目标分 [${targetScore}] 分，先到目标分者直接获胜。`;
   };
@@ -3054,58 +3047,42 @@ export default function App() {
   const getScoreRuleNameById = (ruleId: string) =>
     scoreRules.find((item) => item.id === ruleId)?.ruleName ?? '未选择规则';
 
+  const getRequiredWins = (count: number) => Math.floor(Math.max(count, 1) / 2) + 1;
+
+  const getSingleMatchRuleOutcomeLabel = (method: SingleMatchRuleRow['outcomeMethod']) =>
+    method === '局分胜' ? '按胜局判定' : '按总得分判定';
+
   const getSingleMatchRuleRoundsLabel = (rule: SingleMatchRuleRow) => {
-    if (rule.matchFormat === '单局定胜负') return '1局定胜负';
-    if (rule.matchFormat === '固定局数') return `打${rule.totalGames}局，赢${rule.gamesToWin}局`;
+    if (rule.outcomeMethod === '总分胜') return `${Math.max(1, rule.totalGames)}局累计总分`;
+    if (Math.max(1, rule.totalGames) === 1) return '1局定胜负';
     return `${rule.totalGames}局${rule.gamesToWin}胜`;
   };
 
   const getSingleMatchRuleScoreLabel = (rule: SingleMatchRuleRow) => {
-    if (rule.scoreRuleMode === 'global') {
-      return `全局统一：${getScoreRuleNameById(rule.globalScoreRuleId)}`;
-    }
-    return `分局自定义：共 ${rule.perGameScoreRuleIds.length} 局`;
+    const gameCount = getSingleMatchRuleGameCount(rule);
+    const normalizedIds = normalizePerGameScoreRuleIds(gameCount, rule.perGameScoreRuleIds, scoreRules[0]?.id || 'SR001');
+    const uniqueIds = Array.from(new Set(normalizedIds));
+    if (gameCount === 1) return getScoreRuleNameById(normalizedIds[0]);
+    if (uniqueIds.length === 1) return `${gameCount}局统一：${getScoreRuleNameById(uniqueIds[0])}`;
+    return `分局配置：共 ${gameCount} 局`;
   };
 
   const getSingleMatchRuleIntervalLabel = (rule: SingleMatchRuleRow) =>
-    rule.intervalRestEnabled ? `是，局间休息 ${rule.intervalRestSeconds} 秒` : '否';
+    Math.max(1, rule.totalGames) === 1 ? '不适用' : rule.intervalRestEnabled ? `开启：${rule.intervalRestSeconds} 秒` : '关闭';
 
-  const getSingleMatchRuleForfeitLabel = (rule: SingleMatchRuleRow) =>
-    `胜局补偿 ${rule.forfeitWinGames} 局，每局小分补偿 ${rule.forfeitPointsPerGame} 分`;
-
-  const normalizeTeamBattlePerMatchRuleIds = (count: number, currentIds: string[], fallbackId: string) =>
-    Array.from({ length: count }, (_, index) => currentIds[index] ?? fallbackId);
-
-  const getTeamBattleRuleSingleMatchName = (ruleId: string) =>
-    singleMatchRules.find((item) => item.id === ruleId)?.ruleName ?? '未选择规则';
-
-  const getTeamBattleRuleSingleMatchSummary = (rule: TeamBattleRuleRow) => {
-    if (rule.singleMatchRuleMode === 'global') {
-      return `全场统一：${getTeamBattleRuleSingleMatchName(rule.singleMatchRuleId)}`;
-    }
-
-    const names = normalizeTeamBattlePerMatchRuleIds(
-      rule.totalMatches,
-      rule.perMatchSingleMatchRuleIds,
-      rule.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
-    ).map((id, index) => `第${index + 1}场 ${getTeamBattleRuleSingleMatchName(id)}`);
-
-    return `分场设置：${names.join(' / ')}`;
-  };
+  const getSingleMatchRuleSwapLabel = (rule: SingleMatchRuleRow) =>
+    Math.max(1, rule.totalGames) === 1 ? '不适用' : '默认：每局结束后交换';
 
   const getTeamBattleRuleWinsLabel = (rule: TeamBattleRuleRow) =>
     rule.outcomeMethod === '胜场制' && rule.matchesToWin
       ? `${rule.totalMatches}场 / 先胜${rule.matchesToWin}场`
       : `${rule.totalMatches}场 / 按累计总分判胜`;
 
-  const getTeamBattleRuleStrategyLabel = (strategy: TeamBattleEndStrategy) => {
-    if (strategy === 'play-all') return '打满全部比赛后结束';
-    if (strategy === 'finish-running') return '分出胜负后已开赛场次继续';
-    return '分出胜负后立即结束未完成场次';
-  };
+  const getTeamBattleRuleStrategyLabel = (playAllMatches: boolean) =>
+    playAllMatches ? '打满全部比赛' : '不要求打满';
 
   const getSingleMatchRuleGameCount = (rule: SingleMatchRuleRow) =>
-    rule.matchFormat === '单局定胜负' ? 1 : Math.max(1, rule.totalGames);
+    Math.max(1, rule.totalGames);
 
   const normalizePerGameScoreRuleIds = (count: number, currentIds: string[], fallbackId: string) =>
     Array.from({ length: count }, (_, index) => currentIds[index] ?? fallbackId);
@@ -3123,13 +3100,18 @@ export default function App() {
   };
 
   const saveSingleMatchRule = () => {
+    const normalizedGameCount = Math.max(1, singleMatchRuleDraft.totalGames);
     const normalizedRule: SingleMatchRuleRow = {
       ...singleMatchRuleDraft,
+      matchFormat: normalizedGameCount === 1 ? '单局定胜负' : '多局胜制',
+      totalGames: normalizedGameCount,
+      gamesToWin: getRequiredWins(normalizedGameCount),
       perGameScoreRuleIds: normalizePerGameScoreRuleIds(
-        getSingleMatchRuleGameCount(singleMatchRuleDraft),
+        normalizedGameCount,
         singleMatchRuleDraft.perGameScoreRuleIds,
-        singleMatchRuleDraft.globalScoreRuleId || scoreRules[0]?.id || 'SR001'
+        scoreRules[0]?.id || 'SR001'
       ),
+      intervalRestEnabled: normalizedGameCount === 1 ? false : singleMatchRuleDraft.intervalRestEnabled,
     };
 
     setSingleMatchRules((prev) => {
@@ -3160,17 +3142,15 @@ export default function App() {
 
   const saveTeamBattleRule = () => {
     const existingRule = teamBattleRules.find((item) => item.id === teamBattleRuleDraft.id);
+    const normalizedTotalMatches = Math.max(1, teamBattleRuleDraft.totalMatches);
     const normalizedRule: TeamBattleRuleRow = {
       ...teamBattleRuleDraft,
+      totalMatches: normalizedTotalMatches,
       matchesToWin:
         teamBattleRuleDraft.outcomeMethod === '胜场制'
-          ? Math.min(teamBattleRuleDraft.matchesToWin || 1, teamBattleRuleDraft.totalMatches)
+          ? getRequiredWins(normalizedTotalMatches)
           : null,
-      perMatchSingleMatchRuleIds: normalizeTeamBattlePerMatchRuleIds(
-        teamBattleRuleDraft.totalMatches,
-        teamBattleRuleDraft.perMatchSingleMatchRuleIds,
-        teamBattleRuleDraft.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
-      ),
+      enabled: teamBattleRuleDraft.enabled ?? existingRule?.enabled ?? true,
       createdAt:
         existingRule?.createdAt ||
         teamBattleRuleDraft.createdAt ||
@@ -3975,8 +3955,7 @@ export default function App() {
                                 {scoreRuleDraft.deuceEnabled && (
                                   <div className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
                                     <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-                                      <span className="font-medium text-slate-600">需领先分数</span>
-                                      <span>当双方达到</span>
+                                      <span className="font-medium text-slate-600">平分加赛触发分</span>
                                       <input
                                         type="number"
                                         min={1}
@@ -3989,7 +3968,10 @@ export default function App() {
                                         }
                                         className="w-32 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
                                       />
-                                      <span>分平分时，获胜需要领先</span>
+                                      <span>分</span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
+                                      <span className="font-medium text-slate-600">加赛领先分差</span>
                                       <input
                                         type="number"
                                         min={1}
@@ -4004,25 +3986,55 @@ export default function App() {
                                       />
                                       <span>分</span>
                                     </div>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      <span className="text-sm font-medium text-slate-600">启用最高封顶分</span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setScoreRuleDraft((prev) => ({ ...prev, capScoreEnabled: !prev.capScoreEnabled }))
+                                        }
+                                        className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
+                                          scoreRuleDraft.capScoreEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
+                                        }`}
+                                      >
+                                        <span>{scoreRuleDraft.capScoreEnabled ? '开' : '关'}</span>
+                                        <span
+                                          className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
+                                            scoreRuleDraft.capScoreEnabled ? 'right-1' : 'left-1'
+                                          }`}
+                                        />
+                                      </button>
+                                    </div>
+
+                                    {scoreRuleDraft.capScoreEnabled && (
+                                      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
+                                        <span className="font-medium text-slate-600">最高封顶分</span>
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          value={scoreRuleDraft.capScore}
+                                          onChange={(event) =>
+                                            setScoreRuleDraft((prev) => ({ ...prev, capScore: Number(event.target.value || 0) }))
+                                          }
+                                          className="w-36 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                        />
+                                        <span>分</span>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
 
-                              <div className="space-y-2">
-                                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-                                  <span className="font-medium text-slate-600">最高封顶分</span>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    value={scoreRuleDraft.capScore}
-                                    onChange={(event) =>
-                                      setScoreRuleDraft((prev) => ({ ...prev, capScore: Number(event.target.value || 0) }))
-                                    }
-                                    className="w-36 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                  />
-                                  <span>分</span>
-                                </div>
-                              </div>
+                              <label className="block space-y-2">
+                                <span className="text-sm font-medium text-slate-600">备注</span>
+                                <textarea
+                                  value={scoreRuleDraft.remark}
+                                  onChange={(event) => setScoreRuleDraft((prev) => ({ ...prev, remark: event.target.value }))}
+                                  rows={3}
+                                  placeholder="可补充说明该计分规则适用的业务场景或特殊约定"
+                                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100 resize-none"
+                                />
+                              </label>
                             </div>
                           </div>
 
@@ -4042,10 +4054,28 @@ export default function App() {
                                 <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
                                   平分加赛 {scoreRuleDraft.deuceEnabled ? '开启' : '关闭'}
                                 </span>
-                                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
-                                  封顶分 {scoreRuleDraft.capScore}
-                                </span>
+                                {scoreRuleDraft.deuceEnabled && (
+                                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                                    触发分 {scoreRuleDraft.leadTriggerScore}
+                                  </span>
+                                )}
+                                {scoreRuleDraft.deuceEnabled && (
+                                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                                    领先分差 {scoreRuleDraft.leadWinScore}
+                                  </span>
+                                )}
+                                {scoreRuleDraft.deuceEnabled && scoreRuleDraft.capScoreEnabled && (
+                                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                                    封顶分 {scoreRuleDraft.capScore}
+                                  </span>
+                                )}
                               </div>
+                              {scoreRuleDraft.remark.trim() && (
+                                <div className="mt-4 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">备注</p>
+                                  <p className="mt-2 text-sm leading-6 text-slate-600">{scoreRuleDraft.remark}</p>
+                                </div>
+                              )}
                             </div>
                             <InteractionHelp
                               prototypeMode={prototypeMode}
@@ -4187,10 +4217,8 @@ export default function App() {
                           <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">单项胜负规则</h3>
-                          <p className="mt-1 text-sm text-slate-500">
-                            统一维护单项比赛的胜负判定、局制、弃权结果与局间规则，供比赛项目直接引用。
-                          </p>
+                          <h3 className="text-lg font-bold text-slate-900">单场胜负规则</h3>
+                          <p className="mt-1 text-sm text-slate-500">统一维护单场比赛的胜负判定、局数与局间规则，供比赛项目直接引用。</p>
                         </div>
                       </div>
                       <button
@@ -4229,18 +4257,15 @@ export default function App() {
                     </div>
 
                     <div className="max-w-full overflow-x-auto px-6 py-4">
-                      <table className="min-w-[1720px] w-full border-collapse text-left">
+                      <table className="min-w-[1120px] w-full border-collapse text-left">
                         <thead>
                           <tr className="border-b border-slate-100 bg-white">
                             <th className="w-[88px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">ID</th>
                             <th className="w-[190px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">规则名称</th>
                             <th className="w-[120px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">胜负判定方式</th>
-                            <th className="w-[120px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">比赛局制</th>
                             <th className="w-[150px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">局数</th>
                             <th className="w-[240px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">局内计分规则</th>
-                            <th className="w-[150px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">每局结束交换场区</th>
                             <th className="w-[210px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">局间休息</th>
-                            <th className="w-[340px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">弃权判定结果</th>
                             <th className="w-[170px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">创建时间</th>
                             <th className="sticky right-0 z-10 w-[160px] bg-white px-3 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">操作</th>
                           </tr>
@@ -4255,12 +4280,7 @@ export default function App() {
                                 </td>
                                 <td className="px-3 py-5">
                                   <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                                    {rule.outcomeMethod}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-5">
-                                  <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                                    {rule.matchFormat}
+                                    {getSingleMatchRuleOutcomeLabel(rule.outcomeMethod)}
                                   </span>
                                 </td>
                                 <td className="px-3 py-5 text-sm font-medium text-slate-700 whitespace-nowrap">
@@ -4270,21 +4290,7 @@ export default function App() {
                                   <p className="text-sm text-slate-700 whitespace-nowrap">{getSingleMatchRuleScoreLabel(rule)}</p>
                                 </td>
                                 <td className="px-3 py-5">
-                                  <span
-                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                                      rule.swapAfterGame
-                                        ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200'
-                                        : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
-                                    }`}
-                                  >
-                                    {rule.swapAfterGame ? '开启' : '关闭'}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-5">
                                   <p className="text-sm text-slate-600 whitespace-nowrap">{getSingleMatchRuleIntervalLabel(rule)}</p>
-                                </td>
-                                <td className="px-3 py-5">
-                                  <p className="text-sm text-slate-600 whitespace-nowrap">{getSingleMatchRuleForfeitLabel(rule)}</p>
                                 </td>
                                 <td className="px-3 py-5 text-sm text-slate-500 whitespace-nowrap">{rule.createdAt}</td>
                                 <td className="sticky right-0 z-10 bg-white px-3 py-5 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50/60">
@@ -4309,7 +4315,7 @@ export default function App() {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan={11} className="px-8 py-16 text-center text-sm text-slate-500">
+                              <td colSpan={8} className="px-8 py-16 text-center text-sm text-slate-500">
                                 暂无符合条件的规则，试试调整检索条件后再查看。
                               </td>
                             </tr>
@@ -4357,8 +4363,8 @@ export default function App() {
                           <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">单项胜负规则配置</h3>
-                          <p className="mt-1 text-sm text-slate-500">配置单项比赛的胜负判定方式、局制与局间规则。</p>
+                          <h3 className="text-lg font-bold text-slate-900">单场胜负规则配置</h3>
+                          <p className="mt-1 text-sm text-slate-500">配置单场比赛的胜负判定方式、局数与局间规则。</p>
                         </div>
                       </div>
                     </div>
@@ -4376,420 +4382,201 @@ export default function App() {
                         />
                       </label>
 
-                      <div className="space-y-7">
-                        <div className="space-y-3">
+                      <div className="space-y-6">
+                        <div className="space-y-3 border-t border-slate-100 pt-6 first:border-t-0 first:pt-0">
                           <div className="flex items-center gap-2">
                             <ShieldCheck className="h-4 w-4 text-indigo-500" />
-                            <p className="text-sm font-semibold text-slate-700">基础判定</p>
+                            <p className="text-sm font-semibold text-slate-700">胜负判定方式</p>
                           </div>
-                          <div className="space-y-5 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
-
-                            <div className="space-y-3 rounded-2xl border border-white bg-white p-5">
-                              <p className="text-sm font-medium text-slate-600">胜负判定方式</p>
-                              <div className="flex flex-wrap gap-3">
-                                {(['局分胜', '总分胜'] as const).map((option) => (
-                                  <button
-                                    key={option}
-                                    type="button"
-                                    onClick={() =>
-                                      setSingleMatchRuleDraft((prev) => {
-                                        const nextMatchFormat =
-                                          option === '总分胜'
-                                            ? '单局定胜负'
-                                            : prev.matchFormat === '单局定胜负'
-                                              ? '多局胜制'
-                                              : prev.matchFormat;
-                                        const nextGameCount = nextMatchFormat === '单局定胜负' ? 1 : Math.max(3, prev.totalGames);
-                                        const nextWins = nextMatchFormat === '单局定胜负' ? 1 : Math.min(prev.gamesToWin || 2, nextGameCount);
-                                        return {
-                                          ...prev,
-                                          outcomeMethod: option,
-                                          matchFormat: nextMatchFormat,
-                                          totalGames: nextGameCount,
-                                          gamesToWin: nextWins,
-                                          swapAfterGame: nextMatchFormat === '单局定胜负' ? false : prev.swapAfterGame,
-                                          perGameScoreRuleIds: normalizePerGameScoreRuleIds(
-                                            nextGameCount,
-                                            prev.perGameScoreRuleIds,
-                                            prev.globalScoreRuleId || scoreRules[0]?.id || 'SR001'
-                                          ),
-                                        };
-                                      })
-                                    }
-                                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                                      singleMatchRuleDraft.outcomeMethod === option
-                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                                        : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    {option}
-                                  </button>
-                                ))}
-                              </div>
-                              <p className="text-sm leading-6 text-slate-500">
-                                {singleMatchRuleDraft.outcomeMethod === '局分胜'
-                                  ? '局分胜：以赢得的“局数”定胜负（如：2:1 获胜）。'
-                                  : '总分胜：以全场累计的总分数定胜负（如：105:98 获胜）。'}
-                              </p>
-                            </div>
-
-                            <div className="space-y-4 rounded-2xl border border-white bg-white p-5">
-                              <div className="space-y-3">
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <p className="text-sm font-medium text-slate-600">比赛局制</p>
-                                  <InteractionHelp
-                                    prototypeMode={prototypeMode}
-                                    content="【胜负依据 = 局分胜】时，【比赛局制】只能选择【多局胜制】和【固定局数】；【胜负依据 = 总分胜】时，【比赛局制】只能选择【单局定胜负】。"
-                                  />
-                                </div>
-                                <div className="flex flex-wrap gap-3">
-                                  {(['多局胜制', '单局定胜负', '固定局数'] as const).map((option) => {
-                                    const disabled =
-                                      (singleMatchRuleDraft.outcomeMethod === '局分胜' && option === '单局定胜负') ||
-                                      (singleMatchRuleDraft.outcomeMethod === '总分胜' && option !== '单局定胜负');
-
-                                    return (
-                                      <button
-                                        key={option}
-                                        type="button"
-                                        disabled={disabled}
-                                        onClick={() =>
-                                          setSingleMatchRuleDraft((prev) => {
-                                            const nextGameCount = option === '单局定胜负' ? 1 : Math.max(prev.totalGames, 3);
-                                            const nextWins =
-                                              option === '单局定胜负'
-                                                ? 1
-                                                : option === '固定局数'
-                                                  ? Math.min(prev.gamesToWin || 1, nextGameCount)
-                                                  : Math.min(prev.gamesToWin || 2, nextGameCount);
-                                            return {
-                                              ...prev,
-                                              matchFormat: option,
-                                              totalGames: nextGameCount,
-                                              gamesToWin: nextWins,
-                                              swapAfterGame: option === '单局定胜负' ? false : prev.swapAfterGame,
-                                              perGameScoreRuleIds: normalizePerGameScoreRuleIds(
-                                                nextGameCount,
-                                                prev.perGameScoreRuleIds,
-                                                prev.globalScoreRuleId || scoreRules[0]?.id || 'SR001'
-                                              ),
-                                            };
-                                          })
-                                        }
-                                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                                          singleMatchRuleDraft.matchFormat === option
-                                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                                            : disabled
-                                              ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
-                                              : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                        }`}
-                                      >
-                                        {option}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-
-                              {singleMatchRuleDraft.matchFormat !== '单局定胜负' && (
-                                <div className="space-y-3 border-t border-slate-100 pt-4">
-                                  <p className="text-sm font-medium text-slate-600">局数设置</p>
-                                  <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-                                    <span>打</span>
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      value={singleMatchRuleDraft.totalGames}
-                                      onChange={(event) =>
-                                        setSingleMatchRuleDraft((prev) => {
-                                          const totalGames = Number(event.target.value || 1);
-                                          return {
-                                            ...prev,
-                                            totalGames,
-                                            gamesToWin: Math.min(prev.gamesToWin, totalGames),
-                                            perGameScoreRuleIds: normalizePerGameScoreRuleIds(
-                                              totalGames,
-                                              prev.perGameScoreRuleIds,
-                                              prev.globalScoreRuleId || scoreRules[0]?.id || 'SR001'
-                                            ),
-                                          };
-                                        })
-                                      }
-                                      className="w-28 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                    />
-                                    <span>局，</span>
-                                    {singleMatchRuleDraft.matchFormat === '多局胜制' && <span>先赢</span>}
-                                    {singleMatchRuleDraft.matchFormat === '固定局数' && <span>赢</span>}
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      value={singleMatchRuleDraft.gamesToWin}
-                                      onChange={(event) =>
-                                        setSingleMatchRuleDraft((prev) => ({
-                                          ...prev,
-                                          gamesToWin: Number(event.target.value || 1),
-                                        }))
-                                      }
-                                      className="w-28 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                    />
-                                    <span>局为胜</span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                          <div className="flex flex-wrap gap-3">
+                            {([
+                              { value: '局分胜' as const, label: '按胜局判定' },
+                              { value: '总分胜' as const, label: '按总得分判定' },
+                            ]).map(({ value, label }) => (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() =>
+                                  setSingleMatchRuleDraft((prev) => ({
+                                    ...prev,
+                                    outcomeMethod: value,
+                                    gamesToWin: getRequiredWins(Math.max(1, prev.totalGames)),
+                                  }))
+                                }
+                                className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                                  singleMatchRuleDraft.outcomeMethod === value
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                    : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
                           </div>
+                          <p className="text-sm leading-6 text-slate-500">
+                            {singleMatchRuleDraft.outcomeMethod === '局分胜'
+                              ? '按胜局判定：以赢得的局数判定整场胜负（如：2:1 获胜）。'
+                              : '按总得分判定：以整场比赛累计产生的总得分判定胜负，总得分更高者获胜。'}
+                          </p>
                         </div>
 
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Settings2 className="h-4 w-4 text-indigo-500" />
-                            <p className="text-sm font-semibold text-slate-700">计分与场间规则</p>
-                          </div>
-                          <div className="space-y-5 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="space-y-4 border-t border-slate-100 pt-6">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <label className="block space-y-2">
+                              <span className="text-sm font-medium text-slate-600">总局数</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={singleMatchRuleDraft.totalGames}
+                                onChange={(event) =>
+                                  setSingleMatchRuleDraft((prev) => {
+                                    const totalGames = Math.max(1, Number(event.target.value || 1));
+                                    return {
+                                      ...prev,
+                                      totalGames,
+                                      gamesToWin: getRequiredWins(totalGames),
+                                      intervalRestEnabled: totalGames === 1 ? false : prev.intervalRestEnabled,
+                                      perGameScoreRuleIds: normalizePerGameScoreRuleIds(
+                                        totalGames,
+                                        prev.perGameScoreRuleIds,
+                                        scoreRules[0]?.id || 'SR001'
+                                      ),
+                                    };
+                                  })
+                                }
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                              />
+                            </label>
 
-                            <div className="space-y-3 rounded-2xl border border-white bg-white p-5">
-                              <p className="text-sm font-medium text-slate-600">局内计分规则</p>
-                              <div className="flex flex-wrap gap-3">
-                                {[
-                                  { key: 'global', label: '全局统一' },
-                                  { key: 'per-game', label: '分局自定义' },
-                                ].map((option) => (
-                                  <button
-                                    key={option.key}
-                                    type="button"
-                                    onClick={() =>
-                                      setSingleMatchRuleDraft((prev) => ({
-                                        ...prev,
-                                        scoreRuleMode: option.key as 'global' | 'per-game',
-                                        perGameScoreRuleIds: normalizePerGameScoreRuleIds(
-                                          getSingleMatchRuleGameCount(prev),
-                                          prev.perGameScoreRuleIds,
-                                          prev.globalScoreRuleId || scoreRules[0]?.id || 'SR001'
-                                        ),
-                                      }))
-                                    }
-                                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                                      singleMatchRuleDraft.scoreRuleMode === option.key
-                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                                        : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    {option.label}
-                                  </button>
-                                ))}
-                              </div>
-
-                              {singleMatchRuleDraft.scoreRuleMode === 'global' ? (
-                                <label className="block max-w-md space-y-2">
-                                  <span className="text-sm font-medium text-slate-600">关联计分规则</span>
-                                  <select
-                                    value={singleMatchRuleDraft.globalScoreRuleId}
-                                    onChange={(event) =>
-                                      setSingleMatchRuleDraft((prev) => ({
-                                        ...prev,
-                                        globalScoreRuleId: event.target.value,
-                                        perGameScoreRuleIds: normalizePerGameScoreRuleIds(
-                                          getSingleMatchRuleGameCount(prev),
-                                          prev.perGameScoreRuleIds,
-                                          event.target.value
-                                        ),
-                                      }))
-                                    }
-                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                  >
-                                    {scoreRules.map((rule) => (
-                                      <option key={rule.id} value={rule.id}>
-                                        {rule.ruleName}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              ) : (
-                                <div className="grid gap-4 md:grid-cols-2">
-                                  {Array.from({ length: getSingleMatchRuleGameCount(singleMatchRuleDraft) }, (_, index) => (
-                                    <label key={`game-${index + 1}`} className="block space-y-2">
-                                      <span className="text-sm font-medium text-slate-600">第 {index + 1} 局计分规则</span>
-                                      <select
-                                        value={
-                                          singleMatchRuleDraft.perGameScoreRuleIds[index] ||
-                                          singleMatchRuleDraft.globalScoreRuleId
-                                        }
-                                        onChange={(event) =>
-                                          setSingleMatchRuleDraft((prev) => {
-                                            const nextIds = [...normalizePerGameScoreRuleIds(
-                                              getSingleMatchRuleGameCount(prev),
-                                              prev.perGameScoreRuleIds,
-                                              prev.globalScoreRuleId || scoreRules[0]?.id || 'SR001'
-                                            )];
-                                            nextIds[index] = event.target.value;
-                                            return {
-                                              ...prev,
-                                              perGameScoreRuleIds: nextIds,
-                                            };
-                                          })
-                                        }
-                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                      >
-                                        {scoreRules.map((rule) => (
-                                          <option key={rule.id} value={rule.id}>
-                                            {rule.ruleName}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {singleMatchRuleDraft.matchFormat !== '单局定胜负' && (
-                              <div className="space-y-3 rounded-2xl border border-white bg-white p-5">
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <span className="text-sm font-medium text-slate-600">每局结束交换场区</span>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setSingleMatchRuleDraft((prev) => ({
-                                        ...prev,
-                                        swapAfterGame: !prev.swapAfterGame,
-                                      }))
-                                    }
-                                    className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
-                                      singleMatchRuleDraft.swapAfterGame ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
-                                    }`}
-                                    >
-                                      <span>{singleMatchRuleDraft.swapAfterGame ? '开' : '关'}</span>
-                                      <span
-                                      className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
-                                        singleMatchRuleDraft.swapAfterGame ? 'right-1' : 'left-1'
-                                      }`}
-                                    />
-                                  </button>
-                                  <InteractionHelp
-                                    prototypeMode={prototypeMode}
-                                    content="【每局结束交换场地 = 开启】时，支持设置【局间间歇】，默认写入60秒。"
-                                  />
-                                </div>
-
-                                {singleMatchRuleDraft.swapAfterGame && (
-                                  <div className="space-y-3 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-5">
-                                    <p className="text-sm font-medium text-slate-600">局间休息</p>
-                                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
-                                      <label className="inline-flex items-center gap-2">
-                                        <input
-                                          type="radio"
-                                          checked={singleMatchRuleDraft.intervalRestEnabled}
-                                          onChange={() =>
-                                            setSingleMatchRuleDraft((prev) => ({ ...prev, intervalRestEnabled: true }))
-                                          }
-                                        />
-                                        <span>是</span>
-                                      </label>
-                                      {singleMatchRuleDraft.intervalRestEnabled && (
-                                        <>
-                                          <span>局间休息</span>
-                                          <input
-                                            type="number"
-                                            min={1}
-                                            value={singleMatchRuleDraft.intervalRestSeconds}
-                                            onChange={(event) =>
-                                              setSingleMatchRuleDraft((prev) => ({
-                                                ...prev,
-                                                intervalRestSeconds: Number(event.target.value || 0),
-                                              }))
-                                            }
-                                            className="w-36 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                                          />
-                                          <span>秒</span>
-                                        </>
-                                      )}
-                                      <label className="inline-flex items-center gap-2">
-                                        <input
-                                          type="radio"
-                                          checked={!singleMatchRuleDraft.intervalRestEnabled}
-                                          onChange={() =>
-                                            setSingleMatchRuleDraft((prev) => ({ ...prev, intervalRestEnabled: false }))
-                                          }
-                                        />
-                                        <span>否</span>
-                                      </label>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                            {singleMatchRuleDraft.outcomeMethod === '局分胜' && (
+                              <label className="block space-y-2">
+                                <span className="text-sm font-medium text-slate-600">获胜所需局数</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={Math.max(1, singleMatchRuleDraft.totalGames)}
+                                  value={getRequiredWins(Math.max(1, singleMatchRuleDraft.totalGames))}
+                                  readOnly
+                                  className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm text-slate-700 outline-none"
+                                />
+                                <p className="text-xs leading-5 text-slate-500">根据总局数自动计算，例如 5 局默认写入 3 局。</p>
+                              </label>
                             )}
                           </div>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-4 border-t border-slate-100 pt-6">
                           <div className="flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 text-indigo-500" />
-                            <p className="text-sm font-semibold text-slate-700">异常赛果规则设置</p>
+                            <Settings2 className="h-4 w-4 text-indigo-500" />
+                            <p className="text-sm font-semibold text-slate-700">局内计分规则</p>
                           </div>
-                          <div className="space-y-5 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            {Array.from({ length: getSingleMatchRuleGameCount(singleMatchRuleDraft) }, (_, index) => (
+                              <label key={`game-${index + 1}`} className="block space-y-2">
+                                <span className="text-sm font-medium text-slate-600">第 {index + 1} 局计分规则</span>
+                                <select
+                                  value={
+                                    normalizePerGameScoreRuleIds(
+                                      getSingleMatchRuleGameCount(singleMatchRuleDraft),
+                                      singleMatchRuleDraft.perGameScoreRuleIds,
+                                      scoreRules[0]?.id || 'SR001'
+                                    )[index]
+                                  }
+                                  onChange={(event) =>
+                                    setSingleMatchRuleDraft((prev) => {
+                                      const nextIds = [
+                                        ...normalizePerGameScoreRuleIds(
+                                          getSingleMatchRuleGameCount(prev),
+                                          prev.perGameScoreRuleIds,
+                                          scoreRules[0]?.id || 'SR001'
+                                        ),
+                                      ];
+                                      nextIds[index] = event.target.value;
+                                      return {
+                                        ...prev,
+                                        perGameScoreRuleIds: nextIds,
+                                      };
+                                    })
+                                  }
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                >
+                                  {scoreRules.map((rule) => (
+                                    <option key={rule.id} value={rule.id}>
+                                      {rule.ruleName}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
 
-                            <div className="space-y-3 rounded-2xl border border-white bg-white p-5">
-                              <p className="text-sm font-medium text-slate-600">弃权判定结果</p>
-                              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-                                <span>胜局补偿</span>
+                        {getSingleMatchRuleGameCount(singleMatchRuleDraft) > 1 && (
+                          <div className="space-y-4 border-t border-slate-100 pt-6">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-indigo-500" />
+                              <p className="text-sm font-semibold text-slate-700">局间休息规则</p>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <span className="text-sm font-medium text-slate-600">是否开启局间休息</span>
+                                <span className="text-xs leading-5 text-slate-500">默认每局结束后交换场区，无需单独配置。</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSingleMatchRuleDraft((prev) => ({
+                                    ...prev,
+                                    intervalRestEnabled: !prev.intervalRestEnabled,
+                                  }))
+                                }
+                                className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
+                                  singleMatchRuleDraft.intervalRestEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
+                                }`}
+                              >
+                                <span>{singleMatchRuleDraft.intervalRestEnabled ? '开' : '关'}</span>
+                                <span
+                                  className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
+                                    singleMatchRuleDraft.intervalRestEnabled ? 'right-1' : 'left-1'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+
+                            {singleMatchRuleDraft.intervalRestEnabled && (
+                              <label className="block max-w-xs space-y-2">
+                                <span className="text-sm font-medium text-slate-600">局间休息时长（秒）</span>
                                 <input
                                   type="number"
                                   min={1}
-                                  value={singleMatchRuleDraft.forfeitWinGames}
+                                  value={singleMatchRuleDraft.intervalRestSeconds}
                                   onChange={(event) =>
                                     setSingleMatchRuleDraft((prev) => ({
                                       ...prev,
-                                      forfeitWinGames: Number(event.target.value || 0),
+                                      intervalRestSeconds: Number(event.target.value || 0),
                                     }))
                                   }
-                                  className="w-28 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                                 />
-                                <span>局，每局小分补偿</span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={singleMatchRuleDraft.forfeitPointsPerGame}
-                                  onChange={(event) =>
-                                    setSingleMatchRuleDraft((prev) => ({
-                                      ...prev,
-                                      forfeitPointsPerGame: Number(event.target.value || 0),
-                                    }))
-                                  }
-                                  className="w-28 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                />
-                                <span>分</span>
-                              </div>
-                              <p className="text-sm leading-6 text-slate-400">
-                                胜局补偿填入 {singleMatchRuleDraft.forfeitWinGames}，代表弃权即判定另一方 {singleMatchRuleDraft.forfeitWinGames}:0 获胜；每局小分补偿填入{singleMatchRuleDraft.forfeitPointsPerGame}，即每一局比分为：{singleMatchRuleDraft.forfeitPointsPerGame}:0。
-                              </p>
-                            </div>
-
-                            <div className="space-y-3 rounded-2xl border border-white bg-white p-5">
-                              <p className="text-sm font-medium text-slate-600">退赛判定结果</p>
-                              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                                <div className="grid grid-cols-[220px_minmax(0,1fr)] border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
-                                  <div className="px-5 py-4">场景</div>
-                                  <div className="border-l border-slate-200 px-5 py-4">规则说明</div>
-                                </div>
-                                <div className="grid grid-cols-[220px_minmax(0,1fr)] border-b border-slate-200 text-sm text-slate-600">
-                                  <div className="px-5 py-5 font-medium text-slate-700">当前中断局补分逻辑</div>
-                                  <div className="border-l border-slate-200 px-5 py-5 leading-7">
-                                    <p>• 获胜方：自动补齐至当前局的目标分（例如从 10 分补到 21 分）</p>
-                                    <p>• 负方（退赛方）：保留退赛瞬间的实际得分（例如 5 分），本局结果为 21:5</p>
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-[220px_minmax(0,1fr)] text-sm text-slate-600">
-                                  <div className="px-5 py-5 font-medium text-slate-700">后续未开赛局补偿</div>
-                                  <div className="border-l border-slate-200 px-5 py-5 leading-7">
-                                    若此时获胜方尚未赢得整场比赛（如 BO3 刚打完 1 局），则剩余局次自动引用上方的“弃权判定”分值进行填充（例如补一局 {singleMatchRuleDraft.forfeitPointsPerGame}:0），直到获胜方达到规则要求的获胜局数。
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            </div>
+                              </label>
+                            )}
                           </div>
-                        </div>
+                        )}
+
+                        <label className="block space-y-2 border-t border-slate-100 pt-6">
+                          <span className="text-sm font-medium text-slate-600">备注</span>
+                          <textarea
+                            rows={4}
+                            value={singleMatchRuleDraft.remark}
+                            onChange={(event) =>
+                              setSingleMatchRuleDraft((prev) => ({ ...prev, remark: event.target.value }))
+                            }
+                            placeholder="请输入备注说明"
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </label>
                       </div>
+                    </div>
                   </section>
                 </div>
               )
@@ -4803,9 +4590,9 @@ export default function App() {
                           <Users className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">团体对抗规则</h3>
+                          <h3 className="text-lg font-bold text-slate-900">团体胜负规则</h3>
                           <p className="mt-1 text-sm text-slate-500">
-                            统一维护团体项目中 Tie 的整场对抗方式、获胜条件与比赛结束策略。
+                            统一维护团体项目中 Tie 的判胜方式、获胜条件与是否打满。
                           </p>
                         </div>
                       </div>
@@ -4845,14 +4632,16 @@ export default function App() {
                     </div>
 
                     <div className="max-w-full overflow-x-auto">
-                      <table className="min-w-[1380px] w-full border-collapse text-left">
+                      <table className="min-w-[1360px] w-full border-collapse text-left">
                         <thead>
                           <tr className="border-b border-slate-100 bg-white">
                             <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">规则ID</th>
                             <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">规则名称</th>
-                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">胜负判定方式</th>
-                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">总场数/胜利规则</th>
-                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">单场胜负规则</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">团体胜负判定方式</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">团体总场数</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">团体获胜所需场数</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">是否打满</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">是否启用</th>
                             <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">创建时间</th>
                             <th className="sticky right-0 z-10 bg-white px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
                               操作
@@ -4865,26 +4654,35 @@ export default function App() {
                               <tr key={rule.id} className="group align-top transition-colors hover:bg-slate-50/60">
                                 <td className="px-8 py-6 text-sm font-medium text-slate-500 whitespace-nowrap">{rule.id}</td>
                                 <td className="px-6 py-6">
-                                  <div className="space-y-1">
-                                    <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{rule.ruleName}</p>
-                                    <p className="text-xs text-slate-400 whitespace-nowrap">{getTeamBattleRuleStrategyLabel(rule.endStrategy)}</p>
-                                  </div>
+                                  <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">{rule.ruleName}</p>
                                 </td>
-                                <td className="px-6 py-6">
-                                  <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 whitespace-nowrap">
-                                    {rule.outcomeMethod}
-                                  </span>
+                                <td className="px-6 py-6 text-sm text-slate-700 whitespace-nowrap">{rule.outcomeMethod === '胜场制' ? '按胜场判定' : '按总分判定'}</td>
+                                <td className="px-6 py-6 text-sm font-medium text-slate-700 whitespace-nowrap">{rule.totalMatches} 场</td>
+                                <td className="px-6 py-6 text-sm text-slate-600 whitespace-nowrap">
+                                  {rule.outcomeMethod === '胜场制' && rule.matchesToWin ? `${rule.matchesToWin} 场` : '—'}
                                 </td>
-                                <td className="px-6 py-6 text-sm font-medium text-slate-700 whitespace-nowrap">
-                                  {getTeamBattleRuleWinsLabel(rule)}
-                                </td>
-                                <td className="px-6 py-6">
-                                  <p
-                                    className="max-w-[340px] truncate text-sm text-slate-600"
-                                    title={getTeamBattleRuleSingleMatchSummary(rule)}
+                                <td className="px-6 py-6 text-sm text-slate-600 whitespace-nowrap">{getTeamBattleRuleStrategyLabel(rule.playAllMatches)}</td>
+                                <td className="px-6 py-6 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setTeamBattleRules((prev) =>
+                                        prev.map((item) =>
+                                          item.id === rule.id ? { ...item, enabled: !item.enabled } : item
+                                        )
+                                      )
+                                    }
+                                    className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
+                                      rule.enabled ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
+                                    }`}
                                   >
-                                    {getTeamBattleRuleSingleMatchSummary(rule)}
-                                  </p>
+                                    <span>{rule.enabled ? '开' : '关'}</span>
+                                    <span
+                                      className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
+                                        rule.enabled ? 'right-1' : 'left-1'
+                                      }`}
+                                    />
+                                  </button>
                                 </td>
                                 <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{rule.createdAt}</td>
                                 <td className="sticky right-0 z-10 bg-white px-8 py-6 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50/60">
@@ -4909,7 +4707,7 @@ export default function App() {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan={7} className="px-8 py-16 text-center text-sm text-slate-500">
+                              <td colSpan={9} className="px-8 py-16 text-center text-sm text-slate-500">
                                 暂无符合条件的规则，试试调整检索条件后再查看。
                               </td>
                             </tr>
@@ -4957,267 +4755,142 @@ export default function App() {
                           <Users className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">团体对抗规则配置</h3>
-                          <p className="mt-1 text-sm text-slate-500">配置团体项目中 Tie 的判胜方式、单场引用规则和比赛结束策略。</p>
+                          <h3 className="text-lg font-bold text-slate-900">团体胜负规则配置</h3>
+                          <p className="mt-1 text-sm text-slate-500">配置团体项目中 Tie 的判胜方式、获胜条件与是否打满。</p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="space-y-8 px-8 py-8">
-                      <label className="block max-w-3xl space-y-2">
-                        <span className="text-sm font-medium text-slate-600">规则名称</span>
-                        <input
+                      <div className="space-y-8 px-8 py-8">
+                        <label className="block max-w-3xl space-y-2">
+                          <span className="text-sm font-medium text-slate-600">规则名称</span>
+                          <input
                           value={teamBattleRuleDraft.ruleName}
                           onChange={(event) =>
                             setTeamBattleRuleDraft((prev) => ({ ...prev, ruleName: event.target.value }))
                           }
                           placeholder="请输入"
                           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                        />
-                      </label>
+                          />
+                        </label>
 
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="h-4 w-4 text-indigo-500" />
-                          <p className="text-sm font-semibold text-slate-700">对抗结构</p>
-                        </div>
-                        <div className="space-y-5 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
-                          <div className="space-y-3 rounded-2xl border border-white bg-white p-5">
-                            <p className="text-sm font-medium text-slate-600">胜负判定方式</p>
-                            <div className="flex flex-wrap gap-3">
-                              {(['胜场制', '总分制'] as const).map((option) => (
-                                <button
-                                  key={option}
-                                  type="button"
-                                  onClick={() =>
-                                    setTeamBattleRuleDraft((prev) => ({
-                                      ...prev,
-                                      outcomeMethod: option,
-                                      matchesToWin:
-                                        option === '胜场制'
-                                          ? prev.matchesToWin ?? Math.ceil(prev.totalMatches / 2)
-                                          : null,
-                                    }))
-                                  }
-                                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                                    teamBattleRuleDraft.outcomeMethod === option
-                                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                                      : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                  }`}
-                                >
-                                  {option}
-                                </button>
-                              ))}
-                            </div>
-                            <p className="text-sm leading-6 text-slate-500">
-                              {teamBattleRuleDraft.outcomeMethod === '胜场制'
-                                ? '胜场制：以赢得的场次数决定整场 Tie 胜负（如：5场3胜）。'
-                                : '总分制：以整场团体对抗中所有单场累计总得分决定最终胜负。'}
-                            </p>
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium text-slate-600">团体胜负判定方式</p>
+                          <div className="flex flex-wrap gap-3">
+                            {[
+                              { value: '胜场制' as const, label: '按胜场判定' },
+                              { value: '总分制' as const, label: '按总分判定' },
+                            ].map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() =>
+                                  setTeamBattleRuleDraft((prev) => ({
+                                    ...prev,
+                                    outcomeMethod: option.value,
+                                    matchesToWin: option.value === '胜场制' ? getRequiredWins(prev.totalMatches) : null,
+                                  }))
+                                }
+                                className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                                  teamBattleRuleDraft.outcomeMethod === option.value
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                    : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
                           </div>
+                          {teamBattleRuleDraft.outcomeMethod === '总分制' && (
+                            <p className="text-xs leading-5 text-slate-500">
+                              按团体赛全部单项比赛累计产生的总得分判定胜负，总得分更高者获胜。
+                            </p>
+                          )}
+                        </div>
 
-                          <div className="grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-600">团体总场数</span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={teamBattleRuleDraft.totalMatches}
+                              onChange={(event) =>
+                                setTeamBattleRuleDraft((prev) => {
+                                  const totalMatches = Number(event.target.value || 1);
+                                  return {
+                                    ...prev,
+                                    totalMatches,
+                                    matchesToWin: prev.outcomeMethod === '胜场制' ? getRequiredWins(totalMatches) : null,
+                                  };
+                                })
+                              }
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                            />
+                          </label>
+
+                          {teamBattleRuleDraft.outcomeMethod === '胜场制' && (
                             <label className="block space-y-2">
-                              <span className="text-sm font-medium text-slate-600">总场数</span>
+                              <span className="text-sm font-medium text-slate-600">团体获胜所需场数</span>
                               <input
                                 type="number"
                                 min={1}
-                                value={teamBattleRuleDraft.totalMatches}
-                                onChange={(event) =>
-                                  setTeamBattleRuleDraft((prev) => {
-                                    const totalMatches = Number(event.target.value || 1);
-                                    return {
-                                      ...prev,
-                                      totalMatches,
-                                      matchesToWin:
-                                        prev.outcomeMethod === '胜场制'
-                                          ? Math.min(prev.matchesToWin ?? Math.ceil(totalMatches / 2), totalMatches)
-                                          : null,
-                                      perMatchSingleMatchRuleIds: normalizeTeamBattlePerMatchRuleIds(
-                                        totalMatches,
-                                        prev.perMatchSingleMatchRuleIds,
-                                        prev.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
-                                      ),
-                                    };
-                                  })
-                                }
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                                max={teamBattleRuleDraft.totalMatches}
+                                value={teamBattleRuleDraft.matchesToWin ?? 1}
+                                readOnly
+                                className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm text-slate-700 outline-none"
                               />
+                              <p className="text-xs leading-5 text-slate-500">根据团体总场数自动计算，例如 5 场默认写入 3 场。</p>
                             </label>
-
-                            {teamBattleRuleDraft.outcomeMethod === '胜场制' && (
-                              <label className="block space-y-2">
-                                <span className="text-sm font-medium text-slate-600">获胜所需场次</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={teamBattleRuleDraft.totalMatches}
-                                  value={teamBattleRuleDraft.matchesToWin ?? 1}
-                                  onChange={(event) =>
-                                    setTeamBattleRuleDraft((prev) => ({
-                                      ...prev,
-                                      matchesToWin: Number(event.target.value || 1),
-                                    }))
-                                  }
-                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                />
-                              </label>
-                            )}
-                          </div>
-
-                          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-4 text-sm text-slate-600">
-                            当前规则将按 <span className="font-semibold text-slate-700">{getTeamBattleRuleWinsLabel(teamBattleRuleDraft)}</span> 进行 Tie 判胜。
-                          </div>
+                          )}
                         </div>
-                      </div>
 
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Settings2 className="h-4 w-4 text-indigo-500" />
-                          <p className="text-sm font-semibold text-slate-700">单场胜负规则</p>
-                        </div>
-                        <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
-                          <div className="space-y-4">
-                            <div className="flex flex-wrap gap-3">
-                              {[
-                                { key: 'global', label: '全场统一' },
-                                { key: 'per-match', label: '分场设置' },
-                              ].map((option) => (
-                                <button
-                                  key={option.key}
-                                  type="button"
-                                  onClick={() =>
-                                    setTeamBattleRuleDraft((prev) => ({
-                                      ...prev,
-                                      singleMatchRuleMode: option.key as TeamBattleSingleMatchRuleMode,
-                                      perMatchSingleMatchRuleIds: normalizeTeamBattlePerMatchRuleIds(
-                                        prev.totalMatches,
-                                        prev.perMatchSingleMatchRuleIds,
-                                        prev.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
-                                      ),
-                                    }))
-                                  }
-                                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                                    teamBattleRuleDraft.singleMatchRuleMode === option.key
-                                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                                      : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                  }`}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-
-                            {teamBattleRuleDraft.singleMatchRuleMode === 'global' ? (
-                              <>
-                                <label className="block max-w-xl space-y-2">
-                                  <span className="text-sm font-medium text-slate-600">关联单项胜负规则</span>
-                                  <select
-                                    value={teamBattleRuleDraft.singleMatchRuleId}
-                                    onChange={(event) =>
-                                      setTeamBattleRuleDraft((prev) => ({
-                                        ...prev,
-                                        singleMatchRuleId: event.target.value,
-                                        perMatchSingleMatchRuleIds: normalizeTeamBattlePerMatchRuleIds(
-                                          prev.totalMatches,
-                                          prev.perMatchSingleMatchRuleIds,
-                                          event.target.value
-                                        ),
-                                      }))
-                                    }
-                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                  >
-                                    {singleMatchRules.map((rule) => (
-                                      <option key={rule.id} value={rule.id}>
-                                        {rule.ruleName}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <p className="text-sm leading-6 text-slate-500">
-                                  当前 Tie 中的每个单场，统一引用这条单项胜负规则。
-                                </p>
-                              </>
-                            ) : (
-                              <div className="grid gap-4 md:grid-cols-2">
-                                {Array.from({ length: teamBattleRuleDraft.totalMatches }, (_, index) => (
-                                  <label key={`team-battle-match-${index + 1}`} className="block space-y-2">
-                                    <span className="text-sm font-medium text-slate-600">第 {index + 1} 场单项胜负规则</span>
-                                    <select
-                                      value={
-                                        teamBattleRuleDraft.perMatchSingleMatchRuleIds[index] ||
-                                        teamBattleRuleDraft.singleMatchRuleId
-                                      }
-                                      onChange={(event) =>
-                                        setTeamBattleRuleDraft((prev) => {
-                                          const nextIds = [
-                                            ...normalizeTeamBattlePerMatchRuleIds(
-                                              prev.totalMatches,
-                                              prev.perMatchSingleMatchRuleIds,
-                                              prev.singleMatchRuleId || singleMatchRules[0]?.id || 'SMR001'
-                                            ),
-                                          ];
-                                          nextIds[index] = event.target.value;
-                                          return {
-                                            ...prev,
-                                            perMatchSingleMatchRuleIds: nextIds,
-                                          };
-                                        })
-                                      }
-                                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                                    >
-                                      {singleMatchRules.map((rule) => (
-                                        <option key={rule.id} value={rule.id}>
-                                          {rule.ruleName}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                ))}
-                              </div>
-                            )}
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium text-slate-600">是否要求打满全部比赛</p>
+                          <div className="flex flex-wrap gap-3">
+                            {[
+                              { value: false, label: '不要求打满' },
+                              { value: true, label: '打满全部比赛' },
+                            ].map((option) => (
+                              <button
+                                key={option.label}
+                                type="button"
+                                onClick={() => setTeamBattleRuleDraft((prev) => ({ ...prev, playAllMatches: option.value }))}
+                                className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                                  teamBattleRuleDraft.playAllMatches === option.value
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                    : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs leading-5 text-slate-500">
+                            {teamBattleRuleDraft.playAllMatches
+                              ? '无论是否已分出胜负，全部比赛都要完成。'
+                              : '当团体赛存在多个单项同时开打，且团体胜负已确定时，仍在进行的比赛是否继续完成，由裁判现场决定是否“强制结束”。若强制结束，则保留终止时的比分，比赛状态记为“未完赛”。'}
+                          </p>
+                          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+                            <p className="text-sm font-medium leading-6 text-amber-900">
+                              团体赛的晋级判定以整场比赛“正式结束”为触发时机。一方达到团体获胜条件时，仅表示团体胜负结果已经产生，只有当剩余单项比赛均已按规则完成收尾后，整场团体赛才视为正式结束。
+                            </p>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-indigo-500" />
-                          <p className="text-sm font-semibold text-slate-700">比赛结束策略</p>
-                        </div>
-                        <div className="grid gap-4 xl:grid-cols-3">
-                          {[
-                            {
-                              key: 'play-all' as const,
-                              title: '打满全部比赛后结束',
-                              description: '即使已经提前分出团体胜负，剩余场次仍需全部完成。',
-                            },
-                            {
-                              key: 'finish-running' as const,
-                              title: '分出胜负后已开赛场次继续',
-                              description: '一旦团体胜负确定，未开始的场次不再进行；已开赛但未结束的场次继续完成。',
-                            },
-                            {
-                              key: 'stop-immediately' as const,
-                              title: '分出胜负后立即结束未完成场次',
-                              description: '一旦团体胜负确定，未开始及未完成的场次均立即终止。',
-                            },
-                          ].map((option) => (
-                            <button
-                              key={option.key}
-                              type="button"
-                              onClick={() => setTeamBattleRuleDraft((prev) => ({ ...prev, endStrategy: option.key }))}
-                              className={`rounded-[24px] border px-5 py-5 text-left transition-all ${
-                                teamBattleRuleDraft.endStrategy === option.key
-                                  ? 'border-indigo-200 bg-indigo-50 shadow-sm'
-                                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                              }`}
-                            >
-                              <p className="text-sm font-semibold text-slate-800">{option.title}</p>
-                              <p className="mt-2 text-sm leading-6 text-slate-500">{option.description}</p>
-                            </button>
-                          ))}
-                        </div>
+                      <div className="grid gap-6">
+                        <label className="block space-y-2">
+                          <span className="text-sm font-medium text-slate-600">备注</span>
+                          <textarea
+                            rows={4}
+                            value={teamBattleRuleDraft.remark}
+                            onChange={(event) =>
+                              setTeamBattleRuleDraft((prev) => ({ ...prev, remark: event.target.value }))
+                            }
+                            placeholder="请输入备注说明"
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                          />
+                        </label>
                       </div>
                     </div>
                   </section>
@@ -7311,10 +6984,6 @@ export default function App() {
                   </section>
                 </div>
               )
-            ) : adminActiveMenu === 'match-code-rule-template' ? (
-              <div className="max-w-7xl mx-auto">
-                <MatchCodeConfig />
-              </div>
             ) : (
               <div className="max-w-7xl mx-auto space-y-6">
                 <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -7598,10 +7267,10 @@ export default function App() {
                   className="ml-4 pl-4 border-l border-slate-200 space-y-1 overflow-hidden"
                 >
                   <button 
-                    onClick={() => setViewMode('venue-config')}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'venue-config' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                    onClick={() => setViewMode('match-code-config')}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'match-code-config' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
                   >
-                    场地资源
+                    比赛规则
                   </button>
                   <button 
                     onClick={() => setViewMode('scheduling')}
@@ -7766,7 +7435,12 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <GroupManagement prototypeMode={prototypeMode} value={eventGroups} onChange={setEventGroups} />
+                  <GroupManagement
+                    prototypeMode={prototypeMode}
+                    value={eventGroups}
+                    onChange={setEventGroups}
+                    singleGroupMode
+                  />
                 </motion.div>
               ) : viewMode === 'page-decoration' ? (
                 <motion.div
@@ -7862,19 +7536,14 @@ export default function App() {
                     onUpdateSchedulingConfigs={setSchedulingConfigs}
                   />
                 </motion.div>
-              ) : viewMode === 'venue-config' ? (
+              ) : viewMode === 'match-code-config' ? (
                 <motion.div
-                  key="venue-config-view"
+                  key="match-code-config-view"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <VenueResourceConfig 
-                    venueConfig={venueConfig}
-                    schedulingConfigs={schedulingConfigs}
-                    onUpdateVenueConfig={(updates) => setVenueConfig(prev => ({ ...prev, ...updates }))}
-                    onSave={() => alert('场地资源配置已保存')}
-                  />
+                  <MatchCodeConfig />
                 </motion.div>
               ) : viewMode === 'player-management' ? (
                 <motion.div
@@ -8013,167 +7682,110 @@ export default function App() {
                           </button>
                         </div>
 
-                        <div className="grid gap-5 px-6 py-5 lg:grid-cols-[200px_minmax(0,1fr)_auto] lg:items-start">
-                          <div>
-                            <h2 className="text-base font-semibold text-slate-900">是否开放报名</h2>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-xs leading-6 text-slate-500">
-                              关闭后，“裁判端”小程序该赛事详情页禁用“报名”按钮。
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={refereeRecruitmentConfig.registrationOpen}
-                            onClick={() =>
-                              setRefereeRecruitmentConfig((prev) => ({
-                                ...prev,
-                                registrationOpen: !prev.registrationOpen,
-                              }))
-                            }
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                              refereeRecruitmentConfig.registrationOpen ? 'bg-indigo-600' : 'bg-slate-200'
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                refereeRecruitmentConfig.registrationOpen ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
-                        </div>
-
                         <div className="grid gap-5 px-6 py-5 lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start">
                           <div>
                             <h2 className="text-base font-semibold text-slate-900">招募状态</h2>
                           </div>
-                          <div className="space-y-4">
-                            {refereeRecruitmentConfig.registrationOpen ? (
-                              <>
-                                <p className="text-xs leading-6 text-slate-500">
-                                  设置为“公开招募中”时，用户侧展示对应状态并允许技术官员报名；设置为“招募结束”后裁判端不再报名。
-                                </p>
-                                <div className="rounded-2xl bg-slate-50 px-5 py-4">
-                                  <div className="grid gap-4">
-                                    <div className="space-y-2">
-                                      <span className="text-sm font-medium text-slate-700">招募状态</span>
-                                      <div className="flex flex-wrap gap-2">
-                                        {REFEREE_RECRUITMENT_STATUS_OPTIONS.map((option) => {
-                                          const active = refereeRecruitmentConfig.recruitmentStatus === option.value;
-                                          return (
-                                            <button
-                                              key={option.value}
-                                              type="button"
-                                              onClick={() =>
-                                                setRefereeRecruitmentConfig((prev) => ({
-                                                  ...prev,
-                                                  recruitmentStatus: option.value,
-                                                }))
-                                              }
-                                              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
-                                                active
-                                                  ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm'
-                                                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700'
-                                              }`}
-                                            >
-                                              {option.label}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                      <p className="text-xs leading-5 text-slate-500">
-                                        {REFEREE_RECRUITMENT_STATUS_OPTIONS.find((option) => option.value === refereeRecruitmentConfig.recruitmentStatus)?.description}
-                                      </p>
-                                    </div>
-
-                                    {refereeRecruitmentConfig.recruitmentStatus === 'open' ? (
-                                      <label className="block space-y-2">
-                                        <span className="text-sm font-medium text-slate-700">招募说明</span>
-                                        <textarea
-                                          value={refereeRecruitmentConfig.remark}
-                                          onChange={(event) =>
-                                            setRefereeRecruitmentConfig((prev) => ({ ...prev, remark: event.target.value }))
-                                          }
-                                          rows={5}
-                                          placeholder="请输入用户侧展示的招募说明"
-                                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                        />
-                                      </label>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="rounded-2xl bg-slate-50 px-5 py-4 text-sm text-slate-500">
-                                当前未开放报名，暂不需要配置招募状态与招募说明。
-                              </div>
-                            )}
+                          <div className="space-y-2">
+                            <p className="text-xs leading-6 text-slate-500">
+                              通过招募状态控制裁判端当前是“仅展示不报名”、还是“允许报名”、或“已结束招募”。
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {REFEREE_RECRUITMENT_STATUS_OPTIONS.map((option) => {
+                                const active = refereeRecruitmentConfig.recruitmentStatus === option.value;
+                                return (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() =>
+                                      setRefereeRecruitmentConfig((prev) => ({
+                                        ...prev,
+                                        recruitmentStatus: option.value,
+                                      }))
+                                    }
+                                    className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                                      active
+                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm'
+                                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700'
+                                    }`}
+                                  >
+                                    {option.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs leading-5 text-slate-500">
+                              {REFEREE_RECRUITMENT_STATUS_OPTIONS.find((option) => option.value === refereeRecruitmentConfig.recruitmentStatus)?.description}
+                            </p>
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div className="space-y-1 px-1">
-                      <h3 className="text-xl font-bold text-slate-900">技术官员资格要求</h3>
-                    </div>
-                    <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-visible">
-                      <div className="divide-y divide-slate-100">
+                        <div className="grid gap-5 px-6 py-5 lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start">
+                          <div>
+                            <h2 className="text-base font-semibold text-slate-900">招募说明</h2>
+                          </div>
+                          <div>
+                            <textarea
+                              value={refereeRecruitmentConfig.remark}
+                              onChange={(event) =>
+                                setRefereeRecruitmentConfig((prev) => ({ ...prev, remark: event.target.value }))
+                              }
+                              rows={5}
+                              placeholder="请输入用户侧展示的招募说明"
+                              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+                        </div>
+
                         <div className="grid gap-5 px-6 py-5 lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start">
                           <div>
                             <h2 className="text-base font-semibold text-slate-900">资格要求</h2>
                           </div>
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             <p className="text-xs leading-6 text-slate-500">
                               用于限制哪些技术官员可以报名当前赛事。
                             </p>
-                            {refereeRecruitmentConfig.registrationOpen && refereeRecruitmentConfig.recruitmentStatus === 'open' ? (
-                              <div className="grid gap-4 rounded-2xl bg-slate-50 px-5 py-4 md:grid-cols-2">
-                                <label className="space-y-2">
-                                  <span className="text-sm font-medium text-slate-700">技术等级要求</span>
-                                  <select
-                                    value={refereeRecruitmentConfig.minimumTechnicalLevel}
-                                    onChange={(event) =>
-                                      setRefereeRecruitmentConfig((prev) => ({
-                                        ...prev,
-                                        minimumTechnicalLevel: event.target.value,
-                                      }))
-                                    }
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                  >
-                                    {REFEREE_TECHNICAL_LEVEL_OPTIONS.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <label className="space-y-2">
+                                <span className="text-sm font-medium text-slate-700">技术等级要求</span>
+                                <select
+                                  value={refereeRecruitmentConfig.minimumTechnicalLevel}
+                                  onChange={(event) =>
+                                    setRefereeRecruitmentConfig((prev) => ({
+                                      ...prev,
+                                      minimumTechnicalLevel: event.target.value,
+                                    }))
+                                  }
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                >
+                                  {REFEREE_TECHNICAL_LEVEL_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
 
-                                <label className="space-y-2">
-                                  <span className="text-sm font-medium text-slate-700">证书适用运动项目</span>
-                                  <select
-                                    value={refereeRecruitmentConfig.requiredSportCertificate}
-                                    onChange={(event) =>
-                                      setRefereeRecruitmentConfig((prev) => ({
-                                        ...prev,
-                                        requiredSportCertificate: event.target.value,
-                                      }))
-                                    }
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                  >
-                                    {REFEREE_CERTIFICATE_SPORT_OPTIONS.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              </div>
-                            ) : (
-                              <div className="rounded-2xl bg-slate-50 px-5 py-4 text-sm text-slate-500">
-                                当前未开放报名，或招募已结束。技术等级要求和运动项目证书要求仅在“开放报名”且“公开招募中”时生效。
-                              </div>
-                            )}
+                              <label className="space-y-2">
+                                <span className="text-sm font-medium text-slate-700">证书适用运动项目</span>
+                                <select
+                                  value={refereeRecruitmentConfig.requiredSportCertificate}
+                                  onChange={(event) =>
+                                    setRefereeRecruitmentConfig((prev) => ({
+                                      ...prev,
+                                      requiredSportCertificate: event.target.value,
+                                    }))
+                                  }
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                >
+                                  {REFEREE_CERTIFICATE_SPORT_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
                           </div>
                         </div>
                       </div>

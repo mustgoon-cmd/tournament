@@ -4,7 +4,6 @@ import {
   Trophy, 
   Plus, 
   Trash2, 
-  Play, 
   ChevronRight, 
   LayoutGrid, 
   GitBranch, 
@@ -19,7 +18,6 @@ import {
   Save,
   Zap,
   Download,
-  Share2,
   X
 } from 'lucide-react';
 import { PhaseType, PhaseConfig, ProjectSchedulingConfig, MatchSession, MatchRound, PromotionRule, VenueConfig } from '../types';
@@ -40,24 +38,152 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
   schedulingConfigs,
   onUpdateSchedulingConfigs
 }) => {
+  type SchedulingStatus = 'unconfigured' | 'draft' | 'locked' | 'generated';
+  type PhaseWorkflowStatus = 'configured' | 'draft' | 'confirmed' | 'locked' | 'generated';
+  type SchedulingConfigWithPhaseState = ProjectSchedulingConfig & {
+    phase_statuses?: Record<string, PhaseWorkflowStatus>;
+  };
+  type BatchSchedulingPreset = 'group_elimination' | 'round_robin_elimination' | 'single_elimination';
   const [establishedProjects] = useState(
     MOCK_PROJECT_SUMMARY.filter(p => p.status === 'ESTABLISHED' || p.establishment_status === '已立项')
   );
 
   const [projectTypeTab, setProjectTypeTab] = useState<'单项项目' | '团体项目'>('单项项目');
-  const filteredProjects = establishedProjects.filter(p => {
-    if (projectTypeTab === '单项项目') {
-      return p.type === 'single';
-    }
-    return p.type === 'team';
-  });
-
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'bracket' | 'list' | 'sub_matches'>('bracket');
   const [activePhaseIndex, setActivePhaseIndex] = useState(0);
   const [selectedTie, setSelectedTie] = useState<MatchSession | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  const [showBatchSchedulingModal, setShowBatchSchedulingModal] = useState(false);
+  const [showBatchPlanResult, setShowBatchPlanResult] = useState(false);
+  const [batchPlanLoading, setBatchPlanLoading] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | SchedulingStatus>('all');
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [batchTemplateKeyword, setBatchTemplateKeyword] = useState('');
+  const [batchSchedulingDraft, setBatchSchedulingDraft] = useState({
+    templateId: 'group_elimination' as BatchSchedulingPreset
+  });
+  const [batchTemplatePhases, setBatchTemplatePhases] = useState<PhaseConfig[]>([]);
+  const [batchExpandedPhaseIds, setBatchExpandedPhaseIds] = useState<string[]>([]);
+  const [batchPlanResult, setBatchPlanResult] = useState<{
+    successCount: number;
+    failedCount: number;
+    failedItems: { projectName: string; reason: string }[];
+  } | null>(null);
+
+  const batchPlanningTemplates = [
+    {
+      id: 'group_elimination' as BatchSchedulingPreset,
+      name: '两阶段：分组循环赛 + 单淘汰',
+      description: '适用于多数常规赛事，先按组内循环赛筛选，再进入淘汰赛。',
+      defaultMatchRuleId: 'rule_bo3_standard'
+    },
+    {
+      id: 'round_robin_elimination' as BatchSchedulingPreset,
+      name: '两阶段：单循环赛 + 单淘汰',
+      description: '适用于人数相对集中、希望所有人先进行一轮充分比赛的项目。',
+      defaultMatchRuleId: 'rule_bo3_standard'
+    },
+    {
+      id: 'single_elimination' as BatchSchedulingPreset,
+      name: '单阶段：单淘汰赛',
+      description: '适用于项目较多、需要快速进入正式比赛结构的场景。',
+      defaultMatchRuleId: 'rule_bo1_fast'
+    }
+  ];
+
+  const getTemplateDefaultMatchRuleId = (templateId: BatchSchedulingPreset) =>
+    batchPlanningTemplates.find((template) => template.id === templateId)?.defaultMatchRuleId || 'rule_bo3_standard';
+
+  const mapMatchRuleToPhaseValue = (ruleId: string, projectType: 'single' | 'team') => {
+    if (projectType === 'team') {
+      if (ruleId === 'rule_team_tie') return '5场3胜';
+      if (ruleId === 'rule_bo1_fast') return '3场2胜';
+      return '5场3胜';
+    }
+
+    if (ruleId === 'rule_bo1_fast') return '1局1胜';
+    return '3局2胜';
+  };
+
+  const createTemplatePhase = (
+    templateId: BatchSchedulingPreset,
+    projectType: 'single' | 'team',
+    matchRuleId: string
+  ): PhaseConfig[] => {
+    const defaultRule = mapMatchRuleToPhaseValue(matchRuleId, projectType);
+    const basePhase = (order: number, name: string, type: PhaseType, overrides: Partial<PhaseConfig> = {}): PhaseConfig => ({
+      id: `template-phase-${templateId}-${order}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+      name,
+      type,
+      order,
+      participant_count: order === 1 ? 16 : 8,
+      elimination_goal: 'advance',
+      promotion_count: 1,
+      group_count: 1,
+      promotion_per_group: 2,
+      grouping_strategy: '1号固定逆时针轮转法',
+      group_match_format: '单循环',
+      enable_promotion_path: false,
+      ranking_rules: ['胜场数', '胜负关系', '净胜局', '总得分'],
+      seed_count: 0,
+      play_third_place: false,
+      decide_top_n: 1,
+      promotion_rules: [],
+      progression_rule: {
+        mode: 'group_ranking'
+      },
+      placement_rule: {
+        strategy: 'serpentine',
+        avoid_same_group: true,
+        mapping_relations: []
+      },
+      match_win_loss_rule: projectType === 'single' ? defaultRule : '3局2胜',
+      team_match_rule: projectType === 'team' ? defaultRule : '5场3胜',
+      sub_match_rules: {},
+      ...overrides
+    });
+
+    if (templateId === 'single_elimination') {
+      return [
+        basePhase(1, '第一阶段', PhaseType.ELIMINATION, {
+          participant_count: 16,
+          elimination_goal: 'ranking',
+          decide_top_n: 1
+        })
+      ];
+    }
+
+    if (templateId === 'round_robin_elimination') {
+      return [
+        basePhase(1, '第一阶段', PhaseType.ROUND_ROBIN, {
+          participant_count: 8,
+          group_count: 1,
+          promotion_per_group: 4
+        }),
+        basePhase(2, '第二阶段', PhaseType.ELIMINATION, {
+          participant_count: 4,
+          elimination_goal: 'ranking',
+          decide_top_n: 4
+        })
+      ];
+    }
+
+    return [
+      basePhase(1, '第一阶段', PhaseType.GROUP_ROUND_ROBIN, {
+        participant_count: 16,
+        group_count: 4,
+        promotion_per_group: 2
+      }),
+      basePhase(2, '第二阶段', PhaseType.ELIMINATION, {
+        participant_count: 8,
+        elimination_goal: 'ranking',
+        decide_top_n: 8
+      })
+    ];
+  };
 
   // Helper to get group label based on match code config
   const getGroupLabel = (index: number) => {
@@ -75,25 +201,118 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     setActivePhaseIndex(0);
   }, [selectedProject?.id]);
 
-  const getProjectConfig = (projectId: string): ProjectSchedulingConfig => {
-    return schedulingConfigs[projectId] || {
+  React.useEffect(() => {
+    setBatchTemplatePhases(createTemplatePhase(
+      batchSchedulingDraft.templateId,
+      projectTypeTab === '单项项目' ? 'single' : 'team',
+      getTemplateDefaultMatchRuleId(batchSchedulingDraft.templateId)
+    ));
+  }, [batchSchedulingDraft.templateId, projectTypeTab]);
+
+  React.useEffect(() => {
+    setBatchExpandedPhaseIds(batchTemplatePhases[0] ? [batchTemplatePhases[0].id] : []);
+  }, [batchTemplatePhases]);
+
+  const projectsByType = establishedProjects.filter((p) => {
+    if (projectTypeTab === '单项项目') return p.type === 'single';
+    return p.type === 'team';
+  });
+
+  const filteredProjects = projectsByType.filter((project) => {
+    const matchesKeyword =
+      searchKeyword.trim() === '' ||
+      [project.name, project.short_name, project.code]
+        .filter(Boolean)
+        .some((field) => field.toLowerCase().includes(searchKeyword.trim().toLowerCase()));
+
+    const schedulingStatus = getProjectSchedulingStatus(project.id);
+    const matchesStatus = statusFilter === 'all' ? true : schedulingStatus === statusFilter;
+
+    return matchesKeyword && matchesStatus;
+  });
+
+  const visibleSelectedProjectIds = selectedProjectIds.filter((id) => filteredProjects.some((project) => project.id === id));
+  const allVisibleSelected = filteredProjects.length > 0 && visibleSelectedProjectIds.length === filteredProjects.length;
+  const selectedBatchProjects = filteredProjects.filter((project) => visibleSelectedProjectIds.includes(project.id));
+  const filteredBatchPlanningTemplates = batchPlanningTemplates.filter((template) =>
+    template.name.toLowerCase().includes(batchTemplateKeyword.trim().toLowerCase())
+  );
+  const batchPlanningTeamEvents =
+    filteredProjects.find((project) => visibleSelectedProjectIds.includes(project.id) && project.type === 'team')?.team_events ||
+    projectsByType.find((project) => project.type === 'team')?.team_events ||
+    [];
+
+  React.useEffect(() => {
+    setSelectedProjectIds((prev) => prev.filter((id) => establishedProjects.some((project) => project.id === id)));
+  }, [establishedProjects]);
+
+  function getProjectConfig(projectId: string): SchedulingConfigWithPhaseState {
+    const rawConfig = schedulingConfigs[projectId] as Partial<SchedulingConfigWithPhaseState> | undefined;
+    const project = establishedProjects.find(p => p.id === projectId);
+
+    return {
       project_id: projectId,
-      project_name: establishedProjects.find(p => p.id === projectId)?.name || '',
-      project_code: establishedProjects.find(p => p.id === projectId)?.id || '',
-      phases: [],
+      project_name: rawConfig?.project_name || project?.name || '',
+      project_code: rawConfig?.project_code || project?.id || '',
+      phases: Array.isArray(rawConfig?.phases) ? rawConfig.phases : [],
+      scheduling_status: rawConfig?.scheduling_status,
+      generated_framework: rawConfig?.generated_framework,
+      phase_statuses: rawConfig?.phase_statuses || {},
       venue_config: {
         court_count: 8,
         match_duration: 30,
         break_duration: 5,
         buffer_duration: 5,
         max_daily_hours: 8,
-        max_days: 2
+        max_days: 2,
+        ...(rawConfig?.venue_config || {})
       }
     };
+  }
+
+  function getPhaseStatus(projectId: string, phaseId: string): PhaseWorkflowStatus {
+    const config = getProjectConfig(projectId);
+    return config.phase_statuses?.[phaseId] || 'configured';
+  }
+
+  function getProjectPhaseStatuses(projectId: string) {
+    const config = getProjectConfig(projectId);
+    return config.phases.map((phase) => ({
+      phase,
+      status: getPhaseStatus(projectId, phase.id)
+    }));
+  }
+
+  function withUpdatedPhaseStatuses(
+    config: SchedulingConfigWithPhaseState,
+    updater: (current: Record<string, PhaseWorkflowStatus>) => Record<string, PhaseWorkflowStatus>
+  ): SchedulingConfigWithPhaseState {
+    return {
+      ...config,
+      phase_statuses: updater(config.phase_statuses || {})
+    };
+  }
+
+  function getProjectSchedulingStatus(projectId: string): SchedulingStatus {
+    const phaseStates = getProjectPhaseStatuses(projectId);
+    if (phaseStates.length === 0) return 'unconfigured';
+    if (phaseStates.every(({ status }) => status === 'generated')) return 'generated';
+    if (phaseStates.some(({ status }) => status === 'locked' || status === 'confirmed')) return 'locked';
+    return 'draft';
+  }
+
+  const canAddAnotherPhase = (phases: PhaseConfig[]) => {
+    if (phases.length === 0) return true;
+    const lastPhase = phases[phases.length - 1];
+    return !(lastPhase.type === PhaseType.ELIMINATION && lastPhase.elimination_goal === 'ranking');
   };
 
   const addPhase = (projectId: string) => {
     const config = getProjectConfig(projectId);
+    if (!canAddAnotherPhase(config.phases)) {
+      alert('当前最后一个阶段已设置为“决出名次”，不能继续添加后续阶段。');
+      return;
+    }
     
     // Calculate initial participant count based on previous phase if exists
     let initialCount = establishedProjects.find(p => p.id === projectId)?.current_count || 0;
@@ -112,6 +331,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
       type: PhaseType.ELIMINATION,
       order: config.phases.length + 1,
       participant_count: initialCount,
+      elimination_goal: 'advance',
       promotion_count: 1,
       group_count: 1,
       promotion_per_group: 2,
@@ -138,7 +358,13 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     
     const newConfig = {
       ...config,
-      phases: [...config.phases, newPhase]
+      phases: [...config.phases, newPhase],
+      phase_statuses: {
+        ...(config.phase_statuses || {}),
+        [newPhase.id]: 'configured' as PhaseWorkflowStatus
+      },
+      scheduling_status: 'draft',
+      generated_framework: undefined
     };
     
     onUpdateSchedulingConfigs({
@@ -149,9 +375,14 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
 
   const removePhase = (projectId: string, phaseId: string) => {
     const config = getProjectConfig(projectId);
+    const nextPhaseStatuses = { ...(config.phase_statuses || {}) };
+    delete nextPhaseStatuses[phaseId];
     const newConfig = {
       ...config,
-      phases: config.phases.filter(p => p.id !== phaseId)
+      phases: config.phases.filter(p => p.id !== phaseId),
+      phase_statuses: nextPhaseStatuses,
+      scheduling_status: config.phases.length > 1 ? 'draft' : undefined,
+      generated_framework: undefined
     };
     
     onUpdateSchedulingConfigs({
@@ -176,7 +407,10 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     
     const newConfig = {
       ...config,
-      phases: newPhases
+      phases: newPhases,
+      phase_statuses: config.phase_statuses || {},
+      scheduling_status: config.scheduling_status ?? (newPhases.length > 0 ? 'draft' : undefined),
+      generated_framework: config.generated_framework
     };
     
     onUpdateSchedulingConfigs({
@@ -193,11 +427,107 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     });
   };
 
-  const calculateVenueCapacity = (config: VenueConfig): number => {
-    const cycleTime = config.match_duration + config.break_duration + config.buffer_duration;
-    if (cycleTime <= 0) return 0;
-    const matchesPerCourtPerDay = Math.floor((config.max_daily_hours * 60) / cycleTime);
-    return matchesPerCourtPerDay * config.court_count * config.max_days;
+  const addBatchTemplatePhase = () => {
+    if (!canAddAnotherPhase(batchTemplatePhases)) {
+      alert('当前最后一个阶段已设置为“决出名次”，不能继续添加后续阶段。');
+      return;
+    }
+    const projectType = projectTypeTab === '单项项目' ? 'single' : 'team';
+    const defaultRule = mapMatchRuleToPhaseValue(getTemplateDefaultMatchRuleId(batchSchedulingDraft.templateId), projectType);
+    setBatchTemplatePhases((prev) => [
+      ...prev,
+      {
+        id: `batch-template-phase-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+        name: `第${prev.length + 1}阶段`,
+        type: PhaseType.ELIMINATION,
+        order: prev.length + 1,
+        participant_count: prev.length > 0 ? (prev[prev.length - 1].promotion_count || 1) : 16,
+        elimination_goal: 'advance',
+        promotion_count: 1,
+        group_count: 1,
+        promotion_per_group: 2,
+        grouping_strategy: '1号固定逆时针轮转法',
+        group_match_format: '单循环',
+        enable_promotion_path: false,
+        ranking_rules: ['胜场数', '胜负关系', '净胜局', '总得分'],
+        seed_count: 0,
+        play_third_place: false,
+        decide_top_n: 1,
+        promotion_rules: [],
+        progression_rule: {
+          mode: 'group_ranking'
+        },
+        placement_rule: {
+          strategy: 'serpentine',
+          avoid_same_group: true,
+          mapping_relations: []
+        },
+        match_win_loss_rule: projectType === 'single' ? defaultRule : '3局2胜',
+        team_match_rule: projectType === 'team' ? defaultRule : '5场3胜',
+        sub_match_rules: {}
+      }
+    ]);
+  };
+
+  const removeBatchTemplatePhase = (phaseId: string) => {
+    setBatchTemplatePhases((prev) => prev.filter((phase) => phase.id !== phaseId).map((phase, index) => ({
+      ...phase,
+      order: index + 1
+    })));
+  };
+
+  const updateBatchTemplatePhase = (phaseId: string, updates: Partial<PhaseConfig>) => {
+    setBatchTemplatePhases((prev) => {
+      const nextPhases = prev.map((phase) => phase.id === phaseId ? { ...phase, ...updates } : phase);
+      for (let i = 1; i < nextPhases.length; i++) {
+        const previousPhase = nextPhases[i - 1];
+        if (previousPhase.type === PhaseType.ELIMINATION) {
+          nextPhases[i].participant_count = previousPhase.promotion_count || 1;
+        } else {
+          nextPhases[i].participant_count = (previousPhase.group_count || 1) * (previousPhase.promotion_per_group || 1);
+        }
+      }
+      return nextPhases;
+    });
+  };
+
+  const addBatchPromotionRule = (phaseId: string) => {
+    setBatchTemplatePhases((prev) => prev.map((phase) => {
+      if (phase.id !== phaseId) return phase;
+      return {
+        ...phase,
+        promotion_rules: [...(phase.promotion_rules || []), { from_group: 1, from_rank: 1, to_position: 1 }]
+      };
+    }));
+  };
+
+  const updateBatchPromotionRule = (phaseId: string, ruleIndex: number, updates: Partial<PromotionRule>) => {
+    setBatchTemplatePhases((prev) => prev.map((phase) => {
+      if (phase.id !== phaseId || !phase.promotion_rules) return phase;
+      const nextRules = [...phase.promotion_rules];
+      nextRules[ruleIndex] = { ...nextRules[ruleIndex], ...updates };
+      return { ...phase, promotion_rules: nextRules };
+    }));
+  };
+
+  const removeBatchPromotionRule = (phaseId: string, ruleIndex: number) => {
+    setBatchTemplatePhases((prev) => prev.map((phase) => {
+      if (phase.id !== phaseId || !phase.promotion_rules) return phase;
+      return {
+        ...phase,
+        promotion_rules: phase.promotion_rules.filter((_, index) => index !== ruleIndex)
+      };
+    }));
+  };
+
+  const openProjectScheduling = (project: any) => {
+    setSelectedProject(project);
+    setActiveTab('bracket');
+  };
+
+  const openProjectMatchList = (project: any) => {
+    setSelectedProject(project);
+    setActiveTab('list');
   };
 
   const calculatePhaseMatches = (phase: PhaseConfig): number => {
@@ -477,16 +807,33 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
   const handleSaveConfig = () => {
     if (!selectedProject) return;
     const config = getProjectConfig(selectedProject.id);
+    const currentPhase = config.phases[Math.min(activePhaseIndex, Math.max(0, config.phases.length - 1))];
     
     // In a real app, this would be an API call
     console.log('Saving config:', config);
     
     // Simulate persistence
+    const nextConfig = {
+      ...config,
+      scheduling_status: config.scheduling_status ?? (config.phases.length > 0 ? 'draft' as const : undefined),
+      generated_framework: config.generated_framework
+    };
     const savedConfigs = JSON.parse(localStorage.getItem('scheduling_configs') || '{}');
-    savedConfigs[selectedProject.id] = config;
+    const finalConfig = currentPhase
+      ? withUpdatedPhaseStatuses(nextConfig, (current) => ({
+          ...current,
+          [currentPhase.id]: current[currentPhase.id] || 'configured'
+        }))
+      : nextConfig;
+    savedConfigs[selectedProject.id] = finalConfig;
     localStorage.setItem('scheduling_configs', JSON.stringify(savedConfigs));
+
+    onUpdateSchedulingConfigs({
+      ...schedulingConfigs,
+      [selectedProject.id]: finalConfig
+    });
     
-    alert(`项目 [${selectedProject.name}] 的编排配置已保存成功！`);
+    alert(`项目 [${selectedProject.name}] 当前阶段配置已保存成功！`);
   };
 
   const handleResetConfig = () => {
@@ -502,97 +849,944 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
   const handleGenerateFramework = () => {
     if (!selectedProject) return;
     const config = getProjectConfig(selectedProject.id);
+    const currentPhase = config.phases[Math.min(activePhaseIndex, Math.max(0, config.phases.length - 1))];
+    if (!currentPhase) return;
     
     if (config.phases.length === 0) {
       alert('请先添加比赛阶段');
       return;
     }
 
-    const newConfig = generateFrameworkForConfig(config);
+    if (getPhaseStatus(selectedProject.id, currentPhase.id) !== 'locked') {
+      alert('请先锁定当前阶段，再生成比赛。');
+      return;
+    }
+
+    const newConfig = {
+      ...generateFrameworkForConfig(config),
+      scheduling_status: 'generated' as const
+    };
     onUpdateSchedulingConfigs({
       ...schedulingConfigs,
-      [selectedProject.id]: newConfig
+      [selectedProject.id]: withUpdatedPhaseStatuses(newConfig, (current) => ({
+        ...current,
+        [currentPhase.id]: 'generated'
+      }))
     });
     
-    alert(`已成功生成 [${selectedProject.name}] 的对阵框架，共计 ${newConfig.generated_framework?.total_matches} 场比赛。`);
+    alert(`已成功生成 [${selectedProject.name}] 当前阶段比赛。`);
   };
 
-  const generateFramework = (projectId: string) => {
+  const generateBracket = (projectId: string, phaseId: string) => {
+    const project = establishedProjects.find((item) => item.id === projectId);
     const config = getProjectConfig(projectId);
+    const phase = config.phases.find((item) => item.id === phaseId);
+
+    if (config.phases.length === 0) {
+      alert('请先添加比赛阶段');
+      return;
+    }
+    if (!phase) return;
+
+    const draftConfig = {
+      ...generateFrameworkForConfig(config),
+      scheduling_status: 'draft' as const
+    };
+
     onUpdateSchedulingConfigs({
       ...schedulingConfigs,
-      [projectId]: generateFrameworkForConfig(config)
+      [projectId]: withUpdatedPhaseStatuses(draftConfig, (current) => ({
+        ...current,
+        [phaseId]: 'draft'
+      }))
     });
-    alert('对阵表及场次信息已更新！');
+
+    setActiveTab('bracket');
+    alert(`已成功生成 [${project?.name || config.project_name}] 当前阶段对阵，请确认后再锁定阶段。`);
   };
 
-  return (
-    <div className="flex-1 flex flex-col bg-slate-50">
-      {/* Header Section */}
-      <div className="px-8 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 z-10">
-        <div className="flex items-center gap-6">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">项目编排管理</h2>
-            <p className="text-xs text-slate-500 mt-1">配置比赛阶段、生成对阵框架及场次信息</p>
-          </div>
-          <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <AlertCircle className="w-4 h-4 text-indigo-500" />
-              只有已立项的项目可以编排对阵
-            </div>
-            <button 
-              onClick={onNavigateToAnnouncement}
-              className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-all flex items-center gap-1"
-            >
-              前往立项 <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setIsPreviewMode(!isPreviewMode)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border ${
-                isPreviewMode 
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' 
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-              {isPreviewMode ? '退出预览' : '方案预览'}
-            </button>
-            <button 
-              onClick={() => setShowFinalizeConfirm(true)}
-              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              编排定稿
-            </button>
-          </div>
-          {(() => {
-            const capacity = calculateVenueCapacity(venueConfig);
-            let totalOccupied = 0;
-            Object.values(schedulingConfigs).forEach((config: ProjectSchedulingConfig) => {
-              config.phases.forEach((phase: PhaseConfig) => {
-                totalOccupied += calculatePhaseMatches(phase);
-              });
-            });
-            const remaining = capacity - totalOccupied;
-            return (
-              <p className="text-[10px] text-slate-500 font-medium">
-                场地总容量: <span className="text-slate-900 font-bold">{capacity}</span> | 
-                当前已占用: <span className="text-indigo-600 font-bold">{totalOccupied}</span> | 
-                {remaining >= 0 ? (
-                  <>剩余: <span className="text-emerald-600 font-bold">{remaining}</span></>
-                ) : (
-                  <>缺口: <span className="text-rose-600 font-bold">{Math.abs(remaining)}</span></>
-                )}
-              </p>
-            );
-          })()}
-        </div>
-      </div>
+  const handleGenerateBracket = () => {
+    if (!selectedProject) return;
+    const config = getProjectConfig(selectedProject.id);
+    const currentPhase = config.phases[Math.min(activePhaseIndex, Math.max(0, config.phases.length - 1))];
+    if (!currentPhase) return;
+    generateBracket(selectedProject.id, currentPhase.id);
+  };
 
+  const handleConfirmCurrentPhase = () => {
+    if (!selectedProject) return;
+    const config = getProjectConfig(selectedProject.id);
+    const currentPhase = config.phases[Math.min(activePhaseIndex, Math.max(0, config.phases.length - 1))];
+    if (!currentPhase) return;
+
+    if (getPhaseStatus(selectedProject.id, currentPhase.id) !== 'draft') {
+      alert('请先生成当前阶段对阵，再确认阶段。');
+      return;
+    }
+
+    onUpdateSchedulingConfigs({
+      ...schedulingConfigs,
+      [selectedProject.id]: withUpdatedPhaseStatuses(config, (current) => ({
+        ...current,
+        [currentPhase.id]: 'confirmed'
+      }))
+    });
+    alert(`已确认 [${currentPhase.name}]，可继续锁定阶段。`);
+  };
+
+  const handleLockCurrentPhase = () => {
+    if (!selectedProject) return;
+    const config = getProjectConfig(selectedProject.id);
+    const currentPhase = config.phases[Math.min(activePhaseIndex, Math.max(0, config.phases.length - 1))];
+    if (!currentPhase) return;
+
+    if (getPhaseStatus(selectedProject.id, currentPhase.id) !== 'confirmed') {
+      alert('请先确认当前阶段，再锁定阶段。');
+      return;
+    }
+
+    onUpdateSchedulingConfigs({
+      ...schedulingConfigs,
+      [selectedProject.id]: withUpdatedPhaseStatuses(config, (current) => ({
+        ...current,
+        [currentPhase.id]: 'locked'
+      }))
+    });
+    alert(`已锁定 [${currentPhase.name}]，可继续生成比赛。`);
+  };
+
+  const toggleProjectSelection = (projectId: string) => {
+    setSelectedProjectIds((prev) =>
+      prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId]
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedProjectIds((prev) => prev.filter((id) => !filteredProjects.some((project) => project.id === id)));
+      return;
+    }
+
+    setSelectedProjectIds((prev) => {
+      const merged = new Set([...prev, ...filteredProjects.map((project) => project.id)]);
+      return Array.from(merged);
+    });
+  };
+
+  const handleBatchGenerate = () => {
+    if (visibleSelectedProjectIds.length === 0) {
+      alert('请先选择需要批量编排的项目。');
+      return;
+    }
+
+    if (visibleSelectedProjectIds.some((projectId) => !['unconfigured', 'draft'].includes(getProjectSchedulingStatus(projectId)))) {
+      alert('仅支持未编排或编排中的项目');
+      return;
+    }
+
+    setShowBatchSchedulingModal(true);
+  };
+
+  const createBatchPhase = (
+    projectId: string,
+    order: number,
+    name: string,
+    type: PhaseType,
+    participantCount: number,
+    overrides: Partial<PhaseConfig> = {}
+  ): PhaseConfig => ({
+    id: `batch-phase-${projectId}-${order}-${Date.now()}`,
+    name,
+    type,
+    order,
+    participant_count: participantCount,
+    promotion_count: 1,
+    group_count: 1,
+    promotion_per_group: 2,
+    grouping_strategy: '1号固定逆时针轮转法',
+    group_match_format: '单循环',
+    enable_promotion_path: false,
+    ranking_rules: ['胜场数', '胜负关系', '净胜局', '总得分'],
+    seed_count: 0,
+    play_third_place: false,
+    decide_top_n: 1,
+    promotion_rules: [],
+    progression_rule: {
+      mode: 'group_ranking'
+    },
+    placement_rule: {
+      strategy: 'serpentine',
+      avoid_same_group: true,
+      mapping_relations: []
+    },
+    match_win_loss_rule: '3局2胜',
+    team_match_rule: '5场3胜',
+    sub_match_rules: {},
+    ...overrides
+  });
+
+  const buildBatchPhasesForProject = (projectId: string): PhaseConfig[] => {
+    const project = establishedProjects.find((item) => item.id === projectId);
+    const participantCount = Math.max(project?.current_count || 0, 1);
+    const templatePhases = batchTemplatePhases.length > 0
+      ? batchTemplatePhases
+      : createTemplatePhase(
+          batchSchedulingDraft.templateId,
+          projectTypeTab === '单项项目' ? 'single' : 'team',
+          getTemplateDefaultMatchRuleId(batchSchedulingDraft.templateId)
+        );
+
+    const clonedPhases = templatePhases.map((phase, index) => ({
+      ...phase,
+      id: `batch-phase-${projectId}-${index + 1}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+      promotion_rules: phase.promotion_rules ? phase.promotion_rules.map((rule) => ({ ...rule })) : [],
+      ranking_rules: phase.ranking_rules ? [...phase.ranking_rules] : ['胜场数', '胜负关系', '净胜局', '总得分'],
+      placement_rule: phase.placement_rule ? { ...phase.placement_rule, mapping_relations: [...(phase.placement_rule.mapping_relations || [])] } : phase.placement_rule,
+      progression_rule: phase.progression_rule ? { ...phase.progression_rule } : phase.progression_rule,
+      sub_match_rules: phase.sub_match_rules ? { ...phase.sub_match_rules } : {},
+      order: index + 1
+    }));
+
+    if (clonedPhases.length === 0) return [];
+
+    clonedPhases[0].participant_count = participantCount;
+    for (let i = 1; i < clonedPhases.length; i++) {
+      const previousPhase = clonedPhases[i - 1];
+      clonedPhases[i].participant_count = previousPhase.type === PhaseType.ELIMINATION
+        ? (previousPhase.promotion_count || 1)
+        : ((previousPhase.group_count || 1) * (previousPhase.promotion_per_group || 1));
+    }
+
+    return clonedPhases;
+  };
+
+  const handleApplyBatchScheduling = async () => {
+    if (visibleSelectedProjectIds.length === 0) {
+      alert('请先选择需要批量编排的项目。');
+      return;
+    }
+
+    if (!batchSchedulingDraft.templateId) {
+      alert('请选择赛制模板。');
+      return;
+    }
+
+    setBatchPlanLoading(true);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    const nextConfigs = { ...schedulingConfigs };
+    const failedItems: { projectName: string; reason: string }[] = [];
+    let successCount = 0;
+
+    visibleSelectedProjectIds.forEach((projectId) => {
+      const project = establishedProjects.find((item) => item.id === projectId);
+      const currentConfig = getProjectConfig(projectId);
+      const participantCount = project?.current_count || 0;
+      const firstTemplatePhase = batchTemplatePhases[0];
+      const minimumRequired = firstTemplatePhase?.type === PhaseType.ELIMINATION
+        ? 2
+        : Math.max((firstTemplatePhase?.group_count || 1) * 2, firstTemplatePhase?.promotion_per_group || 2);
+
+      if (participantCount < minimumRequired) {
+        failedItems.push({
+          projectName: project?.name || currentConfig.project_name,
+          reason: '人数不足'
+        });
+        return;
+      }
+
+      const phases = buildBatchPhasesForProject(projectId);
+      const draftConfig = {
+        ...currentConfig,
+        phases,
+        scheduling_status: 'draft' as const,
+        generated_framework: undefined
+      };
+
+      nextConfigs[projectId] = withUpdatedPhaseStatuses(
+        {
+          ...draftConfig,
+          generated_framework: generateFrameworkForConfig(draftConfig).generated_framework
+        },
+        (current) => phases.reduce<Record<string, PhaseWorkflowStatus>>((acc, phase) => {
+          acc[phase.id] = 'draft';
+          return acc;
+        }, { ...current })
+      );
+      successCount += 1;
+    });
+
+    onUpdateSchedulingConfigs(nextConfigs);
+    setBatchPlanLoading(false);
+    setShowBatchSchedulingModal(false);
+    setBatchPlanResult({
+      successCount,
+      failedCount: failedItems.length,
+      failedItems
+    });
+    setShowBatchPlanResult(true);
+  };
+
+  const getProjectScheduleSummary = (project: any) => {
+    const config = getProjectConfig(project.id);
+    if (config.phases.length === 0) return '未配置比赛阶段';
+    if (config.phases.length === 1) return `${config.phases[0].name} · ${config.phases[0].type}`;
+    return `${config.phases.length} 个阶段 · ${config.phases.map((phase) => phase.type).join(' / ')}`;
+  };
+
+  const getPhaseStatusMeta = (status: PhaseWorkflowStatus) => {
+    if (status === 'generated') return { label: '已生成比赛', className: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
+    if (status === 'locked') return { label: '已锁定', className: 'bg-violet-50 text-violet-600 border-violet-100' };
+    if (status === 'confirmed') return { label: '已确认', className: 'bg-sky-50 text-sky-600 border-sky-100' };
+    if (status === 'draft') return { label: '对阵草稿', className: 'bg-amber-50 text-amber-600 border-amber-100' };
+    return { label: '待配置', className: 'bg-slate-50 text-slate-500 border-slate-200' };
+  };
+
+  const getProjectScheduleStatusMeta = (projectId: string) => {
+    const phaseStates = getProjectPhaseStatuses(projectId);
+    const total = phaseStates.length;
+    if (total === 0) {
+      return { label: '未编排', className: 'bg-slate-50 text-slate-500 border-slate-200' };
+    }
+
+    const generatedCount = phaseStates.filter(({ status }) => status === 'generated').length;
+    const lockedCount = phaseStates.filter(({ status }) => status === 'locked').length;
+    const confirmedCount = phaseStates.filter(({ status }) => status === 'confirmed').length;
+    const draftCount = phaseStates.filter(({ status }) => status === 'draft').length;
+
+    if (generatedCount === total) {
+      return { label: '全部阶段已生成比赛', className: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
+    }
+    if (generatedCount > 0) {
+      return { label: `已生成 ${generatedCount}/${total} 阶段`, className: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
+    }
+    if (lockedCount > 0) {
+      return { label: `已锁定 ${lockedCount}/${total} 阶段`, className: 'bg-violet-50 text-violet-600 border-violet-100' };
+    }
+    if (confirmedCount > 0) {
+      return { label: `已确认 ${confirmedCount}/${total} 阶段`, className: 'bg-sky-50 text-sky-600 border-sky-100' };
+    }
+    if (draftCount > 0) {
+      return { label: `编排中 ${draftCount}/${total} 阶段`, className: 'bg-amber-50 text-amber-600 border-amber-100' };
+    }
+    return { label: `待配置 ${total} 个阶段`, className: 'bg-slate-50 text-slate-500 border-slate-200' };
+  };
+
+  const getProjectUpdatedText = (projectId: string) => {
+    const phaseStates = getProjectPhaseStatuses(projectId);
+    const total = phaseStates.length;
+    if (total === 0) return '未开始';
+
+    const generatedCount = phaseStates.filter(({ status }) => status === 'generated').length;
+    const lockedCount = phaseStates.filter(({ status }) => status === 'locked').length;
+    const confirmedCount = phaseStates.filter(({ status }) => status === 'confirmed').length;
+    const draftCount = phaseStates.filter(({ status }) => status === 'draft').length;
+
+    if (generatedCount > 0) return `${generatedCount}/${total} 阶段已生成比赛`;
+    if (lockedCount > 0) return `${lockedCount}/${total} 阶段待生成比赛`;
+    if (confirmedCount > 0) return `${confirmedCount}/${total} 阶段待锁定`;
+    if (draftCount > 0) return `${draftCount}/${total} 阶段待确认`;
+    return '待生成对阵';
+  };
+
+  const renderPhaseConfigurationEditor = ({
+    phases,
+    projectType,
+    teamEvents,
+    onAddPhase,
+    onUpdatePhase,
+    onRemovePhase,
+    onAddPromotionRule,
+    onUpdatePromotionRule,
+    onRemovePromotionRule,
+    emptyTitle,
+    emptyDescription,
+    canAddPhase = true,
+    addPhaseDisabledReason = '当前最后一个阶段已设置为“决出名次”，不能继续添加后续阶段。',
+    collapsible = false,
+    expandedPhaseIds = [],
+    onTogglePhase,
+    participantCountMode = 'editable',
+    showAddPhaseButton = true,
+    visiblePhaseIds,
+    contextPhases,
+    showPhaseImpactHint = false
+  }: {
+    phases: PhaseConfig[];
+    projectType: 'single' | 'team';
+    teamEvents?: any[];
+    onAddPhase: () => void;
+    onUpdatePhase: (phaseId: string, updates: Partial<PhaseConfig>) => void;
+    onRemovePhase: (phaseId: string) => void;
+    onAddPromotionRule: (phaseId: string) => void;
+    onUpdatePromotionRule: (phaseId: string, ruleIndex: number, updates: Partial<PromotionRule>) => void;
+    onRemovePromotionRule: (phaseId: string, ruleIndex: number) => void;
+    emptyTitle: string;
+    emptyDescription: string;
+    canAddPhase?: boolean;
+    addPhaseDisabledReason?: string;
+    collapsible?: boolean;
+    expandedPhaseIds?: string[];
+    onTogglePhase?: (phaseId: string) => void;
+    participantCountMode?: 'editable' | 'per_project_auto';
+    showAddPhaseButton?: boolean;
+    visiblePhaseIds?: string[];
+    contextPhases?: PhaseConfig[];
+    showPhaseImpactHint?: boolean;
+  }) => {
+    const effectiveContextPhases = contextPhases || phases;
+    const visiblePhases = visiblePhaseIds
+      ? phases.filter((phase) => visiblePhaseIds.includes(phase.id))
+      : phases;
+
+    return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">比赛阶段配置</span>
+        {showAddPhaseButton && (
+          <button
+            onClick={() => {
+              if (!canAddPhase) {
+                alert(addPhaseDisabledReason);
+                return;
+              }
+              onAddPhase();
+            }}
+            className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold transition-all ${
+              canAddPhase
+                ? 'text-indigo-600 hover:bg-indigo-50'
+                : 'cursor-not-allowed text-slate-300'
+            }`}
+            title={canAddPhase ? '添加阶段' : addPhaseDisabledReason}
+          >
+            <Plus className="w-3 h-3" />
+            添加阶段
+          </button>
+        )}
+      </div>
+      {showPhaseImpactHint && visiblePhases.length > 0 && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-700">
+          修改当前阶段配置后，后续阶段的晋级人数与状态可能同步更新。
+        </div>
+      )}
+      {visiblePhases.length === 0 ? (
+        <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-white border border-slate-200 flex items-center justify-center text-slate-300 shadow-sm">
+            <LayoutGrid className="w-8 h-8" />
+          </div>
+          <div className="max-w-xs">
+            <p className="text-sm font-bold text-slate-900">{emptyTitle}</p>
+            <p className="text-xs text-slate-500 mt-1">{emptyDescription}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {visiblePhases.map((phase, index) => {
+            const actualIndex = Math.max(
+              effectiveContextPhases.findIndex((item) => item.id === phase.id),
+              0
+            );
+            const isLastPhase = actualIndex === effectiveContextPhases.length - 1;
+            const hasNextPhase = actualIndex < effectiveContextPhases.length - 1;
+
+            return (
+            <div key={phase.id} className="relative p-5 bg-white rounded-2xl border border-slate-200 shadow-sm group">
+              <div className={`flex items-center justify-between ${collapsible && !expandedPhaseIds.includes(phase.id) ? '' : 'mb-4'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                    {actualIndex + 1}
+                  </div>
+                  <div className="min-w-0">
+                    <input
+                      type="text"
+                      value={phase.name}
+                      onChange={(e) => onUpdatePhase(phase.id, { name: e.target.value })}
+                      className="bg-transparent border-none p-0 text-sm font-bold text-slate-900 focus:ring-0 w-32"
+                      placeholder="阶段名称"
+                    />
+                    {collapsible && (
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {phase.type} · {phase.type === PhaseType.ELIMINATION
+                          ? participantCountMode === 'per_project_auto'
+                            ? '参赛人数按项目自动带入'
+                            : `${phase.participant_count}人淘汰`
+                          : participantCountMode === 'per_project_auto'
+                            ? `${phase.group_count || 1}组 / 每组晋级${phase.promotion_per_group || 1}人 / 参赛人数自动带入`
+                            : `${phase.group_count || 1}组 / 每组晋级${phase.promotion_per_group || 1}人`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={phase.type}
+                    onChange={(e) => onUpdatePhase(phase.id, { type: e.target.value as PhaseType })}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 uppercase tracking-wider focus:ring-0 cursor-pointer"
+                  >
+                    {Object.values(PhaseType).map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => onRemovePhase(phase.id)}
+                    className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  {collapsible && onTogglePhase && (
+                    <button
+                      onClick={() => onTogglePhase(phase.id)}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    >
+                      <ChevronRight className={`w-4 h-4 transition-transform ${expandedPhaseIds.includes(phase.id) ? 'rotate-90' : ''}`} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {(!collapsible || expandedPhaseIds.includes(phase.id)) && (phase.type === PhaseType.ELIMINATION ? (
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="space-y-1 col-span-2">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">阶段目标</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onUpdatePhase(phase.id, { elimination_goal: 'advance' })}
+                        className={`rounded-lg border px-3 py-2 text-xs font-bold transition-all ${
+                          (phase.elimination_goal || 'advance') === 'advance'
+                            ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-200 hover:text-indigo-600'
+                        }`}
+                      >
+                        筛选晋级
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isLastPhase) {
+                            alert('“决出名次”只能用于最后一个阶段，请先将后续阶段删除后再设置。');
+                            return;
+                          }
+                          onUpdatePhase(phase.id, { elimination_goal: 'ranking' });
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-xs font-bold transition-all ${
+                          (phase.elimination_goal || 'advance') === 'ranking'
+                            ? 'border-violet-200 bg-violet-50 text-violet-600'
+                            : isLastPhase
+                              ? 'border-slate-200 bg-white text-slate-500 hover:border-violet-200 hover:text-violet-600'
+                              : 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300'
+                        }`}
+                        title={isLastPhase ? '将该阶段作为最终名次阶段' : '仅最后一个阶段可设置为决出名次'}
+                      >
+                        决出名次
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {(phase.elimination_goal || 'advance') === 'advance'
+                        ? '当前阶段用于筛选进入下一阶段的选手。'
+                        : '当前阶段将作为最终阶段，直接决出名次。'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">参赛人数</label>
+                    {participantCountMode === 'per_project_auto' ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+                        将按各项目实际报名人数自动带入
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <Hash className="w-3 h-3 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="number"
+                          value={phase.participant_count}
+                          onChange={(e) => onUpdatePhase(phase.id, { participant_count: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">种子数</label>
+                    <div className="relative">
+                      <Hash className="w-3 h-3 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="number"
+                        value={phase.seed_count || 0}
+                        onChange={(e) => onUpdatePhase(phase.id, { seed_count: parseInt(e.target.value) || 0 })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  {(phase.elimination_goal || 'advance') === 'advance' ? (
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">晋级人数</label>
+                      <div className="relative">
+                        <ArrowRight className="w-3 h-3 text-emerald-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="number"
+                          value={phase.promotion_count}
+                          onChange={(e) => onUpdatePhase(phase.id, { promotion_count: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-emerald-600 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">本阶段决出名次</label>
+                      <select
+                        value={phase.decide_top_n || 1}
+                        onChange={(e) => onUpdatePhase(phase.id, { decide_top_n: parseInt(e.target.value) || 1 })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-violet-600 focus:ring-1 focus:ring-violet-500 focus:border-violet-500"
+                      >
+                        <option value={1}>决出冠军</option>
+                        <option value={2}>决出前2名</option>
+                        <option value={4}>决出前4名</option>
+                        <option value={8}>决出前8名</option>
+                      </select>
+                    </div>
+                  )}
+                  <div className="space-y-1 flex items-end">
+                    <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">
+                      {(phase.elimination_goal || 'advance') === 'advance'
+                        ? '该阶段结束后，系统将按晋级人数自动衔接下一阶段。'
+                        : '该阶段作为最终阶段，后续将不允许继续新增比赛阶段。'}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">参赛人数</label>
+                    {participantCountMode === 'per_project_auto' ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+                        将按各项目实际报名人数自动带入
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <Hash className="w-3 h-3 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="number"
+                          value={phase.participant_count}
+                          onChange={(e) => onUpdatePhase(phase.id, { participant_count: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">分组数量</label>
+                    <div className="relative">
+                      <Hash className="w-3 h-3 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="number"
+                        value={phase.group_count || 1}
+                        onChange={(e) => onUpdatePhase(phase.id, { group_count: parseInt(e.target.value) || 1 })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">每组晋级人数</label>
+                    <div className="relative">
+                      <ArrowRight className="w-3 h-3 text-emerald-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="number"
+                        value={phase.promotion_per_group || 1}
+                        onChange={(e) => onUpdatePhase(phase.id, { promotion_per_group: parseInt(e.target.value) || 1 })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-emerald-600 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">组内赛制</label>
+                    <select
+                      value={phase.group_match_format || '单循环'}
+                      onChange={(e) => onUpdatePhase(phase.id, { group_match_format: e.target.value as any })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="单循环">单循环</option>
+                      <option value="双循环">双循环</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">分组策略</label>
+                    <select
+                      value={phase.grouping_strategy || '1号固定逆时针轮转法'}
+                      onChange={(e) => onUpdatePhase(phase.id, { grouping_strategy: e.target.value as any })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="1号固定逆时针轮转法">1号固定逆时针轮转法</option>
+                      <option value="蛇形排列法">蛇形排列法</option>
+                      <option value="随机抽签">随机抽签</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 col-span-2 mt-2">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">排序规则配置 (拖拽调整优先级)</label>
+                    <div className="flex flex-wrap gap-2">
+                      {(phase.ranking_rules || ['胜场数', '胜负关系', '净胜局', '总得分']).map((rule, idx, arr) => (
+                        <div
+                          key={rule}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', idx.toString());
+                          }}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'));
+                            if (sourceIdx === idx) return;
+                            const newRules = [...arr];
+                            const [draggedItem] = newRules.splice(sourceIdx, 1);
+                            newRules.splice(idx, 0, draggedItem);
+                            onUpdatePhase(phase.id, { ranking_rules: newRules });
+                          }}
+                          className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 cursor-move hover:border-indigo-300 transition-colors"
+                        >
+                          <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-500 shrink-0">
+                            {idx + 1}
+                          </div>
+                          <span className="text-xs font-bold text-slate-700">{rule}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {(!collapsible || expandedPhaseIds.includes(phase.id)) && (
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">比赛胜负规则</span>
+                </div>
+
+                {projectType === 'single' ? (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">单场胜负规则</label>
+                    <select
+                      value={phase.match_win_loss_rule || '3局2胜'}
+                      onChange={(e) => onUpdatePhase(phase.id, { match_win_loss_rule: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="1局1胜">1局1胜</option>
+                      <option value="3局2胜">3局2胜</option>
+                      <option value="5局3胜">5局3胜</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">团体胜负规则</label>
+                      <select
+                        value={phase.team_match_rule || '5场3胜'}
+                        onChange={(e) => onUpdatePhase(phase.id, { team_match_rule: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      >
+                        <option value="3场2胜">3场2胜</option>
+                        <option value="5场3胜">5场3胜</option>
+                        <option value="7场4胜">7场4胜</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">团体单项规则配置</label>
+                      <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        {(teamEvents || []).map((te: any) => (
+                          <div key={te.id} className="flex items-center justify-between gap-4">
+                            <span className="text-xs font-bold text-slate-600 shrink-0">
+                              {te.match_format_rule?.value || '未知单项'}
+                            </span>
+                            <select
+                              value={phase.sub_match_rules?.[te.id] || '3局2胜'}
+                              onChange={(e) => {
+                                const newSubRules = { ...(phase.sub_match_rules || {}) };
+                                newSubRules[te.id] = e.target.value;
+                                onUpdatePhase(phase.id, { sub_match_rules: newSubRules });
+                              }}
+                              className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                            >
+                              <option value="1局1胜">1局1胜</option>
+                              <option value="3局2胜">3局2胜</option>
+                              <option value="5局3胜">5局3胜</option>
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              )}
+
+              {(!collapsible || expandedPhaseIds.includes(phase.id)) && hasNextPhase && (
+                <div className="pt-4 border-t border-slate-100 space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GitBranch className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">晋级与落位逻辑 (至下一阶段)</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">晋级规则 (筛选方式)</label>
+                    </div>
+                    <select
+                      value={phase.progression_rule?.mode || 'group_ranking'}
+                      onChange={(e) => onUpdatePhase(phase.id, {
+                        progression_rule: { ...phase.progression_rule, mode: e.target.value as any }
+                      })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="group_ranking">按组内排名晋级</option>
+                      <option value="cross_group_ranking">跨组综合排名晋级</option>
+                      <option value="hybrid">混合补位模式</option>
+                      <option value="playoff">附加赛晋级</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">落位规则 (签表分布)</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <span className="text-[9px] text-slate-400 block">落位策略</span>
+                        <select
+                          value={phase.placement_rule?.strategy || 'serpentine'}
+                          onChange={(e) => onUpdatePhase(phase.id, {
+                            placement_rule: { ...phase.placement_rule, strategy: e.target.value as any }
+                          })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="serpentine">蛇形分布</option>
+                          <option value="cross_group">小组交叉对阵</option>
+                          <option value="fixed">固定映射</option>
+                          <option value="random">随机抽签</option>
+                          <option value="seed_protection">种子保护</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[9px] text-slate-400 block">分区规则</span>
+                        <select
+                          value={phase.placement_rule?.division_rule || 'none'}
+                          onChange={(e) => onUpdatePhase(phase.id, {
+                            placement_rule: { ...phase.placement_rule, division_rule: e.target.value }
+                          })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="none">无分区</option>
+                          <option value="half">上下半区避开</option>
+                          <option value="quarter">四个区避开</option>
+                          <option value="region">按地区避开</option>
+                          <option value="club">按俱乐部避开</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={phase.placement_rule?.avoid_same_group || false}
+                          onChange={(e) => onUpdatePhase(phase.id, {
+                            placement_rule: { ...phase.placement_rule, avoid_same_group: e.target.checked }
+                          })}
+                          className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                        />
+                        <span className="text-[10px] font-bold text-slate-600">避免同组提前相遇</span>
+                      </label>
+                    </div>
+
+                    {phase.placement_rule?.strategy === 'fixed' && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">具体映射关系</span>
+                          <button
+                            onClick={() => onAddPromotionRule(phase.id)}
+                            className="text-[9px] font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-0.5 rounded transition-colors"
+                          >
+                            + 添加映射
+                          </button>
+                        </div>
+                        <div className="space-y-2 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                          {phase.promotion_rules?.length === 0 && (
+                            <div className="text-center py-2 text-[10px] text-slate-400">
+                              暂无映射规则
+                            </div>
+                          )}
+                          {phase.promotion_rules?.map((rule, rIdx) => (
+                            <div key={rIdx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
+                              <div className="flex-1 grid grid-cols-3 gap-2">
+                                <div className="space-y-1">
+                                  <span className="text-[9px] text-slate-400 block">来源组</span>
+                                  <select
+                                    value={rule.from_group}
+                                    onChange={(e) => onUpdatePromotionRule(phase.id, rIdx, { from_group: parseInt(e.target.value) || 1 })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold"
+                                  >
+                                    {Array.from({ length: phase.group_count || 1 }).map((_, i) => (
+                                      <option key={i} value={i + 1}>
+                                        小组 {getGroupLabel(i)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[9px] text-slate-400 block">组名次</span>
+                                  <input
+                                    type="number"
+                                    value={rule.from_rank}
+                                    onChange={(e) => onUpdatePromotionRule(phase.id, rIdx, { from_rank: parseInt(e.target.value) || 1 })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[9px] text-indigo-400 block">下段位</span>
+                                  <input
+                                    type="number"
+                                    value={rule.to_position}
+                                    onChange={(e) => onUpdatePromotionRule(phase.id, rIdx, { to_position: parseInt(e.target.value) || 1 })}
+                                    className="w-full bg-indigo-50 border border-indigo-100 rounded px-1 py-0.5 text-[10px] font-bold text-indigo-600"
+                                  />
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => onRemovePromotionRule(phase.id, rIdx)}
+                                className="p-1 text-slate-300 hover:text-rose-500 transition-colors"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )})}
+        </div>
+      )}
+    </div>
+  )};
+
+  const selectedProjectConfig = selectedProject ? getProjectConfig(selectedProject.id) : null;
+  const selectedProjectPhases = selectedProjectConfig?.phases || [];
+  const safeSelectedPhaseIndex = Math.min(activePhaseIndex, Math.max(0, selectedProjectPhases.length - 1));
+  const selectedPhase = selectedProjectPhases[safeSelectedPhaseIndex];
+  const selectedPhaseStatus = selectedProject && selectedPhase
+    ? getPhaseStatus(selectedProject.id, selectedPhase.id)
+    : null;
+  const selectedPhaseStatusMeta = selectedPhaseStatus
+    ? getPhaseStatusMeta(selectedPhaseStatus)
+    : null;
+  const selectedPhaseHasStructure = Boolean(
+    selectedProject &&
+      selectedPhase &&
+      ['draft', 'confirmed', 'locked', 'generated'].includes(selectedPhaseStatus || '') &&
+      getProjectConfig(selectedProject.id).generated_framework
+  );
+
+  return (
+    <div className="flex-1 flex flex-col bg-slate-100">
       {/* 4 Columns Layout */}
       <div className="flex-1 flex overflow-x-auto overflow-y-hidden">
         {isPreviewMode ? (
@@ -603,7 +1797,21 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                   <h3 className="text-2xl font-bold text-slate-900">项目编排总方案预览</h3>
                   <p className="text-slate-500 mt-1">查看所有已配置项目的编排详情及场次统计</p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setIsPreviewMode(false)}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600"
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                    退出预览
+                  </button>
+                  <button 
+                    onClick={() => setShowFinalizeConfirm(true)}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-700 shadow-lg shadow-emerald-200"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    编排定稿
+                  </button>
                   <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                       <Trophy className="w-5 h-5" />
@@ -688,601 +1896,481 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
           </div>
         ) : (
           <>
-            {/* Column 1: 已立项项目 */}
-        <div className="w-72 shrink-0 border-r border-slate-200 bg-white flex flex-col">
-          <div className="p-2 border-b border-slate-100 flex gap-1 bg-slate-50/50 shrink-0">
-            <button
-              onClick={() => { setProjectTypeTab('单项项目'); setSelectedProject(null); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${projectTypeTab === '单项项目' ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              单项项目
-            </button>
-            <button
-              onClick={() => { setProjectTypeTab('团体项目'); setSelectedProject(null); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${projectTypeTab === '团体项目' ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              团体项目
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {filteredProjects.map(p => {
-              const config = schedulingConfigs[p.id];
-              const isConfigured = config && config.phases.length > 0;
-              const isGenerated = config && config.generated_framework;
-
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedProject(p)}
-                  className={`w-full text-left p-4 rounded-2xl border transition-all group relative overflow-hidden ${
-                    selectedProject?.id === p.id 
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' 
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/30'
-                  }`}
-                >
-                  <div className="relative z-10 flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Trophy className={`w-3.5 h-3.5 ${selectedProject?.id === p.id ? 'text-indigo-200' : 'text-indigo-600'}`} />
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${selectedProject?.id === p.id ? 'text-indigo-200' : 'text-slate-400'}`}>
-                          {p.type}
-                        </span>
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <div className="mx-auto max-w-7xl space-y-5">
+                <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_60px_-42px_rgba(15,23,42,0.35)]">
+                  <div className="flex flex-col gap-5 border-b border-slate-100 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(255,255,255,0.9)_100%)] px-8 py-6 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="space-y-3">
+                      <div>
+                        <h2 className="text-2xl font-black tracking-tight text-slate-900">项目编排管理</h2>
+                        <p className="mt-1 text-sm text-slate-500">先对本次比赛的单项和团体项目分别设置赛事与阶段</p>
                       </div>
-                      <h4 className="font-bold text-sm">{p.name}</h4>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 font-medium text-indigo-700">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          只有已立项的项目可以编排对阵
+                        </div>
+                        <button 
+                          onClick={onNavigateToAnnouncement}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600 transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+                        >
+                          前往立项 <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
-                    <ChevronRight className={`w-4 h-4 transition-transform ${selectedProject?.id === p.id ? 'translate-x-1 text-white' : 'text-slate-300 group-hover:translate-x-1'}`} />
+                    <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+                      <button 
+                        onClick={() => setIsPreviewMode(true)}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:border-indigo-300 hover:bg-indigo-50"
+                      >
+                        <LayoutGrid className="h-4 w-4" />
+                        方案总览
+                      </button>
+                      <button 
+                        onClick={() => setShowFinalizeConfirm(true)}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-700 shadow-lg shadow-emerald-200"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        编排定稿
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-2">
-                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                      isConfigured 
-                        ? (selectedProject?.id === p.id ? 'bg-white/20 border-white/30 text-white' : 'bg-emerald-50 border-emerald-100 text-emerald-600')
-                        : (selectedProject?.id === p.id ? 'bg-white/10 border-white/20 text-white/60' : 'bg-slate-50 border-slate-100 text-slate-400')
-                    }`}>
-                      <Settings2 className="w-2.5 h-2.5" />
-                      {isConfigured ? '已配置' : '未配置'}
-                    </div>
-                    {isGenerated && (
-                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                        selectedProject?.id === p.id ? 'bg-white/20 border-white/30 text-white' : 'bg-blue-50 border-blue-100 text-blue-600'
-                      }`}>
-                        <GitBranch className="w-2.5 h-2.5" />
-                        已生成
+                  <div className="flex flex-col gap-4 border-b border-slate-100 px-8 py-5 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex w-fit flex-wrap gap-2 rounded-full bg-slate-100 p-1.5">
+                        <button
+                          onClick={() => {
+                            setProjectTypeTab('单项项目');
+                            setSelectedProject(null);
+                          }}
+                          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                            projectTypeTab === '单项项目'
+                              ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200'
+                              : 'text-slate-500 hover:bg-white hover:text-slate-700'
+                          }`}
+                        >
+                          单项项目
+                        </button>
+                        <button
+                          onClick={() => {
+                            setProjectTypeTab('团体项目');
+                            setSelectedProject(null);
+                          }}
+                          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                            projectTypeTab === '团体项目'
+                              ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200'
+                              : 'text-slate-500 hover:bg-white hover:text-slate-700'
+                          }`}
+                        >
+                          团体项目
+                        </button>
                       </div>
-                    )}
+                      <input
+                        value={searchKeyword}
+                        onChange={(event) => setSearchKeyword(event.target.value)}
+                        placeholder="搜索项目名称 / 简称 / 代码"
+                        className="w-72 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                      <select
+                        value={statusFilter}
+                        onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="all">全部状态</option>
+                        <option value="unconfigured">未编排</option>
+                        <option value="draft">编排中（草稿）</option>
+                        <option value="locked">已锁定赛制</option>
+                        <option value="generated">已生成比赛</option>
+                      </select>
+                      <button
+                        onClick={handleBatchGenerate}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700 shadow-sm shadow-indigo-200"
+                      >
+                        <Settings2 className="h-4 w-4" />
+                        批量编排
+                      </button>
+                    </div>
                   </div>
-                </button>
-              );
-            })}
-            {filteredProjects.length === 0 && (
-              <div className="text-center py-8 text-slate-400 text-xs">
-                暂无{projectTypeTab}
+
+                  <div className="flex flex-wrap items-center gap-3 px-8 py-4 text-sm text-slate-500">
+                    <span className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">列表模式</span>
+                    当前筛选出 <span className="font-bold text-slate-900">{filteredProjects.length}</span> 个项目，
+                    已选 <span className="font-bold text-indigo-600">{visibleSelectedProjectIds.length}</span> 个用于批量编排。
+                  </div>
+
+                  <div className="overflow-x-auto border-t border-slate-100">
+                    <table className="min-w-[1120px] w-full text-left">
+                      <thead className="bg-slate-50/80">
+                        <tr>
+                          <th className="px-6 py-4">
+                            <input
+                              type="checkbox"
+                              checked={allVisibleSelected}
+                              onChange={toggleSelectAllVisible}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                          </th>
+                          <th className="px-6 py-4 text-xs font-semibold text-slate-400">项目名称</th>
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">项目类型</th>
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">报名人数</th>
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">编排方案摘要</th>
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">编排状态</th>
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">场次</th>
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">最近更新</th>
+                          <th className="sticky right-0 bg-slate-50/95 px-6 py-4 text-right text-xs font-semibold text-slate-400 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
+                            操作
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {filteredProjects.map((project) => {
+                          const config = getProjectConfig(project.id);
+                          const statusMeta = getProjectScheduleStatusMeta(project.id);
+                          const generatedPhaseIds = getProjectPhaseStatuses(project.id)
+                            .filter(({ status }) => status === 'generated')
+                            .map(({ phase }) => phase.id);
+                          const generatedMatches = config.generated_framework
+                            ? config.generated_framework.rounds
+                                .filter((round) => generatedPhaseIds.includes(round.phase_id))
+                                .reduce((total, round) => total + round.matches.length, 0)
+                            : 0;
+                          const hasGeneratedPhase = generatedPhaseIds.length > 0;
+                          const selected = selectedProjectIds.includes(project.id);
+
+                          return (
+                            <tr key={project.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="px-6 py-4">
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() => toggleProjectSelection(project.id)}
+                                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="space-y-1">
+                                  <button
+                                    onClick={() => {
+                                      openProjectScheduling(project);
+                                    }}
+                                    className="text-left text-sm font-bold text-slate-900 transition-colors hover:text-indigo-600"
+                                  >
+                                    {project.name}
+                                  </button>
+                                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                                    <span>{project.short_name}</span>
+                                    <span>{project.code}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                                  {project.type === 'single' ? '单项项目' : '团体项目'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-sm font-semibold text-slate-700">{project.current_count || 0}</td>
+                              <td className="px-4 py-4 text-sm text-slate-600">{getProjectScheduleSummary(project)}</td>
+                              <td className="px-4 py-4">
+                                <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                                  {statusMeta.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-sm font-semibold text-slate-700">{generatedMatches > 0 ? `${generatedMatches} 场` : '-'}</td>
+                              <td className="px-4 py-4 text-sm text-slate-500">{getProjectUpdatedText(project.id)}</td>
+                              <td className="sticky right-0 bg-white px-6 py-4 text-right shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
+                                <div className="flex justify-end gap-2 whitespace-nowrap">
+                                  <button
+                                    onClick={() => openProjectScheduling(project)}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+                                  >
+                                    <Settings2 className="h-3.5 w-3.5" />
+                                    项目编排
+                                  </button>
+                                  {hasGeneratedPhase && (
+                                    <button
+                                      onClick={() => openProjectMatchList(project)}
+                                      className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-600 transition-all hover:bg-emerald-100"
+                                    >
+                                      <LayoutGrid className="h-3.5 w-3.5" />
+                                      查看比赛列表
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {filteredProjects.length === 0 && (
+                    <div className="px-8 py-16 text-center text-sm text-slate-400">当前筛选条件下暂无可编排项目</div>
+                  )}
+                </section>
               </div>
-            )}
+            </div>
+
+        {selectedProject && (
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedProject(null)}
+              className="absolute inset-0 bg-slate-900/35 backdrop-blur-[2px]"
+            />
+            <motion.div
+              initial={{ y: 24, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 24, opacity: 0, scale: 0.98 }}
+              className="relative z-10 flex h-[min(920px,calc(100vh-32px))] w-[min(1440px,calc(100vw-32px))] flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_32px_100px_-40px_rgba(15,23,42,0.45)]"
+            >
+        <div className="border-b border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(255,255,255,0.96)_100%)] px-6 py-5 shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex items-center gap-3">
+              <div className="rounded-2xl bg-indigo-50 p-2.5 text-indigo-600">
+                <Settings2 className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="truncate text-lg font-bold text-slate-900">{selectedProject?.name}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">按阶段分别完成配置、生成对阵、确认、锁定与生成比赛。</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                onClick={() => setSelectedProject(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-600"
+                title="关闭弹窗"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
 
+        <div className="border-b border-slate-100 bg-white px-6 py-4 shrink-0">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0 flex-1 overflow-x-auto pb-1">
+              <div className="flex items-center gap-3 w-max pr-2">
+                {selectedProjectPhases.length === 0 ? (
+                  <div className="text-sm text-slate-400">请先添加比赛阶段</div>
+                ) : (
+                  selectedProjectPhases.map((phase, idx) => {
+                    const phaseStatus = getPhaseStatus(selectedProject.id, phase.id);
+                    const phaseMeta = getPhaseStatusMeta(phaseStatus);
+                    return (
+                      <button
+                        key={phase.id}
+                        onClick={() => {
+                          setActivePhaseIndex(idx);
+                          setActiveTab('bracket');
+                        }}
+                        className={`min-w-[180px] rounded-2xl border px-4 py-3 text-left transition-all ${
+                          safeSelectedPhaseIndex === idx
+                            ? 'border-indigo-200 bg-indigo-50 shadow-sm'
+                            : 'border-slate-200 bg-slate-50/60 hover:border-indigo-200 hover:bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold text-slate-900">{phase.name}</div>
+                            <div className="mt-1 text-[11px] text-slate-400">{phase.type}</div>
+                          </div>
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold ${phaseMeta.className}`}>
+                            {phaseMeta.label}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (!canAddAnotherPhase(selectedProjectPhases)) {
+                  alert('当前最后一个阶段已设置为“决出名次”，不能继续添加后续阶段。');
+                  return;
+                }
+                addPhase(selectedProject.id);
+                setActivePhaseIndex(selectedProjectPhases.length);
+                setActiveTab('bracket');
+              }}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-bold transition-all ${
+                canAddAnotherPhase(selectedProjectPhases)
+                  ? 'border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                  : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300'
+              }`}
+              title={canAddAnotherPhase(selectedProjectPhases) ? '添加阶段' : '当前最后一个阶段已设置为“决出名次”，不能继续添加后续阶段。'}
+            >
+              <Plus className="h-4 w-4" />
+              添加阶段
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
         {/* Column 2: 项目编排 (Phase Config) */}
         <div className="w-[420px] shrink-0 border-r border-slate-200 bg-slate-50 flex flex-col">
-          <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-              <Settings2 className="w-4 h-4 text-indigo-600" />
-              项目编排
-            </h3>
-            <div className="flex items-center gap-2">
-              {selectedProject && (
-                <>
-                  <button 
-                    onClick={handleSaveConfig}
-                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                    title="保存配置"
-                  >
-                    <Save className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={handleGenerateFramework}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    生成对阵表
-                  </button>
-                </>
+          <div className="border-b border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(255,255,255,0.92)_100%)] px-6 py-4 shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-bold text-slate-900">当前阶段配置</div>
+                <div className="mt-1 text-xs text-slate-500">调整当前选中阶段的赛制、晋级与落位规则。</div>
+              </div>
+              {selectedPhaseStatusMeta && (
+                <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${selectedPhaseStatusMeta.className}`}>
+                  {selectedPhaseStatusMeta.label}
+                </span>
               )}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-6">
-            {!selectedProject ? (
+            {selectedProject ? renderPhaseConfigurationEditor({
+              phases: getProjectConfig(selectedProject.id).phases,
+              projectType: selectedProject.type,
+              teamEvents: selectedProject.team_events || [],
+              onAddPhase: () => addPhase(selectedProject.id),
+              onUpdatePhase: (phaseId, updates) => updatePhase(selectedProject.id, phaseId, updates),
+              onRemovePhase: (phaseId) => removePhase(selectedProject.id, phaseId),
+              onAddPromotionRule: (phaseId) => addPromotionRule(selectedProject.id, phaseId),
+              onUpdatePromotionRule: (phaseId, ruleIndex, updates) => updatePromotionRule(selectedProject.id, phaseId, ruleIndex, updates),
+              onRemovePromotionRule: (phaseId, ruleIndex) => removePromotionRule(selectedProject.id, phaseId, ruleIndex),
+              emptyTitle: '暂未配置比赛阶段',
+              emptyDescription: '请先在上方阶段导航右侧添加比赛阶段',
+              canAddPhase: canAddAnotherPhase(getProjectConfig(selectedProject.id).phases),
+              showAddPhaseButton: false,
+              visiblePhaseIds: selectedPhase ? [selectedPhase.id] : undefined,
+              contextPhases: getProjectConfig(selectedProject.id).phases,
+              showPhaseImpactHint: true
+            }) : (
               <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50">
                 <LayoutGrid className="w-12 h-12 text-slate-300" />
                 <p className="text-sm font-bold text-slate-500">请选择一个项目</p>
               </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">比赛阶段配置</span>
-                  <button 
-                    onClick={() => addPhase(selectedProject.id)}
-                    className="flex items-center gap-1 px-2 py-1 text-indigo-600 hover:bg-indigo-50 rounded text-[10px] font-bold transition-all"
-                  >
-                    <Plus className="w-3 h-3" />
-                    添加阶段
-                  </button>
-                </div>
-                {getProjectConfig(selectedProject.id).phases.length === 0 ? (
-                  <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
-                    <div className="w-16 h-16 rounded-3xl bg-white border border-slate-200 flex items-center justify-center text-slate-300 shadow-sm">
-                      <LayoutGrid className="w-8 h-8" />
-                    </div>
-                    <div className="max-w-xs">
-                      <p className="text-sm font-bold text-slate-900">暂未配置比赛阶段</p>
-                      <p className="text-xs text-slate-500 mt-1">点击右上角按钮开始为该项目配置比赛阶段</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {getProjectConfig(selectedProject.id).phases.map((phase, index) => (
-                      <div key={phase.id} className="relative p-5 bg-white rounded-2xl border border-slate-200 shadow-sm group">
-                        <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
-                          {index + 1}
-                        </div>
-                        <input 
-                          type="text" 
-                          value={phase.name}
-                          onChange={(e) => updatePhase(selectedProject.id, phase.id, { name: e.target.value })}
-                          className="bg-transparent border-none p-0 text-sm font-bold text-slate-900 focus:ring-0 w-24"
-                          placeholder="阶段名称"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <select 
-                          value={phase.type}
-                          onChange={(e) => updatePhase(selectedProject.id, phase.id, { type: e.target.value as PhaseType })}
-                          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 uppercase tracking-wider focus:ring-0 cursor-pointer"
-                        >
-                          {Object.values(PhaseType).map(t => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                        <button 
-                          onClick={() => removePhase(selectedProject.id, phase.id)}
-                          className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {phase.type === PhaseType.ELIMINATION ? (
-                      <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">参赛人数</label>
-                          <div className="relative">
-                            <Hash className="w-3 h-3 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
-                            <input 
-                              type="number" 
-                              value={phase.participant_count}
-                              onChange={(e) => updatePhase(selectedProject.id, phase.id, { participant_count: parseInt(e.target.value) || 0 })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">种子数</label>
-                          <div className="relative">
-                            <Hash className="w-3 h-3 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
-                            <input 
-                              type="number" 
-                              value={phase.seed_count || 0}
-                              onChange={(e) => updatePhase(selectedProject.id, phase.id, { seed_count: parseInt(e.target.value) || 0 })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">晋级人数</label>
-                          <div className="relative">
-                            <ArrowRight className="w-3 h-3 text-emerald-400 absolute left-2 top-1/2 -translate-y-1/2" />
-                            <input 
-                              type="number" 
-                              value={phase.promotion_count}
-                              onChange={(e) => updatePhase(selectedProject.id, phase.id, { promotion_count: parseInt(e.target.value) || 0 })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-emerald-600 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1 flex items-end">
-                          <label className="flex items-center gap-2 p-1.5 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer w-full h-[34px]">
-                            <input 
-                              type="checkbox" 
-                              checked={phase.play_third_place || false}
-                              onChange={(e) => updatePhase(selectedProject.id, phase.id, { play_third_place: e.target.checked })}
-                              className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 ml-1"
-                            />
-                            <span className="text-xs font-bold text-slate-700">附加赛(决出3、4名)</span>
-                          </label>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">参赛人数</label>
-                          <div className="relative">
-                            <Hash className="w-3 h-3 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
-                            <input 
-                              type="number" 
-                              value={phase.participant_count}
-                              onChange={(e) => updatePhase(selectedProject.id, phase.id, { participant_count: parseInt(e.target.value) || 0 })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">分组数量</label>
-                          <div className="relative">
-                            <Hash className="w-3 h-3 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
-                            <input 
-                              type="number" 
-                              value={phase.group_count || 1}
-                              onChange={(e) => updatePhase(selectedProject.id, phase.id, { group_count: parseInt(e.target.value) || 1 })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">每组晋级人数</label>
-                          <div className="relative">
-                            <ArrowRight className="w-3 h-3 text-emerald-400 absolute left-2 top-1/2 -translate-y-1/2" />
-                            <input 
-                              type="number" 
-                              value={phase.promotion_per_group || 1}
-                              onChange={(e) => updatePhase(selectedProject.id, phase.id, { promotion_per_group: parseInt(e.target.value) || 1 })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-emerald-600 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">组内赛制</label>
-                          <select 
-                            value={phase.group_match_format || '单循环'}
-                            onChange={(e) => updatePhase(selectedProject.id, phase.id, { group_match_format: e.target.value as any })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          >
-                            <option value="单循环">单循环</option>
-                            <option value="双循环">双循环</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1 col-span-2">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">分组策略</label>
-                          <select 
-                            value={phase.grouping_strategy || '1号固定逆时针轮转法'}
-                            onChange={(e) => updatePhase(selectedProject.id, phase.id, { grouping_strategy: e.target.value as any })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          >
-                            <option value="1号固定逆时针轮转法">1号固定逆时针轮转法</option>
-                            <option value="蛇形排列法">蛇形排列法</option>
-                            <option value="随机抽签">随机抽签</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2 col-span-2 mt-2">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">排序规则配置 (拖拽调整优先级)</label>
-                          <div className="flex flex-wrap gap-2">
-                            {(phase.ranking_rules || ['胜场数', '胜负关系', '净胜局', '总得分']).map((rule, idx, arr) => (
-                              <div
-                                key={rule}
-                                draggable
-                                onDragStart={(e) => {
-                                  e.dataTransfer.setData('text/plain', idx.toString());
-                                }}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'));
-                                  if (sourceIdx === idx) return;
-                                  const newRules = [...arr];
-                                  const [draggedItem] = newRules.splice(sourceIdx, 1);
-                                  newRules.splice(idx, 0, draggedItem);
-                                  updatePhase(selectedProject.id, phase.id, { ranking_rules: newRules });
-                                }}
-                                className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 cursor-move hover:border-indigo-300 transition-colors"
-                              >
-                                <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-500 shrink-0">
-                                  {idx + 1}
-                                </div>
-                                <span className="text-xs font-bold text-slate-700">{rule}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Match Rules Section */}
-                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Zap className="w-3.5 h-3.5 text-amber-500" />
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">比赛胜负规则</span>
-                      </div>
-
-                      {selectedProject.type === 'single' ? (
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">单项胜负规则</label>
-                          <select 
-                            value={phase.match_win_loss_rule || '3局2胜'}
-                            onChange={(e) => updatePhase(selectedProject.id, phase.id, { match_win_loss_rule: e.target.value })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          >
-                            <option value="1局1胜">1局1胜</option>
-                            <option value="3局2胜">3局2胜</option>
-                            <option value="5局3胜">5局3胜</option>
-                          </select>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">团体对抗规则</label>
-                            <select 
-                              value={phase.team_match_rule || '5场3胜'}
-                              onChange={(e) => updatePhase(selectedProject.id, phase.id, { team_match_rule: e.target.value })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            >
-                              <option value="3场2胜">3场2胜</option>
-                              <option value="5场3胜">5场3胜</option>
-                              <option value="7场4胜">7场4胜</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">团体单项规则配置</label>
-                            <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                              {(selectedProject.team_events || []).map((te: any) => (
-                                <div key={te.id} className="flex items-center justify-between gap-4">
-                                  <span className="text-xs font-bold text-slate-600 shrink-0">
-                                    {te.match_format_rule?.value || '未知单项'}
-                                  </span>
-                                  <select 
-                                    value={phase.sub_match_rules?.[te.id] || '3局2胜'}
-                                    onChange={(e) => {
-                                      const newSubRules = { ...(phase.sub_match_rules || {}) };
-                                      newSubRules[te.id] = e.target.value;
-                                      updatePhase(selectedProject.id, phase.id, { sub_match_rules: newSubRules });
-                                    }}
-                                    className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                                  >
-                                    <option value="1局1胜">1局1胜</option>
-                                    <option value="3局2胜">3局2胜</option>
-                                    <option value="5局3胜">5局3胜</option>
-                                  </select>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Progression & Placement Logic Section */}
-                    {index < getProjectConfig(selectedProject.id).phases.length - 1 && (
-                      <div className="pt-4 border-t border-slate-100 space-y-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <GitBranch className="w-3.5 h-3.5 text-indigo-500" />
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">晋级与落位逻辑 (至下一阶段)</span>
-                        </div>
-
-                        {/* Progression Rules */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">晋级规则 (筛选方式)</label>
-                          </div>
-                          <select 
-                            value={phase.progression_rule?.mode || 'group_ranking'}
-                            onChange={(e) => updatePhase(selectedProject.id, phase.id, { 
-                              progression_rule: { ...phase.progression_rule, mode: e.target.value as any } 
-                            })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          >
-                            <option value="group_ranking">按组内排名晋级</option>
-                            <option value="cross_group_ranking">跨组综合排名晋级</option>
-                            <option value="hybrid">混合补位模式</option>
-                            <option value="playoff">附加赛晋级</option>
-                          </select>
-                        </div>
-
-                        {/* Placement Rules */}
-                        <div className="space-y-4">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">落位规则 (签表分布)</label>
-                          
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <span className="text-[9px] text-slate-400 block">落位策略</span>
-                              <select 
-                                value={phase.placement_rule?.strategy || 'serpentine'}
-                                onChange={(e) => updatePhase(selectedProject.id, phase.id, { 
-                                  placement_rule: { ...phase.placement_rule, strategy: e.target.value as any } 
-                                })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                              >
-                                <option value="serpentine">蛇形分布</option>
-                                <option value="cross_group">小组交叉对阵</option>
-                                <option value="fixed">固定映射</option>
-                                <option value="random">随机抽签</option>
-                                <option value="seed_protection">种子保护</option>
-                              </select>
-                            </div>
-                            <div className="space-y-1">
-                              <span className="text-[9px] text-slate-400 block">分区规则</span>
-                              <select 
-                                value={phase.placement_rule?.division_rule || 'none'}
-                                onChange={(e) => updatePhase(selectedProject.id, phase.id, { 
-                                  placement_rule: { ...phase.placement_rule, division_rule: e.target.value } 
-                                })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                              >
-                                <option value="none">无分区</option>
-                                <option value="half">上下半区避开</option>
-                                <option value="quarter">四个区避开</option>
-                                <option value="region">按地区避开</option>
-                                <option value="club">按俱乐部避开</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                checked={phase.placement_rule?.avoid_same_group || false}
-                                onChange={(e) => updatePhase(selectedProject.id, phase.id, { 
-                                  placement_rule: { ...phase.placement_rule, avoid_same_group: e.target.checked } 
-                                })}
-                                className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                              />
-                              <span className="text-[10px] font-bold text-slate-600">避免同组提前相遇</span>
-                            </label>
-                          </div>
-
-                          {/* Mapping Relations (Only for Fixed Mapping) */}
-                          {phase.placement_rule?.strategy === 'fixed' && (
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">具体映射关系</span>
-                                <button 
-                                  onClick={() => addPromotionRule(selectedProject.id, phase.id)}
-                                  className="text-[9px] font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-0.5 rounded transition-colors"
-                                >
-                                  + 添加映射
-                                </button>
-                              </div>
-                              <div className="space-y-2 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                                {phase.promotion_rules?.length === 0 && (
-                                  <div className="text-center py-2 text-[10px] text-slate-400">
-                                    暂无映射规则
-                                  </div>
-                                )}
-                                {phase.promotion_rules?.map((rule, rIdx) => (
-                                  <div key={rIdx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
-                                    <div className="flex-1 grid grid-cols-3 gap-2">
-                                      <div className="space-y-1">
-                                        <span className="text-[9px] text-slate-400 block">来源组</span>
-                                        <select
-                                          value={rule.from_group}
-                                          onChange={(e) => updatePromotionRule(selectedProject.id, phase.id, rIdx, { from_group: parseInt(e.target.value) || 1 })}
-                                          className="w-full bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold"
-                                        >
-                                          {Array.from({ length: phase.group_count || 1 }).map((_, i) => (
-                                            <option key={i} value={i + 1}>
-                                              小组 {getGroupLabel(i)}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <span className="text-[9px] text-slate-400 block">组名次</span>
-                                        <input 
-                                          type="number" 
-                                          value={rule.from_rank}
-                                          onChange={(e) => updatePromotionRule(selectedProject.id, phase.id, rIdx, { from_rank: parseInt(e.target.value) || 1 })}
-                                          className="w-full bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <span className="text-[9px] text-indigo-400 block">下段位</span>
-                                        <input 
-                                          type="number" 
-                                          value={rule.to_position}
-                                          onChange={(e) => updatePromotionRule(selectedProject.id, phase.id, rIdx, { to_position: parseInt(e.target.value) || 1 })}
-                                          className="w-full bg-indigo-50 border border-indigo-100 rounded px-1 py-0.5 text-[10px] font-bold text-indigo-600"
-                                        />
-                                      </div>
-                                    </div>
-                                    <button 
-                                      onClick={() => removePromotionRule(selectedProject.id, phase.id, rIdx)}
-                                      className="p-1 text-slate-300 hover:text-rose-500 transition-colors"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
             )}
-            </div>
-          )}
           </div>
         </div>
 
         {/* Column 3: 赛程安排 (Schedule) */}
         <div className="flex-1 min-w-[500px] shrink-0 border-r border-slate-200 bg-slate-50 flex flex-col">
-          <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-4">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <GitBranch className="w-4 h-4 text-emerald-600" />
-                赛程安排
-              </h3>
-              {selectedProject && getProjectConfig(selectedProject.id).generated_framework && (
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                  <button
-                    onClick={() => setActiveTab('bracket')}
-                    className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${
-                      activeTab === 'bracket' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {selectedProject?.type === 'team' ? '团体对阵图' : '对阵图'}
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('list')}
-                    className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${
-                      activeTab === 'list' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {selectedProject?.type === 'team' ? '团体对阵(Tie)表' : '场次列表'}
-                  </button>
-                  {selectedProject?.type === 'team' && (
+          <div className="px-6 py-4 border-b border-slate-200 bg-white shrink-0">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-emerald-600" />
+                  {selectedPhase ? `${selectedPhase.name} · 赛程安排` : '赛程安排'}
+                </h3>
+                {selectedPhaseStatusMeta && (
+                  <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${selectedPhaseStatusMeta.className}`}>
+                    当前阶段：{selectedPhaseStatusMeta.label}
+                  </span>
+                )}
+                {selectedPhaseHasStructure && (
+                  <div className="flex bg-slate-100 p-1 rounded-lg">
                     <button
-                      onClick={() => setActiveTab('sub_matches')}
+                      onClick={() => setActiveTab('bracket')}
                       className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${
-                        activeTab === 'sub_matches' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                        activeTab === 'bracket' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
-                      单项对阵(所有单项)
+                      {selectedProject?.type === 'team' ? '团体对阵图' : '对阵图'}
                     </button>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {selectedProject && getProjectConfig(selectedProject.id).generated_framework && (
-                <>
+                    <button
+                      onClick={() => setActiveTab('list')}
+                      className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${
+                        activeTab === 'list' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {selectedProject?.type === 'team' ? '团体对阵(Tie)表' : '场次列表'}
+                    </button>
+                    {selectedProject?.type === 'team' && (
+                      <button
+                        onClick={() => setActiveTab('sub_matches')}
+                        className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${
+                          activeTab === 'sub_matches' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        单项对阵(所有单项)
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {selectedPhase && ['configured', 'draft', 'confirmed'].includes(selectedPhaseStatus || '') && (
+                  <button 
+                    onClick={handleSaveConfig}
+                    className="rounded-xl border border-slate-200 bg-white p-2 text-slate-400 transition-all hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
+                    title="保存当前阶段配置"
+                  >
+                    <Save className="w-4 h-4" />
+                  </button>
+                )}
+                {selectedPhaseStatus === 'configured' && (
+                  <button 
+                    onClick={handleGenerateBracket}
+                    className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-indigo-700 shadow-sm shadow-indigo-200"
+                  >
+                    <GitBranch className="w-3.5 h-3.5" />
+                    生成对阵
+                  </button>
+                )}
+                {selectedPhaseStatus === 'draft' && (
+                  <button 
+                    onClick={handleConfirmCurrentPhase}
+                    className="inline-flex items-center gap-1 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-sky-700 shadow-sm shadow-sky-200"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    确认阶段
+                  </button>
+                )}
+                {selectedPhaseStatus === 'confirmed' && (
+                  <button 
+                    onClick={handleLockCurrentPhase}
+                    className="inline-flex items-center gap-1 rounded-xl bg-violet-600 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-violet-700 shadow-sm shadow-violet-200"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    锁定阶段
+                  </button>
+                )}
+                {selectedPhaseStatus === 'locked' && (
+                  <button 
+                    onClick={handleGenerateFramework}
+                    className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-indigo-700 shadow-sm shadow-indigo-200"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    生成比赛
+                  </button>
+                )}
+                {selectedPhaseStatus === 'generated' && (
+                  <button 
+                    onClick={() => setActiveTab('list')}
+                    className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-700 shadow-sm shadow-emerald-200"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    查看比赛列表
+                  </button>
+                )}
+                {selectedPhaseHasStructure && (
                   <button 
                     className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                     title="导出赛程"
                   >
                     <Download className="w-4 h-4" />
                   </button>
-                  <button 
-                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-200"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    发布赛程
-                  </button>
-                </>
-              )}
+                )}
+              </div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-6">
-            {!selectedProject || !getProjectConfig(selectedProject.id).generated_framework ? (
+            {!selectedProject || !selectedPhaseHasStructure ? (
               <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50">
                 <GitBranch className="w-12 h-12 text-slate-300" />
-                <p className="text-sm font-bold text-slate-500">暂无赛程数据</p>
-                <p className="text-xs text-slate-400">请先配置项目编排并生成对阵表</p>
+                <p className="text-sm font-bold text-slate-500">当前阶段暂无赛程数据</p>
+                <p className="text-xs text-slate-400">请先针对当前阶段生成对阵，并继续完成确认与锁定。</p>
               </div>
             ) : (
               <div className="space-y-8">
@@ -1401,9 +2489,229 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
             )}
           </div>
         </div>
+        </div>
+            </motion.div>
+          </div>
+        )}
           </>
         )}
       </div>
+      <AnimatePresence>
+        {showBatchSchedulingModal && (
+          <div className="fixed inset-0 z-[190] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBatchSchedulingModal(false)}
+              className="absolute inset-0 bg-slate-900/55 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              className="relative flex max-h-[calc(100vh-32px)] w-full max-w-6xl flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_32px_90px_-36px_rgba(15,23,42,0.45)]"
+            >
+              <div className="flex items-start justify-between border-b border-slate-100 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(255,255,255,0.92)_100%)] px-8 py-7">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
+                      <Settings2 className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black tracking-tight text-slate-900">批量配置赛制</h3>
+                      <p className="mt-1 text-sm text-slate-500">支持为以下项目批量配置赛制，点击“开始编排”一键生成对阵，后续仍可单独调整。</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedBatchProjects.slice(0, 5).map((project) => (
+                      <span
+                        key={project.id}
+                        className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm"
+                      >
+                        {project.name}
+                      </span>
+                    ))}
+                    {selectedBatchProjects.length > 5 && (
+                      <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600">
+                        +{selectedBatchProjects.length - 5} 个项目
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowBatchSchedulingModal(false)}
+                  className="rounded-full p-2 text-slate-400 transition-all hover:bg-white hover:text-slate-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-8 py-7">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">选择赛制模板</h4>
+                    </div>
+
+                    <div className="space-y-2">
+                      <input
+                        value={batchTemplateKeyword}
+                        onChange={(event) => setBatchTemplateKeyword(event.target.value)}
+                        placeholder="搜索模板名称"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      {filteredBatchPlanningTemplates.map((template) => {
+                        const selected = batchSchedulingDraft.templateId === template.id;
+                        return (
+                          <button
+                            key={template.id}
+                            onClick={() => {
+                              setBatchSchedulingDraft((prev) => ({
+                                ...prev,
+                                templateId: template.id
+                              }));
+                            }}
+                            className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                              selected
+                                ? 'border-indigo-200 bg-indigo-50 shadow-sm'
+                                : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="space-y-1">
+                                <div className={`text-sm font-bold ${selected ? 'text-indigo-700' : 'text-slate-900'}`}>{template.name}</div>
+                                <div className="text-xs leading-5 text-slate-500">{template.description}</div>
+                              </div>
+                              <div className={`mt-0.5 h-4 w-4 rounded-full border-2 ${selected ? 'border-indigo-600 bg-indigo-600 shadow-[inset_0_0_0_3px_white]' : 'border-slate-300 bg-white'}`} />
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {filteredBatchPlanningTemplates.length === 0 && (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
+                          暂无匹配的赛制模板
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+
+                  <div className="min-w-0 rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
+                    <div className="mb-4 flex items-center justify-between gap-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">赛制预览</h4>
+                      </div>
+                      <div className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm">
+                        {batchTemplatePhases.length} 个阶段
+                      </div>
+                    </div>
+
+                    {renderPhaseConfigurationEditor({
+                      phases: batchTemplatePhases,
+                      projectType: projectTypeTab === '单项项目' ? 'single' : 'team',
+                      teamEvents: projectTypeTab === '团体项目' ? batchPlanningTeamEvents : [],
+                      onAddPhase: addBatchTemplatePhase,
+                      onUpdatePhase: updateBatchTemplatePhase,
+                      onRemovePhase: removeBatchTemplatePhase,
+                      onAddPromotionRule: addBatchPromotionRule,
+                      onUpdatePromotionRule: updateBatchPromotionRule,
+                      onRemovePromotionRule: removeBatchPromotionRule,
+                      emptyTitle: '当前模板还没有配置比赛阶段',
+                      emptyDescription: '请先补充模板中的阶段与晋级规则，再开始批量编排',
+                      canAddPhase: canAddAnotherPhase(batchTemplatePhases),
+                      collapsible: true,
+                      participantCountMode: 'per_project_auto',
+                      expandedPhaseIds: batchExpandedPhaseIds,
+                      onTogglePhase: (phaseId) =>
+                        setBatchExpandedPhaseIds((prev) =>
+                          prev.includes(phaseId) ? prev.filter((id) => id !== phaseId) : [...prev, phaseId]
+                        )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-white px-8 py-5">
+                <button
+                  onClick={() => setShowBatchSchedulingModal(false)}
+                  className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleApplyBatchScheduling}
+                  disabled={batchPlanLoading}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  {batchPlanLoading ? '编排中...' : '开始编排'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showBatchPlanResult && batchPlanResult && (
+          <div className="fixed inset-0 z-[195] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBatchPlanResult(false)}
+              className="absolute inset-0 bg-slate-900/55 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              className="relative w-full max-w-2xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_32px_90px_-36px_rgba(15,23,42,0.45)]"
+            >
+              <div className="border-b border-slate-100 px-8 py-7">
+                <h3 className="text-2xl font-black tracking-tight text-slate-900">批量编排完成</h3>
+                <p className="mt-2 text-sm text-slate-500">成功：{batchPlanResult.successCount} 个，失败：{batchPlanResult.failedCount} 个</p>
+              </div>
+
+              <div className="space-y-5 px-8 py-7">
+                {batchPlanResult.failedItems.length > 0 ? (
+                  <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5">
+                    <h4 className="text-sm font-bold text-rose-700">失败项目</h4>
+                    <div className="mt-3 space-y-2 text-sm text-rose-600">
+                      {batchPlanResult.failedItems.map((item) => (
+                        <div key={`${item.projectName}-${item.reason}`} className="flex items-center justify-between gap-4 rounded-xl bg-white/80 px-4 py-3">
+                          <span>项目：{item.projectName}</span>
+                          <span>原因：{item.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm text-emerald-700">
+                    本次批量编排全部成功，所有结构已写入 Draft。
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50 px-4 py-4 text-sm text-indigo-700">
+                  编排完成，请检查结构后进行“锁定赛制”。
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t border-slate-100 px-8 py-5">
+                <button
+                  onClick={() => setShowBatchPlanResult(false)}
+                  className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                >
+                  我知道了
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       {/* Finalize Confirmation Modal */}
       <AnimatePresence>
         {showFinalizeConfirm && (

@@ -398,6 +398,7 @@ export interface PhaseConfig {
   ranking_rules?: string[];
   
   // Elimination specific
+  elimination_goal?: 'advance' | 'ranking';
   seed_count?: number;
   play_third_place?: boolean;
   decide_top_n?: number;
@@ -508,6 +509,7 @@ export interface ProjectSchedulingConfig {
   project_code: string;
   phases: PhaseConfig[];
   venue_config?: VenueConfig;
+  scheduling_status?: 'draft' | 'locked' | 'generated';
   generated_framework?: {
     rounds: MatchRound[];
     total_matches: number;
