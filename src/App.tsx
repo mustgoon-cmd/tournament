@@ -276,6 +276,7 @@ type ScoreRuleRow = {
   breakEnabled: boolean;
   breakSeconds: number;
   swapCourtEnabled: boolean;
+  enabled: boolean;
 };
 
 type SingleMatchRuleRow = {
@@ -292,6 +293,7 @@ type SingleMatchRuleRow = {
   forfeitPointsPerGame: number;
   remark: string;
   createdAt: string;
+  enabled: boolean;
 };
 
 type TeamBattleOutcomeMethod = '胜场制' | '总分制';
@@ -649,6 +651,7 @@ const SCORE_RULES: ScoreRuleRow[] = [
     breakEnabled: true,
     breakSeconds: 60,
     swapCourtEnabled: true,
+    enabled: true,
   },
   {
     id: 'SR002',
@@ -667,6 +670,7 @@ const SCORE_RULES: ScoreRuleRow[] = [
     breakEnabled: true,
     breakSeconds: 60,
     swapCourtEnabled: true,
+    enabled: true,
   },
   {
     id: 'SR003',
@@ -685,6 +689,7 @@ const SCORE_RULES: ScoreRuleRow[] = [
     breakEnabled: true,
     breakSeconds: 60,
     swapCourtEnabled: true,
+    enabled: true,
   },
 ];
 
@@ -703,6 +708,7 @@ const SINGLE_MATCH_RULES: SingleMatchRuleRow[] = [
     forfeitPointsPerGame: 21,
     remark: '适用于常规羽毛球单场比赛。',
     createdAt: '2026-03-20 10:20:18',
+    enabled: true,
   },
   {
     id: 'SMR002',
@@ -718,6 +724,7 @@ const SINGLE_MATCH_RULES: SingleMatchRuleRow[] = [
     forfeitPointsPerGame: 15,
     remark: '适用于青少年项目，局间节奏更紧凑。',
     createdAt: '2026-03-18 09:42:10',
+    enabled: true,
   },
   {
     id: 'SMR003',
@@ -733,6 +740,7 @@ const SINGLE_MATCH_RULES: SingleMatchRuleRow[] = [
     forfeitPointsPerGame: 11,
     remark: '用于企业邀请赛，便于裁判组赛前沟通执行口径。',
     createdAt: '2026-03-12 16:08:55',
+    enabled: true,
   },
 ];
 
@@ -1358,6 +1366,7 @@ const createEmptyScoreRule = (): ScoreRuleRow => ({
   breakEnabled: true,
   breakSeconds: 60,
   swapCourtEnabled: true,
+  enabled: true,
 });
 
 const createEmptySingleMatchRule = (): SingleMatchRuleRow => ({
@@ -1374,6 +1383,7 @@ const createEmptySingleMatchRule = (): SingleMatchRuleRow => ({
   forfeitPointsPerGame: 21,
   remark: '',
   createdAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+  enabled: true,
 });
 
 const createEmptyTeamBattleRule = (): TeamBattleRuleRow => ({
@@ -3020,10 +3030,12 @@ export default function App() {
   };
 
   const saveScoreRule = () => {
+    const existingRule = scoreRules.find((item) => item.id === scoreRuleDraft.id);
     const normalizedRule: ScoreRuleRow = {
       ...scoreRuleDraft,
       summary: buildScoreRuleSummary(scoreRuleDraft),
       updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+      enabled: scoreRuleDraft.enabled ?? existingRule?.enabled ?? true,
     };
 
     setScoreRules((prev) => {
@@ -3100,6 +3112,7 @@ export default function App() {
   };
 
   const saveSingleMatchRule = () => {
+    const existingRule = singleMatchRules.find((item) => item.id === singleMatchRuleDraft.id);
     const normalizedGameCount = Math.max(1, singleMatchRuleDraft.totalGames);
     const normalizedRule: SingleMatchRuleRow = {
       ...singleMatchRuleDraft,
@@ -3112,6 +3125,7 @@ export default function App() {
         scoreRules[0]?.id || 'SR001'
       ),
       intervalRestEnabled: normalizedGameCount === 1 ? false : singleMatchRuleDraft.intervalRestEnabled,
+      enabled: singleMatchRuleDraft.enabled ?? existingRule?.enabled ?? true,
     };
 
     setSingleMatchRules((prev) => {
@@ -3797,13 +3811,14 @@ export default function App() {
                     </div>
 
                     <div className="max-w-full overflow-x-auto">
-                      <table className="min-w-[1380px] border-collapse text-left">
+                      <table className="min-w-[1480px] border-collapse text-left">
                         <thead>
                           <tr className="border-b border-slate-100 bg-white">
                             <th className="px-8 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">ID</th>
                             <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">规则名称</th>
                             <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">规则摘要</th>
                             <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">最新更新</th>
+                            <th className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">是否启用</th>
                             <th className="sticky right-0 z-10 bg-white px-8 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
                               操作
                             </th>
@@ -3821,6 +3836,30 @@ export default function App() {
                                   <p className="text-sm leading-7 text-slate-600 whitespace-nowrap">{rule.summary}</p>
                                 </td>
                                 <td className="px-6 py-6 text-sm text-slate-500 whitespace-nowrap">{rule.updatedAt}</td>
+                                <td className="px-6 py-6">
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={rule.enabled}
+                                    onClick={() =>
+                                      setScoreRules((prev) =>
+                                        prev.map((item) =>
+                                          item.id === rule.id ? { ...item, enabled: !item.enabled } : item
+                                        )
+                                      )
+                                    }
+                                    className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
+                                      rule.enabled ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
+                                    }`}
+                                  >
+                                    <span>{rule.enabled ? '开' : '关'}</span>
+                                    <span
+                                      className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
+                                        rule.enabled ? 'right-1' : 'left-1'
+                                      }`}
+                                    />
+                                  </button>
+                                </td>
                                 <td className="sticky right-0 z-10 bg-white px-8 py-6 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50/60">
                                   <div className="flex flex-nowrap justify-end gap-2">
                                     <button
@@ -3843,7 +3882,7 @@ export default function App() {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan={5} className="px-8 py-16 text-center text-sm text-slate-500">
+                              <td colSpan={6} className="px-8 py-16 text-center text-sm text-slate-500">
                                 暂无符合条件的规则，试试调整检索条件后再查看。
                               </td>
                             </tr>
@@ -4257,7 +4296,7 @@ export default function App() {
                     </div>
 
                     <div className="max-w-full overflow-x-auto px-6 py-4">
-                      <table className="min-w-[1120px] w-full border-collapse text-left">
+                      <table className="min-w-[1240px] w-full border-collapse text-left">
                         <thead>
                           <tr className="border-b border-slate-100 bg-white">
                             <th className="w-[88px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">ID</th>
@@ -4266,6 +4305,7 @@ export default function App() {
                             <th className="w-[150px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">局数</th>
                             <th className="w-[240px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">局内计分规则</th>
                             <th className="w-[210px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">局间休息</th>
+                            <th className="w-[120px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">是否启用</th>
                             <th className="w-[170px] px-3 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">创建时间</th>
                             <th className="sticky right-0 z-10 w-[160px] bg-white px-3 py-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">操作</th>
                           </tr>
@@ -4292,6 +4332,30 @@ export default function App() {
                                 <td className="px-3 py-5">
                                   <p className="text-sm text-slate-600 whitespace-nowrap">{getSingleMatchRuleIntervalLabel(rule)}</p>
                                 </td>
+                                <td className="px-3 py-5">
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={rule.enabled}
+                                    onClick={() =>
+                                      setSingleMatchRules((prev) =>
+                                        prev.map((item) =>
+                                          item.id === rule.id ? { ...item, enabled: !item.enabled } : item
+                                        )
+                                      )
+                                    }
+                                    className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
+                                      rule.enabled ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
+                                    }`}
+                                  >
+                                    <span>{rule.enabled ? '开' : '关'}</span>
+                                    <span
+                                      className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
+                                        rule.enabled ? 'right-1' : 'left-1'
+                                      }`}
+                                    />
+                                  </button>
+                                </td>
                                 <td className="px-3 py-5 text-sm text-slate-500 whitespace-nowrap">{rule.createdAt}</td>
                                 <td className="sticky right-0 z-10 bg-white px-3 py-5 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)] transition-colors group-hover:bg-slate-50/60">
                                   <div className="flex justify-end gap-2 whitespace-nowrap">
@@ -4315,7 +4379,7 @@ export default function App() {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan={8} className="px-8 py-16 text-center text-sm text-slate-500">
+                              <td colSpan={9} className="px-8 py-16 text-center text-sm text-slate-500">
                                 暂无符合条件的规则，试试调整检索条件后再查看。
                               </td>
                             </tr>
@@ -7531,6 +7595,12 @@ export default function App() {
                 >
                   <ProjectScheduling 
                     onNavigateToAnnouncement={() => setViewMode('project-filing')} 
+                    onNavigateToRuleTemplates={() => {
+                      setAppPage('tournament-list');
+                      setAdminActiveMenu('single-match-rule-template');
+                      setExpandedAdminMenus((prev) => (prev.includes('template') ? prev : [...prev, 'template']));
+                    }}
+                    onNavigateToMatchCodeFormat={() => setViewMode('match-code-config')}
                     venueConfig={venueConfig}
                     schedulingConfigs={schedulingConfigs}
                     onUpdateSchedulingConfigs={setSchedulingConfigs}

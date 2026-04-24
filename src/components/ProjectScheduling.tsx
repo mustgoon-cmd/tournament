@@ -27,6 +27,8 @@ import { MatchList } from './MatchList';
 
 interface ProjectSchedulingProps {
   onNavigateToAnnouncement?: () => void;
+  onNavigateToRuleTemplates?: () => void;
+  onNavigateToMatchCodeFormat?: () => void;
   venueConfig: VenueConfig;
   schedulingConfigs: Record<string, ProjectSchedulingConfig>;
   onUpdateSchedulingConfigs: (configs: Record<string, ProjectSchedulingConfig>) => void;
@@ -34,6 +36,8 @@ interface ProjectSchedulingProps {
 
 export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({ 
   onNavigateToAnnouncement,
+  onNavigateToRuleTemplates,
+  onNavigateToMatchCodeFormat,
   venueConfig,
   schedulingConfigs,
   onUpdateSchedulingConfigs
@@ -72,6 +76,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     failedCount: number;
     failedItems: { projectName: string; reason: string }[];
   } | null>(null);
+  const projectListRef = React.useRef<HTMLDivElement | null>(null);
 
   const batchPlanningTemplates = [
     {
@@ -1898,24 +1903,70 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
           <>
             <div className="flex-1 overflow-y-auto px-6 py-6">
               <div className="mx-auto max-w-7xl space-y-5">
+                <div className="sticky top-0 z-30 rounded-[24px] border border-slate-200 bg-white/95 p-2 shadow-lg shadow-slate-200/60 backdrop-blur">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
+                      <GitBranch className="h-4 w-4" />
+                    </span>
+                    <button
+                      type="button"
+                      onClick={onNavigateToAnnouncement}
+                      title="只有已立项的项目可以编排对阵，点击前往项目立项页面"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2 font-semibold text-indigo-700 transition-all hover:border-indigo-200 hover:bg-indigo-100"
+                    >
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      立项后可编排，前往立项
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                    <span className="hidden h-5 w-px bg-slate-200 sm:block" />
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-bold text-indigo-700 ring-1 ring-inset ring-indigo-100">编排流程如下</span>
+                    <button
+                      type="button"
+                      onClick={onNavigateToRuleTemplates}
+                      title="查看或维护项目编排可引用的单场胜负规则、团体胜负规则"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-600 transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] text-slate-500">1</span>
+                      配置胜负规则模板
+                    </button>
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
+                    <button
+                      type="button"
+                      onClick={onNavigateToMatchCodeFormat}
+                      title="确认本赛事生成比赛场次时采用的比赛代码格式"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-600 transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] text-slate-500">2</span>
+                      定义比赛代码格式
+                    </button>
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
+                    <button
+                      type="button"
+                      onClick={() => projectListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      title="批量或单个配置项目赛制"
+                      className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-3 py-2 font-semibold text-white shadow-sm shadow-indigo-100 transition-all hover:bg-indigo-700"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[11px] text-white">3</span>
+                      比赛项目编排
+                    </button>
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
+                    <button
+                      type="button"
+                      onClick={() => projectListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      title="项目赛制锁定后，在操作栏生成比赛场次"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-semibold text-emerald-700 transition-all hover:border-emerald-300 hover:bg-emerald-100"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-[11px] text-emerald-700">4</span>
+                      编排定稿，生成比赛场次
+                    </button>
+                  </div>
+                </div>
                 <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_60px_-42px_rgba(15,23,42,0.35)]">
                   <div className="flex flex-col gap-5 border-b border-slate-100 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(255,255,255,0.9)_100%)] px-8 py-6 xl:flex-row xl:items-start xl:justify-between">
                     <div className="space-y-3">
                       <div>
                         <h2 className="text-2xl font-black tracking-tight text-slate-900">项目编排管理</h2>
                         <p className="mt-1 text-sm text-slate-500">先对本次比赛的单项和团体项目分别设置赛事与阶段</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                        <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 font-medium text-indigo-700">
-                          <AlertCircle className="h-3.5 w-3.5" />
-                          只有已立项的项目可以编排对阵
-                        </div>
-                        <button 
-                          onClick={onNavigateToAnnouncement}
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600 transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
-                        >
-                          前往立项 <ArrowRight className="h-3 w-3" />
-                        </button>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 xl:justify-end">
@@ -1936,7 +1987,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-4 border-b border-slate-100 px-8 py-5 xl:flex-row xl:items-center xl:justify-between">
+                  <div ref={projectListRef} className="flex flex-col gap-4 border-b border-slate-100 px-8 py-5 xl:flex-row xl:items-center xl:justify-between">
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex w-fit flex-wrap gap-2 rounded-full bg-slate-100 p-1.5">
                         <button
