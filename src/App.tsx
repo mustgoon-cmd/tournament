@@ -233,7 +233,9 @@ type IterationPageLink = {
     | 'records'
     | 'records-orders'
     | 'project-filing'
-    | 'multi-event-stats';
+    | 'multi-event-stats'
+    | 'match-code-config'
+    | 'scheduling';
   changeType: IterationChangeType;
   summary: string;
   details?: string[];
@@ -1533,6 +1535,45 @@ const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
 ];
 
 const ITERATION_VERSIONS: IterationVersion[] = [
+  {
+    id: 'v1.3',
+    name: 'v1.3 比赛规则与项目编排优化',
+    status: '已上线',
+    updatedAt: __APP_GIT_COMMIT_TIME__,
+    description: '这一版聚焦竞赛规则模板字段调整、赛事级比赛规则配置，以及项目编排批量化能力优化。',
+    pages: [
+      {
+        id: 'competition-rule-template',
+        label: '竞赛规则模板',
+        area: 'admin',
+        adminMenu: 'score-rule-template',
+        changeType: 'updated',
+        summary: '调整单局计分规则、单场胜负规则和团体胜负规则的配置字段。',
+        details: ['修改单局计分规则字段', '修改单场胜负规则字段', '修改团体胜负规则字段'],
+      },
+      {
+        id: 'match-rule-config',
+        label: '比赛规则',
+        area: 'detail',
+        detailView: 'match-code-config',
+        changeType: 'new',
+        summary: '赛事详情页新增比赛规则配置入口，用于维护赛事级比赛代码格式。',
+        details: ['赛事详情页增加“比赛规则”配置', '支持配置比赛代码格式', '统一调整异常赛果处理配置结构'],
+      },
+      {
+        id: 'project-scheduling',
+        label: '项目编排',
+        area: 'detail',
+        detailView: 'scheduling',
+        changeType: 'updated',
+        summary: '优化项目编排页面交互，并支持批量对项目进行编排。',
+        details: ['优化项目编排页面流程导航', '支持批量选择项目并套用赛制模板', '批量编排后可继续单项目微调'],
+      },
+    ],
+    added: ['赛事详情页比赛规则配置', '比赛代码格式配置入口', '批量项目编排能力'],
+    updated: ['单局计分规则字段', '单场胜负规则字段', '团体胜负规则字段', '项目编排交互'],
+    removed: [],
+  },
   {
     id: 'v1.2',
     name: 'v1.2 赛事详情页菜单调整与报名数据优化',
@@ -9223,7 +9264,7 @@ export default function App() {
                           <div className="space-y-1">
                             <p className="text-sm font-medium text-slate-700">领队只能由队员兼任</p>
                             <p className="text-xs leading-6 text-slate-500">
-                              开启后，领队必须从当前队伍已填写的队员中选择，不能单独录入外部人员。
+                              开启后，创建队伍阶段可暂不设置领队，但系统将在团体项目提交报名前/后续查看队伍时校验是否已设置领队，否则引导用户从已加入的队员中选择领队。
                             </p>
                           </div>
                           <button

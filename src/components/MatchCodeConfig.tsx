@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Reorder } from 'motion/react';
-import { AlertTriangle, Eye, Hash, RefreshCw, Save, Settings2, Users } from 'lucide-react';
+import { AlertTriangle, Eye, Hash, RefreshCw, Save, Settings2 } from 'lucide-react';
 
 type CodeComponentType = 'project' | 'phase' | 'group' | 'round' | 'sequence';
 
@@ -13,28 +13,32 @@ type CodeComponent = {
   joiner: string;
 };
 
-type SingleExceptionRuleConfig = {
-  enabled: boolean;
-  preMatchForfeitWinGames: number;
-  preMatchForfeitPoints: number;
-  retirementCurrentGame: 'complete_to_target' | 'manual';
-  retirementPendingGames: 'follow_forfeit_rule' | 'manual';
-  interruptedHandling: 'manual' | 'resume_later' | 'replay_all';
+type ExceptionEventType = 'forfeit' | 'injury_retirement' | 'disqualification' | 'forced_stop' | 'interruption';
+
+type ExceptionResultDecision = 'opponent_win' | 'current_score' | 'replay' | 'manual';
+type ExceptionCurrentGameScore = 'complete_to_target' | 'keep_current_score' | 'void_current_game' | 'manual';
+type ExceptionPendingGames = 'forfeit_compensation' | 'cancel_remaining' | 'not_counted' | 'manual';
+type ExceptionMatchStatus = 'completed' | 'unfinished' | 'cancelled' | 'interrupted_pending' | 'manual';
+
+type ExceptionRuleRow = {
+  type: ExceptionEventType;
+  name: string;
+  description: string;
+  resultDecision: ExceptionResultDecision;
+  currentGameScore: ExceptionCurrentGameScore;
+  pendingGames: ExceptionPendingGames;
+  matchStatus: ExceptionMatchStatus;
 };
 
-type TeamExceptionRuleConfig = {
+type ExceptionRuleConfig = {
   enabled: boolean;
-  tieForfeitHandling: 'default_loss' | 'manual';
-  completedSubMatchesHandling: 'keep_result' | 'manual';
-  pendingSubMatchesHandling: 'count_as_loss' | 'manual';
-  unfinishedSubMatchesHandling: 'finish_running' | 'stop_immediately';
+  rules: ExceptionRuleRow[];
 };
 
 type StoredMatchRuleConfig = {
   components?: CodeComponent[];
   separator?: string;
-  singleExceptionConfig?: SingleExceptionRuleConfig;
-  teamExceptionConfig?: TeamExceptionRuleConfig;
+  exceptionRuleConfig?: ExceptionRuleConfig;
 };
 
 type MatchCodePanelTarget =
@@ -128,22 +132,98 @@ const normalizeCodeComponents = (storedComponents?: CodeComponent[], legacySepar
     };
   });
 
-const DEFAULT_SINGLE_EXCEPTION_CONFIG: SingleExceptionRuleConfig = {
+const RESULT_DECISION_OPTIONS: { value: ExceptionResultDecision; label: string }[] = [
+  { value: 'opponent_win', label: '对方获胜' },
+  { value: 'current_score', label: '按当前比分判定' },
+  { value: 'replay', label: '比赛无效重赛' },
+  { value: 'manual', label: '裁判手动判定' },
+];
+
+const CURRENT_GAME_SCORE_OPTIONS: { value: ExceptionCurrentGameScore; label: string }[] = [
+  { value: 'complete_to_target', label: '胜方补齐至目标分' },
+  { value: 'keep_current_score', label: '保留当前比分' },
+  { value: 'void_current_game', label: '当前局作废' },
+  { value: 'manual', label: '裁判手动处理' },
+];
+
+const PENDING_GAMES_OPTIONS: { value: ExceptionPendingGames; label: string }[] = [
+  { value: 'forfeit_compensation', label: '按弃权补偿' },
+  { value: 'cancel_remaining', label: '取消剩余未开始局' },
+  { value: 'not_counted', label: '未开始局不计入' },
+  { value: 'manual', label: '裁判手动处理' },
+];
+
+const MATCH_STATUS_OPTIONS: { value: ExceptionMatchStatus; label: string }[] = [
+  { value: 'completed', label: '已完赛' },
+  { value: 'unfinished', label: '未完赛' },
+  { value: 'cancelled', label: '已取消' },
+  { value: 'interrupted_pending', label: '中断待处理' },
+  { value: 'manual', label: '裁判确认后生效' },
+];
+
+const DEFAULT_EXCEPTION_RULES: ExceptionRuleRow[] = [
+  {
+    type: 'forfeit',
+    name: '弃权',
+    description: '比赛开始前或比赛过程中一方主动放弃比赛。',
+    resultDecision: 'opponent_win',
+    currentGameScore: 'complete_to_target',
+    pendingGames: 'forfeit_compensation',
+    matchStatus: 'completed',
+  },
+  {
+    type: 'injury_retirement',
+    name: '伤退',
+    description: '选手因伤病或身体原因无法继续比赛。',
+    resultDecision: 'opponent_win',
+    currentGameScore: 'keep_current_score',
+    pendingGames: 'forfeit_compensation',
+    matchStatus: 'completed',
+  },
+  {
+    type: 'disqualification',
+    name: '取消资格',
+    description: '因违规、资格不符等原因被取消参赛资格。',
+    resultDecision: 'opponent_win',
+    currentGameScore: 'complete_to_target',
+    pendingGames: 'forfeit_compensation',
+    matchStatus: 'completed',
+  },
+  {
+    type: 'forced_stop',
+    name: '强制结束',
+    description: '比赛已产生处理结论，但现场需要提前终止未完成内容。',
+    resultDecision: 'current_score',
+    currentGameScore: 'keep_current_score',
+    pendingGames: 'cancel_remaining',
+    matchStatus: 'unfinished',
+  },
+  {
+    type: 'interruption',
+    name: '比赛中断',
+    description: '因天气、设备、场地或突发事件导致比赛无法继续。',
+    resultDecision: 'manual',
+    currentGameScore: 'keep_current_score',
+    pendingGames: 'not_counted',
+    matchStatus: 'interrupted_pending',
+  },
+];
+
+const DEFAULT_EXCEPTION_RULE_CONFIG: ExceptionRuleConfig = {
   enabled: true,
-  preMatchForfeitWinGames: 2,
-  preMatchForfeitPoints: 21,
-  retirementCurrentGame: 'complete_to_target',
-  retirementPendingGames: 'follow_forfeit_rule',
-  interruptedHandling: 'manual',
+  rules: DEFAULT_EXCEPTION_RULES,
 };
 
-const DEFAULT_TEAM_EXCEPTION_CONFIG: TeamExceptionRuleConfig = {
-  enabled: true,
-  tieForfeitHandling: 'default_loss',
-  completedSubMatchesHandling: 'keep_result',
-  pendingSubMatchesHandling: 'count_as_loss',
-  unfinishedSubMatchesHandling: 'finish_running',
-};
+const normalizeExceptionRuleConfig = (storedConfig?: ExceptionRuleConfig): ExceptionRuleConfig => ({
+  enabled: storedConfig?.enabled ?? DEFAULT_EXCEPTION_RULE_CONFIG.enabled,
+  rules: DEFAULT_EXCEPTION_RULES.map((defaultRule) => ({
+    ...defaultRule,
+    ...(storedConfig?.rules?.find((rule) => rule.type === defaultRule.type) || {}),
+    type: defaultRule.type,
+    name: defaultRule.name,
+    description: defaultRule.description,
+  })),
+});
 
 const loadStoredMatchRuleConfig = (): StoredMatchRuleConfig => {
   try {
@@ -169,85 +249,22 @@ const loadStoredMatchRuleConfig = (): StoredMatchRuleConfig => {
   return {};
 };
 
-const ToggleSwitch: React.FC<{
-  checked: boolean;
-  onChange: () => void;
-}> = ({ checked, onChange }) => (
-  <button
-    type="button"
-    onClick={onChange}
-    className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
-      checked ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
-    }`}
-  >
-    <span>{checked ? '开' : '关'}</span>
-    <span
-      className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
-        checked ? 'right-1' : 'left-1'
-      }`}
-    />
-  </button>
-);
-
-const buildSingleExceptionSummary = (config: SingleExceptionRuleConfig) => {
-  if (!config.enabled) {
-    return '关闭后，单项赛出现弃权、退赛或中断时，将由裁判根据现场情况决定处理方式。';
-  }
-
-  const retirementCurrentGameText =
-    config.retirementCurrentGame === 'complete_to_target'
-      ? '当前局由胜方补齐至目标分，退赛方保留退赛时实际得分'
-      : '当前局由裁判根据现场情况手动判定';
-  const retirementPendingGamesText =
-    config.retirementPendingGames === 'follow_forfeit_rule'
-      ? '后续未开赛局按赛前弃权规则补偿'
-      : '后续未开赛局由裁判决定处理';
-  const interruptedHandlingText =
-    config.interruptedHandling === 'resume_later'
-      ? '保留当前结果后续补赛'
-      : config.interruptedHandling === 'replay_all'
-      ? '整场重赛'
-      : '由裁判决定';
-
-  return `赛前弃权按 ${config.preMatchForfeitWinGames}:0、每局 ${config.preMatchForfeitPoints}:0 处理；比赛中退赛时，${retirementCurrentGameText}，${retirementPendingGamesText}；比赛中断未完赛时，${interruptedHandlingText}。`;
-};
-
-const buildTeamExceptionSummary = (config: TeamExceptionRuleConfig) => {
-  if (!config.enabled) {
-    return '关闭后，团体赛出现异常情况时，将由裁判结合赛事现场情况决定处理方式。';
-  }
-
-  const tieForfeitText = config.tieForfeitHandling === 'default_loss' ? '整场弃权直接按团体告负处理' : '整场弃权由裁判决定';
-  const completedText = config.completedSubMatchesHandling === 'keep_result' ? '已完成单项结果保留' : '已完成单项结果由裁判决定';
-  const pendingText = config.pendingSubMatchesHandling === 'count_as_loss' ? '未开始单项按默认负场处理' : '未开始单项由裁判决定';
-  const unfinishedText =
-    config.unfinishedSubMatchesHandling === 'finish_running' ? '已开赛但未结束的单项继续完成' : '已开赛但未结束的单项立即终止';
-
-  return `${tieForfeitText}；${completedText}；${pendingText}；${unfinishedText}。`;
-};
-
 export const MatchCodeConfig: React.FC = () => {
   const [components, setComponents] = useState<CodeComponent[]>(() => {
     const stored = loadStoredMatchRuleConfig();
     return normalizeCodeComponents(stored.components, stored.separator || '-');
   });
   const [separator, setSeparator] = useState(() => loadStoredMatchRuleConfig().separator || '-');
-  const [singleExceptionConfig, setSingleExceptionConfig] = useState<SingleExceptionRuleConfig>(() => ({
-    ...DEFAULT_SINGLE_EXCEPTION_CONFIG,
-    ...(loadStoredMatchRuleConfig().singleExceptionConfig || {}),
-  }));
-  const [teamExceptionConfig, setTeamExceptionConfig] = useState<TeamExceptionRuleConfig>(() => ({
-    ...DEFAULT_TEAM_EXCEPTION_CONFIG,
-    ...(loadStoredMatchRuleConfig().teamExceptionConfig || {}),
-  }));
+  const [exceptionRuleConfig, setExceptionRuleConfig] = useState<ExceptionRuleConfig>(() =>
+    normalizeExceptionRuleConfig(loadStoredMatchRuleConfig().exceptionRuleConfig)
+  );
   const [panelTarget, setPanelTarget] = useState<MatchCodePanelTarget>({
     type: 'field',
     id: 'project',
   });
   const [isSaving, setIsSaving] = useState(false);
   const codeFormatRef = useRef<HTMLElement | null>(null);
-  const singleExceptionRef = useRef<HTMLElement | null>(null);
-  const teamExceptionRef = useRef<HTMLElement | null>(null);
+  const exceptionRef = useRef<HTMLElement | null>(null);
 
   const activeComponents = components.filter((component) => component.enabled);
   const previewSegments = activeComponents.map((component) => ({
@@ -264,13 +281,19 @@ export const MatchCodeConfig: React.FC = () => {
     setComponents((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   };
 
+  const updateExceptionRule = (type: ExceptionEventType, updates: Partial<ExceptionRuleRow>) => {
+    setExceptionRuleConfig((prev) => ({
+      ...prev,
+      rules: prev.rules.map((rule) => (rule.type === type ? { ...rule, ...updates } : rule)),
+    }));
+  };
+
   const handleSave = () => {
     setIsSaving(true);
     const payload: StoredMatchRuleConfig = {
       components,
       separator,
-      singleExceptionConfig,
-      teamExceptionConfig,
+      exceptionRuleConfig,
     };
     localStorage.setItem('match_rule_config', JSON.stringify(payload));
     localStorage.setItem('match_code_config', JSON.stringify(components));
@@ -293,14 +316,32 @@ export const MatchCodeConfig: React.FC = () => {
               <p className="text-xs text-slate-500 mt-0.5">统一配置比赛代码格式与赛事级异常赛果处理规则。</p>
             </div>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 disabled:opacity-50"
-          >
-            {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            保存配置
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-2xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => codeFormatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="rounded-xl px-3 py-2 text-xs font-semibold text-slate-600 transition-all hover:bg-white hover:text-indigo-600 hover:shadow-sm"
+              >
+                比赛代码格式
+              </button>
+              <button
+                type="button"
+                onClick={() => exceptionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="rounded-xl px-3 py-2 text-xs font-semibold text-slate-600 transition-all hover:bg-white hover:text-amber-600 hover:shadow-sm"
+              >
+                异常赛果处理
+              </button>
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 disabled:opacity-50"
+            >
+              {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              保存配置
+            </button>
+          </div>
         </div>
       </section>
 
@@ -492,305 +533,103 @@ export const MatchCodeConfig: React.FC = () => {
         </div>
       </section>
 
-      <div className="space-y-8">
-      <section ref={singleExceptionRef} className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-amber-50 p-3 text-amber-600">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">单项赛异常赛果处理</h3>
-              <p className="mt-0.5 text-xs text-slate-500">用于定义单项比赛中弃权、退赛和比赛中断时的统一处理规则。</p>
-            </div>
-          </div>
+      <section ref={exceptionRef} className="space-y-3">
+        <div className="flex items-center gap-3 px-1">
+          <AlertTriangle className="h-5 w-5 text-amber-600" />
+          <h3 className="text-xl font-bold text-slate-900">异常赛果处理</h3>
         </div>
 
-        <div className="divide-y divide-slate-100">
-          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">统一规则</h2>
-            </div>
-            <p className="text-xs leading-6 text-slate-500">
-              开启后，单项赛出现弃权、退赛或中断时，将按本赛事统一规则处理。
-            </p>
-            <ToggleSwitch
-              checked={singleExceptionConfig.enabled}
-              onChange={() =>
-                setSingleExceptionConfig((prev) => ({
-                  ...prev,
-                  enabled: !prev.enabled,
-                }))
-              }
-            />
-          </div>
-
-          {singleExceptionConfig.enabled ? (
-            <>
-              <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="divide-y divide-slate-100">
+            {exceptionRuleConfig.rules.map((rule) => (
+              <div key={rule.type} className="grid gap-5 px-6 py-5 lg:grid-cols-[190px_minmax(0,1fr)] lg:items-start">
                 <div>
-                  <h2 className="text-base font-semibold text-slate-900">规则摘要</h2>
+                  <h2 className="text-base font-semibold text-slate-900">{rule.name}</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{rule.description}</p>
                 </div>
-                <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4">
-                  <p className="text-sm leading-7 text-amber-800">{buildSingleExceptionSummary(singleExceptionConfig)}</p>
-                </div>
-              </div>
 
-              <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">赛前弃权</h2>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-                    <span className="font-medium text-slate-600">胜方补偿胜局数</span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={singleExceptionConfig.preMatchForfeitWinGames}
-                      onChange={(event) =>
-                        setSingleExceptionConfig((prev) => ({
-                          ...prev,
-                          preMatchForfeitWinGames: Number(event.target.value || 0),
-                        }))
-                      }
-                      className="w-28 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                    />
-                    <span>局</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-                    <span className="font-medium text-slate-600">每局补偿分数</span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={singleExceptionConfig.preMatchForfeitPoints}
-                      onChange={(event) =>
-                        setSingleExceptionConfig((prev) => ({
-                          ...prev,
-                          preMatchForfeitPoints: Number(event.target.value || 0),
-                        }))
-                      }
-                      className="w-28 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                    />
-                    <span>分</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">比赛中退赛</h2>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium text-slate-600">当前局处理方式</span>
+                    <span className="text-xs font-semibold text-slate-500">结果判定方式</span>
                     <select
-                      value={singleExceptionConfig.retirementCurrentGame}
+                      value={rule.resultDecision}
                       onChange={(event) =>
-                        setSingleExceptionConfig((prev) => ({
-                          ...prev,
-                          retirementCurrentGame: event.target.value as SingleExceptionRuleConfig['retirementCurrentGame'],
-                        }))
+                        updateExceptionRule(rule.type, {
+                          resultDecision: event.target.value as ExceptionResultDecision,
+                        })
                       }
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
                     >
-                      <option value="complete_to_target">胜方补齐至目标分，退赛方保留当前得分</option>
-                      <option value="manual">由裁判根据现场情况手动判定</option>
+                      {RESULT_DECISION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
+
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium text-slate-600">后续未开赛局处理方式</span>
+                    <span className="text-xs font-semibold text-slate-500">当前局比分处理方式</span>
                     <select
-                      value={singleExceptionConfig.retirementPendingGames}
+                      value={rule.currentGameScore}
                       onChange={(event) =>
-                        setSingleExceptionConfig((prev) => ({
-                          ...prev,
-                          retirementPendingGames: event.target.value as SingleExceptionRuleConfig['retirementPendingGames'],
-                        }))
+                        updateExceptionRule(rule.type, {
+                          currentGameScore: event.target.value as ExceptionCurrentGameScore,
+                        })
                       }
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
                     >
-                      <option value="follow_forfeit_rule">按赛前弃权规则补偿</option>
-                      <option value="manual">由裁判决定处理方式</option>
+                      {CURRENT_GAME_SCORE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-xs font-semibold text-slate-500">未开始局处理方式</span>
+                    <select
+                      value={rule.pendingGames}
+                      onChange={(event) =>
+                        updateExceptionRule(rule.type, {
+                          pendingGames: event.target.value as ExceptionPendingGames,
+                        })
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    >
+                      {PENDING_GAMES_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-xs font-semibold text-slate-500">比赛状态处理方式</span>
+                    <select
+                      value={rule.matchStatus}
+                      onChange={(event) =>
+                        updateExceptionRule(rule.type, {
+                          matchStatus: event.target.value as ExceptionMatchStatus,
+                        })
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    >
+                      {MATCH_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </div>
               </div>
-
-              <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">比赛中断</h2>
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {[
-                    { key: 'manual', label: '由裁判决定' },
-                    { key: 'resume_later', label: '保留当前结果后续补赛' },
-                    { key: 'replay_all', label: '整场重赛' },
-                  ].map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() =>
-                        setSingleExceptionConfig((prev) => ({
-                          ...prev,
-                          interruptedHandling: option.key as SingleExceptionRuleConfig['interruptedHandling'],
-                        }))
-                      }
-                      className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition-all ${
-                        singleExceptionConfig.interruptedHandling === option.key
-                          ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">处理方式</h2>
-              </div>
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-sm leading-7 text-slate-500">
-                当前未启用单项赛统一异常赛果处理规则。赛事进行中如出现弃权、退赛或比赛中断，将由裁判根据现场情况决定处理方式。
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section ref={teamExceptionRef} className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-600">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">团体赛异常赛果处理</h3>
-              <p className="mt-0.5 text-xs text-slate-500">用于定义团体 Tie 中整场弃权、未完成单项及已分胜负后续处理规则。</p>
-            </div>
+            ))}
           </div>
         </div>
-
-        <div className="divide-y divide-slate-100">
-          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">统一规则</h2>
-            </div>
-            <p className="text-xs leading-6 text-slate-500">
-              开启后，团体赛出现整场弃权、未完成单项或已分胜负后的后续处理时，将按本赛事统一规则处理。
-            </p>
-            <ToggleSwitch
-              checked={teamExceptionConfig.enabled}
-              onChange={() =>
-                setTeamExceptionConfig((prev) => ({
-                  ...prev,
-                  enabled: !prev.enabled,
-                }))
-              }
-            />
-          </div>
-
-          {teamExceptionConfig.enabled ? (
-            <>
-              <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">规则摘要</h2>
-                </div>
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4">
-                  <p className="text-sm leading-7 text-emerald-800">{buildTeamExceptionSummary(teamExceptionConfig)}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">异常规则</h2>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-slate-600">整场弃权处理</span>
-                  <select
-                    value={teamExceptionConfig.tieForfeitHandling}
-                    onChange={(event) =>
-                      setTeamExceptionConfig((prev) => ({
-                        ...prev,
-                        tieForfeitHandling: event.target.value as TeamExceptionRuleConfig['tieForfeitHandling'],
-                      }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                  >
-                    <option value="default_loss">整场弃权直接判负</option>
-                    <option value="manual">由裁判决定</option>
-                  </select>
-                </label>
-
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-slate-600">已完成单项结果</span>
-                  <select
-                    value={teamExceptionConfig.completedSubMatchesHandling}
-                    onChange={(event) =>
-                      setTeamExceptionConfig((prev) => ({
-                        ...prev,
-                        completedSubMatchesHandling: event.target.value as TeamExceptionRuleConfig['completedSubMatchesHandling'],
-                      }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                  >
-                    <option value="keep_result">保留已完成结果</option>
-                    <option value="manual">由裁判决定</option>
-                  </select>
-                </label>
-
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-slate-600">未开始单项处理</span>
-                  <select
-                    value={teamExceptionConfig.pendingSubMatchesHandling}
-                    onChange={(event) =>
-                      setTeamExceptionConfig((prev) => ({
-                        ...prev,
-                        pendingSubMatchesHandling: event.target.value as TeamExceptionRuleConfig['pendingSubMatchesHandling'],
-                      }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                  >
-                    <option value="count_as_loss">按默认负场处理</option>
-                    <option value="manual">由裁判决定</option>
-                  </select>
-                </label>
-
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-slate-600">已分胜负后未完成单项</span>
-                  <select
-                    value={teamExceptionConfig.unfinishedSubMatchesHandling}
-                    onChange={(event) =>
-                      setTeamExceptionConfig((prev) => ({
-                        ...prev,
-                        unfinishedSubMatchesHandling: event.target.value as TeamExceptionRuleConfig['unfinishedSubMatchesHandling'],
-                      }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                  >
-                    <option value="finish_running">继续完成已开赛单项</option>
-                    <option value="stop_immediately">立即终止未完成单项</option>
-                  </select>
-                </label>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">处理方式</h2>
-              </div>
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-sm leading-7 text-slate-500">
-                当前未启用团体赛统一异常赛果处理规则。赛事进行中如出现整场弃权、未完成单项或已分胜负后的后续处理，将由裁判根据现场情况决定。
-              </div>
-            </div>
-          )}
-        </div>
       </section>
-      </div>
     </div>
   );
 };
