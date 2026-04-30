@@ -8607,7 +8607,7 @@ export default function App() {
 	                    </div>
 	                    <div className="space-y-1">
 	                      <p className="text-xs leading-6 text-slate-500">
-	                        开启后，用户前台赛事详情页会展示单项赛的“个人报名”按钮。
+	                        开启后，若该赛事包含单项赛，则赛事详情页将显示“个人报名”按钮，用户可以个人维度进行报名。
 	                      </p>
 	                    </div>
 	                    <button
