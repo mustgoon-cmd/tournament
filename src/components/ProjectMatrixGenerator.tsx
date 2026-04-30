@@ -353,7 +353,7 @@ export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                       {enableTeamSetup
                         ? '开启后，用户报名该项目时需先加入或创建队伍。'
-                        : '当前赛事未启用队伍，请先在「报名规则 - 队伍限制」中将”启用队伍“选择为开启。'}
+                        : '当前赛事未启用队伍，请先在「报名规则 - 报名入口设置」中将“启用队伍”选择为开启。'}
                     </p>
                   </div>
                   <button

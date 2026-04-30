@@ -1799,14 +1799,17 @@ export default function App() {
     | 'referee-task-assignment'
   >('basic-info');
   const [recordsInitialTab, setRecordsInitialTab] = useState<'orders' | 'project_summary' | 'participants' | 'teams'>('orders');
-  const [activeTab, setActiveTab] = useState<'config' | 'team-limit' | 'restriction' | 'signing'>('config');
+  const [activeTab, setActiveTab] = useState<
+    'entry' | 'team' | 'eligibility' | 'signing' | 'cancel-edit'
+  >('entry');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['basic', 'registration-config', 'registration-data', 'referee', 'scheduling']);
   const detailContentRef = useRef<HTMLDivElement | null>(null);
-  const registrationLimitSectionRef = useRef<HTMLDivElement | null>(null);
-  const teamLimitSectionRef = useRef<HTMLDivElement | null>(null);
-  const restrictionSectionRef = useRef<HTMLDivElement | null>(null);
+  const registrationEntrySectionRef = useRef<HTMLDivElement | null>(null);
+  const teamRegistrationSectionRef = useRef<HTMLDivElement | null>(null);
+  const eligibilityQuotaSectionRef = useRef<HTMLDivElement | null>(null);
   const signingSectionRef = useRef<HTMLDivElement | null>(null);
+  const processRulesSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (adminActiveMenu === 'official-list' || adminActiveMenu === 'official-review') {
@@ -1901,7 +1904,7 @@ export default function App() {
     postDeadlineEditableFields: [PostDeadlineEditableField.PROFILE, PostDeadlineEditableField.EXTRA_FIELDS],
     enableSigning: true,
     selectedAgreements: [{ id: INITIAL_AGREEMENT_TEMPLATES[0].id, name: INITIAL_AGREEMENT_TEMPLATES[0].name }],
-    signingMethod: SigningMethod.READ_AND_AGREE,
+    signingMethod: SigningMethod.USER_SIGNATURE,
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -1972,15 +1975,12 @@ export default function App() {
       }));
       return;
     }
-    setConfig((prev) => {
-      const enabled = prev.listRestrictions.includes(type);
-      return {
-        ...prev,
-        listRestrictions: enabled
-          ? prev.listRestrictions.filter((item) => item !== type)
-          : [...prev.listRestrictions, type],
-      };
-    });
+    setConfig((prev) => ({
+      ...prev,
+      listRestrictions: [type],
+      selectedWhitelistListIds: type === ListRestrictionType.WHITELIST ? prev.selectedWhitelistListIds : [],
+      selectedBlacklistListIds: type === ListRestrictionType.BLACKLIST ? prev.selectedBlacklistListIds : [],
+    }));
   };
 
   const openTargetListPicker = (type: ListRestrictionType) => {
@@ -2041,23 +2041,28 @@ export default function App() {
   }, [activeListPickerGroupId, searchQuery, targetListGroups, targetLists]);
   const selectedWhitelistLists = targetLists.filter((list) => config.selectedWhitelistListIds.includes(list.id));
   const selectedBlacklistLists = targetLists.filter((list) => config.selectedBlacklistListIds.includes(list.id));
+  const isUserSideRegistrationEnabled = config.channel === RegistrationChannel.UNLIMITED;
   const currentViewTitle = VIEW_TITLES[viewMode];
   const currentSectionTitle = VIEW_SECTIONS[viewMode];
   const registrationRuleElevatorItems = [
-    { id: 'config', label: '报名限制', ref: registrationLimitSectionRef },
-    { id: 'team-limit', label: '队伍限制', ref: teamLimitSectionRef },
-    { id: 'restriction', label: '兼项限制', ref: restrictionSectionRef },
+    { id: 'entry', label: '报名入口设置', ref: registrationEntrySectionRef },
+    { id: 'team', label: '队伍报名限制', ref: teamRegistrationSectionRef },
+    { id: 'eligibility', label: '报名资格与名额', ref: eligibilityQuotaSectionRef },
     { id: 'signing', label: '协议签约', ref: signingSectionRef },
+    { id: 'cancel-edit', label: '报名取消和修改', ref: processRulesSectionRef },
   ] as const;
+  const visibleRegistrationRuleElevatorItems = isUserSideRegistrationEnabled
+    ? registrationRuleElevatorItems
+    : registrationRuleElevatorItems.slice(0, 1);
 
   const syncActiveRegistrationSection = () => {
     const container = detailContentRef.current;
     if (!container || viewMode !== 'settings') return;
 
     const containerTop = container.getBoundingClientRect().top;
-    let nextActive: typeof activeTab = 'config';
+    let nextActive: typeof activeTab = 'entry';
 
-    registrationRuleElevatorItems.forEach((item) => {
+    visibleRegistrationRuleElevatorItems.forEach((item) => {
       const rect = item.ref.current?.getBoundingClientRect();
       if (rect && rect.top - containerTop <= 180) {
         nextActive = item.id;
@@ -2071,7 +2076,7 @@ export default function App() {
 
   const scrollToRegistrationSection = (section: typeof activeTab) => {
     setActiveTab(section);
-    const target = registrationRuleElevatorItems.find((item) => item.id === section)?.ref.current;
+    const target = visibleRegistrationRuleElevatorItems.find((item) => item.id === section)?.ref.current;
     if (!target) return;
 
     target.scrollIntoView({
@@ -8530,18 +8535,18 @@ export default function App() {
                         </div>
                         <div>
                           <h2 className="text-lg font-bold text-slate-900">报名规则</h2>
-                          <p className="mt-0.5 text-sm text-slate-500">统一配置赛事的报名限制、队伍限制、兼项限制与协议签约规则。</p>
+                          <p className="mt-0.5 text-sm text-slate-500">统一配置报名入口、队伍报名、资格名额、协议签约与报名取消修改规则。</p>
                         </div>
                       </div>
 
                       <div className="space-y-2 xl:max-w-[560px] xl:items-end">
                         <div className="flex flex-wrap gap-2 xl:justify-end">
-                          {registrationRuleElevatorItems.map((item) => (
+                          {visibleRegistrationRuleElevatorItems.map((item) => (
                             <button
                               key={item.id}
                               onClick={() => scrollToRegistrationSection(item.id)}
                               className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
-                                activeTab === item.id
+                                (!isUserSideRegistrationEnabled && item.id === 'entry') || activeTab === item.id
                                   ? 'bg-indigo-600 text-white shadow-sm'
                                   : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800'
                               }`}
@@ -8557,13 +8562,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-              <div ref={registrationLimitSectionRef} className="scroll-mt-32 space-y-5">
-              <div className="space-y-1 px-1">
-                <h3 className="text-xl font-bold text-slate-900">报名限制</h3>
-              </div>
-              <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div className="divide-y divide-slate-100">
+                  <div className="flex flex-col gap-6">
+              <div ref={registrationEntrySectionRef} className="order-1 scroll-mt-32 space-y-5">
+                <div className="space-y-1 px-1">
+                  <h3 className="text-xl font-bold text-slate-900">报名入口设置</h3>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="divide-y divide-slate-100">
                   <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
                     <div>
                       <h2 className="text-base font-semibold text-slate-900">用户侧报名</h2>
@@ -8592,34 +8597,81 @@ export default function App() {
                           config.channel === RegistrationChannel.UNLIMITED ? 'translate-x-6' : 'translate-x-1'
                         }`}
                       />
-                    </button>
-                  </div>
-
-                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
-                    <div>
-                      <h2 className="text-base font-semibold text-slate-900">个人报名</h2>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs leading-6 text-slate-500">
-                        开启后，用户前台赛事详情页会展示单项赛的“个人报名”按钮。
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setConfig({ ...config, enableIndividualRegistration: !config.enableIndividualRegistration })
-                      }
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        config.enableIndividualRegistration ? 'bg-indigo-600' : 'bg-slate-200'
-                      }`}
+	                    </button>
+	                  </div>
+		                  {isUserSideRegistrationEnabled ? (
+		                    <>
+		                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+	                    <div>
+	                      <h2 className="text-base font-semibold text-slate-900">启用个人报名</h2>
+	                    </div>
+	                    <div className="space-y-1">
+	                      <p className="text-xs leading-6 text-slate-500">
+	                        开启后，用户前台赛事详情页会展示单项赛的“个人报名”按钮。
+	                      </p>
+	                    </div>
+	                    <button
+	                      onClick={() =>
+	                        setConfig({ ...config, enableIndividualRegistration: !config.enableIndividualRegistration })
+	                      }
+	                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+	                        config.enableIndividualRegistration
+	                          ? 'bg-indigo-600'
+	                          : 'bg-slate-200'
+	                      }`}
                     >
                       <span
                         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                           config.enableIndividualRegistration ? 'translate-x-6' : 'translate-x-1'
                         }`}
-                      />
-                    </button>
-                  </div>
+	                      />
+	                    </button>
+	                  </div>
+		                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+		                    <div>
+		                      <h2 className="text-base font-semibold text-slate-900">启用队伍</h2>
+		                    </div>
+		                    <div className="space-y-3">
+		                      <p className="text-xs leading-6 text-slate-500">
+		                        用于控制本赛事是否开放队伍相关报名能力。
+		                      </p>
+		                      <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
+		                        操作影响：关闭后，用户前台赛事详情页不显示“队伍报名”按钮，报名下单页面不显示队伍输入框，用户只能按项目要求进行非队伍维度报名。
+		                      </div>
+		                    </div>
+		                    <button
+		                      onClick={() => setConfig({ ...config, enableTeamSetup: !config.enableTeamSetup })}
+		                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+		                        config.enableTeamSetup ? 'bg-indigo-600' : 'bg-slate-200'
+		                      }`}
+		                    >
+		                      <span
+		                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+		                          config.enableTeamSetup ? 'translate-x-6' : 'translate-x-1'
+		                        }`}
+		                      />
+		                    </button>
+		                  </div>
+		                    </>
+		                  ) : (
+		                    <div className="px-6 py-5">
+		                      <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-xs leading-6 text-amber-800">
+		                        当前赛事未开启用户侧报名，用户前台不可主动发起报名，仅支持后台录入报名数据。
+		                      </div>
+		                    </div>
+		                  )}
+	                  </div>
+	                </div>
+	              </div>
 
+		              {isUserSideRegistrationEnabled ? (
+		                <>
+              <div ref={eligibilityQuotaSectionRef} className="order-3 scroll-mt-32 space-y-5">
+                <div className="space-y-1 px-1">
+                  <h3 className="text-xl font-bold text-slate-900">报名资格与名额</h3>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="divide-y divide-slate-100">
                   <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
                     <div>
                       <h2 className="text-base font-semibold text-slate-900">报名名单限制</h2>
@@ -8858,6 +8910,202 @@ export default function App() {
                     </button>
                   </div>
 
+                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900">兼项限制</h2>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-slate-700">启用兼项限制</p>
+                      <p className="text-xs leading-6 text-slate-500">
+                        开启后，可设置单人最多允许报名项目数、兼项限制范围和互斥项目组。
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setConfig({ ...config, enableMultiEventRestriction: !config.enableMultiEventRestriction })
+                      }
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        config.enableMultiEventRestriction ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          config.enableMultiEventRestriction ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <AnimatePresence initial={false}>
+                    {config.enableMultiEventRestriction ? (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: 'easeInOut' }}
+                        className="overflow-hidden"
+                      >
+                        <div className="divide-y divide-slate-100">
+                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+                            <div />
+                            <div className="space-y-5 rounded-2xl bg-slate-50 px-5 py-4">
+                              <div className="space-y-3">
+                                <p className="text-sm font-medium text-slate-700">单人最多允许报名项目数</p>
+                                <div className="flex items-center gap-4">
+                                  <div className="relative w-32">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={config.maxEventsPerPerson}
+                                      onChange={(e) =>
+                                        setConfig({ ...config, maxEventsPerPerson: parseInt(e.target.value) || 1 })
+                                      }
+                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-9 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                    <div className="absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setConfig({ ...config, maxEventsPerPerson: config.maxEventsPerPerson + 1 })
+                                        }
+                                        className="rounded p-0.5 transition-colors hover:bg-slate-200"
+                                      >
+                                        <ArrowUp className="h-3 w-3 text-slate-400" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setConfig({
+                                            ...config,
+                                            maxEventsPerPerson: Math.max(1, config.maxEventsPerPerson - 1),
+                                          })
+                                        }
+                                        className="rounded p-0.5 transition-colors hover:bg-slate-200"
+                                      >
+                                        <ArrowDown className="h-3 w-3 text-slate-400" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <p className="text-xs leading-6 text-slate-500">
+                                    一个自然人（Identity）以“选手”的身份，在本次赛事中最多允许报名的项目次数。
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3 border-t border-slate-200 pt-4">
+                                <p className="text-sm font-medium text-slate-700">单人兼项限制范围</p>
+                                <div className="flex flex-wrap gap-8">
+                                  {[
+                                    { id: 'INDIVIDUAL', label: '单项赛' },
+                                    { id: 'TEAM', label: '团体赛' },
+                                  ].map((item) => (
+                                    <label key={item.id} className="group flex cursor-pointer items-center gap-3">
+                                      <span
+                                        onClick={() => {
+                                          const newScope = config.restrictionScope.includes(item.id)
+                                            ? config.restrictionScope.filter((s) => s !== item.id)
+                                            : [...config.restrictionScope, item.id];
+                                          setConfig({ ...config, restrictionScope: newScope });
+                                        }}
+                                        className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all ${
+                                          config.restrictionScope.includes(item.id)
+                                            ? 'border-indigo-600 bg-indigo-600'
+                                            : 'border-slate-300 group-hover:border-indigo-400'
+                                        }`}
+                                      >
+                                        {config.restrictionScope.includes(item.id) && <div className="h-2 w-2 rounded-full bg-white" />}
+                                      </span>
+                                      <span
+                                        className={`text-sm font-medium ${
+                                          config.restrictionScope.includes(item.id) ? 'text-slate-900' : 'text-slate-500'
+                                        }`}
+                                      >
+                                        {item.label}
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                            <div />
+                            <div className="space-y-3">
+                              <p className="text-sm font-medium text-slate-700">互斥项目组</p>
+                              <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                                {config.mutuallyExclusiveGroups.length > 0 ? (
+                                  <div className="space-y-3">
+                                    {config.mutuallyExclusiveGroups.map((group, idx) => (
+                                      <div
+                                        key={group.id}
+                                        className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 md:flex-row md:items-start md:justify-between"
+                                      >
+                                        <div className="space-y-2">
+                                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                            互斥组 {idx + 1}
+                                          </p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {group.eventNames.map((name, i) => (
+                                              <span
+                                                key={i}
+                                                className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
+                                              >
+                                                {name}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-sm font-semibold">
+                                          <button
+                                            onClick={() => {
+                                              setEditingGroup(group);
+                                              setShowRestrictionModal(true);
+                                            }}
+                                            className="text-indigo-600 transition-colors hover:text-indigo-700"
+                                          >
+                                            编辑
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setConfig({
+                                                ...config,
+                                                mutuallyExclusiveGroups: config.mutuallyExclusiveGroups.filter(
+                                                  (g) => g.id !== group.id
+                                                ),
+                                              });
+                                            }}
+                                            className="text-red-500 transition-colors hover:text-red-600"
+                                          >
+                                            删除
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 text-slate-400">
+                                    <Layers className="h-4 w-4 opacity-60" />
+                                    <p className="text-sm">当前未配置互斥项目组</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setEditingGroup(null);
+                                setShowRestrictionModal(true);
+                              }}
+                              className="text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+                            >
+                              设置
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+
                   <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
                     <div>
                       <h2 className="text-base font-semibold text-slate-900">年龄计算规则</h2>
@@ -8936,12 +9184,22 @@ export default function App() {
                             : '按周岁精确计算：以计算基准日为准，若当年生日未到，则年龄 = 基准年份 - 出生年份 - 1；若当年生日已到，则年龄 = 基准年份 - 出生年份。'}
                         </p>
                       </div>
-                    </div>
-                  </div>
+	                    </div>
+	                  </div>
 
-                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
-                    <div>
-                      <h2 className="text-base font-semibold text-slate-900">退赛退款</h2>
+                </div>
+              </div>
+              </div>
+
+              <div ref={processRulesSectionRef} className="order-5 scroll-mt-32 space-y-5">
+                <div className="space-y-1 px-1">
+                  <h3 className="text-xl font-bold text-slate-900">报名取消和修改</h3>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="divide-y divide-slate-100">
+	                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+	                    <div>
+	                      <h2 className="text-base font-semibold text-slate-900">退赛退款</h2>
                     </div>
                     <div className="space-y-4">
                       <p className="text-xs leading-6 text-slate-500">
@@ -9108,42 +9366,16 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-              </div>
-              </div>
+	              </div>
+	              </div>
 
-              <div ref={teamLimitSectionRef} className="scroll-mt-32 space-y-5">
+	              <div ref={teamRegistrationSectionRef} className="order-2 scroll-mt-32 space-y-5">
                 <div className="space-y-1 px-1">
-                  <h3 className="text-xl font-bold text-slate-900">队伍限制</h3>
+	                  <h3 className="text-xl font-bold text-slate-900">队伍报名限制</h3>
                 </div>
                 <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                   <div className="divide-y divide-slate-100">
-                    <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
-                      <div>
-                        <h2 className="text-base font-semibold text-slate-900">启用队伍</h2>
-                      </div>
-                      <div className="space-y-3">
-                        <p className="text-xs leading-6 text-slate-500">
-                          用于控制本赛事是否开放队伍相关报名能力。
-                        </p>
-                        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
-                          操作影响：关闭后，用户前台赛事详情页不显示“队伍报名”按钮，报名下单页面不显示队伍输入框，用户只能按项目要求进行非队伍维度报名。
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setConfig({ ...config, enableTeamSetup: !config.enableTeamSetup })}
-                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                          config.enableTeamSetup ? 'bg-indigo-600' : 'bg-slate-200'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            config.enableTeamSetup ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {config.enableTeamSetup ? (
+	                    {config.enableTeamSetup ? (
                       <>
                     <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
                       <div>
@@ -9151,7 +9383,7 @@ export default function App() {
                       </div>
                       <div className="space-y-1">
                         <p className="text-xs leading-6 text-slate-500">
-                          开启后，该赛事中领队创建队伍时，必须先为队伍关联一个组别。
+                          开启后，创建队伍时必须先为队伍关联一个组别，队伍成员仅可报名该组别下的项目。
                         </p>
                       </div>
                       <button
@@ -9268,8 +9500,8 @@ export default function App() {
                       <div className="space-y-4 rounded-2xl bg-slate-50 px-5 py-4">
                         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                           <div className="space-y-1">
-                            <p className="text-sm font-medium text-slate-700">必须设置领队</p>
-                            <p className="text-xs leading-6 text-slate-500">开启后，每个队伍都必须填写领队信息。</p>
+                            <p className="text-sm font-medium text-slate-700">领队是否必填</p>
+                            <p className="text-xs leading-6 text-slate-500">开启后，创建队伍时领队必填。</p>
                           </div>
                           <button
                             onClick={() =>
@@ -9289,30 +9521,6 @@ export default function App() {
                           </button>
                         </div>
 
-                        <div className="grid gap-5 border-t border-slate-200 pt-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-slate-700">领队只能由队员兼任</p>
-                            <p className="text-xs leading-6 text-slate-500">
-                              开启后，创建队伍阶段可暂不设置领队，但系统将在团体项目提交报名前/后续查看队伍时校验是否已设置领队，否则引导用户从已加入的队员中选择领队。
-                            </p>
-                          </div>
-                          <button
-                            onClick={() =>
-                              updateAdvancedTeamLimitConfig({
-                                leaderMustBePlayer: !config.teamLimitConfig.leaderMustBePlayer,
-                              })
-                            }
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              config.teamLimitConfig.leaderMustBePlayer ? 'bg-indigo-600' : 'bg-slate-200'
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                config.teamLimitConfig.leaderMustBePlayer ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
-                        </div>
                       </div>
                     </div>
 
@@ -9401,224 +9609,27 @@ export default function App() {
                       </div>
                     </div>
                       </>
-                    ) : null}
-                  </div>
-                </div>
-
-              <div ref={restrictionSectionRef} className="scroll-mt-32 space-y-5">
-                <div className="space-y-1 px-1">
-                  <h3 className="text-xl font-bold text-slate-900">兼项限制</h3>
-                </div>
-                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
-                    <div>
-                      <h2 className="text-base font-semibold text-slate-900">兼项限制</h2>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-slate-700">启用兼项限制</p>
-                      <p className="text-xs leading-6 text-slate-500">
-                        开启后，可设置单人最多允许报名项目数、兼项限制范围和互斥项目组。
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setConfig({ ...config, enableMultiEventRestriction: !config.enableMultiEventRestriction })
-                      }
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        config.enableMultiEventRestriction ? 'bg-indigo-600' : 'bg-slate-200'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          config.enableMultiEventRestriction ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  <AnimatePresence initial={false}>
-                    {config.enableMultiEventRestriction ? (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.22, ease: 'easeInOut' }}
-                        className="overflow-hidden border-t border-slate-100"
-                      >
-                        <div className="divide-y divide-slate-100">
-                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
-                            <div />
-                            <div className="space-y-5 rounded-2xl bg-slate-50 px-5 py-4">
-                              <div className="space-y-3">
-                                <p className="text-sm font-medium text-slate-700">单人最多允许报名项目数</p>
-                                <div className="flex items-center gap-4">
-                                  <div className="relative w-32">
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      value={config.maxEventsPerPerson}
-                                      onChange={(e) =>
-                                        setConfig({ ...config, maxEventsPerPerson: parseInt(e.target.value) || 1 })
-                                      }
-                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-9 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                    />
-                                    <div className="absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setConfig({ ...config, maxEventsPerPerson: config.maxEventsPerPerson + 1 })
-                                        }
-                                        className="rounded p-0.5 transition-colors hover:bg-slate-200"
-                                      >
-                                        <ArrowUp className="h-3 w-3 text-slate-400" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setConfig({
-                                            ...config,
-                                            maxEventsPerPerson: Math.max(1, config.maxEventsPerPerson - 1),
-                                          })
-                                        }
-                                        className="rounded p-0.5 transition-colors hover:bg-slate-200"
-                                      >
-                                        <ArrowDown className="h-3 w-3 text-slate-400" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <p className="text-xs leading-6 text-slate-500">
-                                    一个自然人（Identity）以“选手”的身份，在本次赛事中最多允许报名的项目次数。
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="space-y-3 border-t border-slate-200 pt-4">
-                                <p className="text-sm font-medium text-slate-700">单人兼项限制范围</p>
-                                <div className="flex flex-wrap gap-8">
-                                  {[
-                                    { id: 'INDIVIDUAL', label: '单项赛' },
-                                    { id: 'TEAM', label: '团体赛' },
-                                  ].map((item) => (
-                                    <label key={item.id} className="group flex cursor-pointer items-center gap-3">
-                                      <span
-                                        onClick={() => {
-                                          const newScope = config.restrictionScope.includes(item.id)
-                                            ? config.restrictionScope.filter((s) => s !== item.id)
-                                            : [...config.restrictionScope, item.id];
-                                          setConfig({ ...config, restrictionScope: newScope });
-                                        }}
-                                        className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all ${
-                                          config.restrictionScope.includes(item.id)
-                                            ? 'border-indigo-600 bg-indigo-600'
-                                            : 'border-slate-300 group-hover:border-indigo-400'
-                                        }`}
-                                      >
-                                        {config.restrictionScope.includes(item.id) && <div className="h-2 w-2 rounded-full bg-white" />}
-                                      </span>
-                                      <span
-                                        className={`text-sm font-medium ${
-                                          config.restrictionScope.includes(item.id) ? 'text-slate-900' : 'text-slate-500'
-                                        }`}
-                                      >
-                                        {item.label}
-                                      </span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
-                            <div />
-                            <div className="space-y-3">
-                              <p className="text-sm font-medium text-slate-700">互斥项目组</p>
-                              <div className="rounded-2xl bg-slate-50 px-5 py-4">
-                                {config.mutuallyExclusiveGroups.length > 0 ? (
-                                  <div className="space-y-3">
-                                    {config.mutuallyExclusiveGroups.map((group, idx) => (
-                                      <div
-                                        key={group.id}
-                                        className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 md:flex-row md:items-start md:justify-between"
-                                      >
-                                        <div className="space-y-2">
-                                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                            互斥组 {idx + 1}
-                                          </p>
-                                          <div className="flex flex-wrap gap-2">
-                                            {group.eventNames.map((name, i) => (
-                                              <span
-                                                key={i}
-                                                className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
-                                              >
-                                                {name}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-4 text-sm font-semibold">
-                                          <button
-                                            onClick={() => {
-                                              setEditingGroup(group);
-                                              setShowRestrictionModal(true);
-                                            }}
-                                            className="text-indigo-600 transition-colors hover:text-indigo-700"
-                                          >
-                                            编辑
-                                          </button>
-                                          <button
-                                            onClick={() => {
-                                              setConfig({
-                                                ...config,
-                                                mutuallyExclusiveGroups: config.mutuallyExclusiveGroups.filter(
-                                                  (g) => g.id !== group.id
-                                                ),
-                                              });
-                                            }}
-                                            className="text-red-500 transition-colors hover:text-red-600"
-                                          >
-                                            删除
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2 text-slate-400">
-                                    <Layers className="h-4 w-4 opacity-60" />
-                                    <p className="text-sm">当前未配置互斥项目组</p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => {
-                                setEditingGroup(null);
-                                setShowRestrictionModal(true);
-                              }}
-                              className="text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
-                            >
-                              设置
-                            </button>
-                          </div>
+                    ) : (
+                      <div className="px-6 py-5">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs leading-6 text-slate-500">
+                          队伍报名未启用，队伍关联组别、队伍人数、领队和教练相关配置暂不展示。
                         </div>
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div ref={signingSectionRef} className="scroll-mt-32 space-y-5">
+              <div ref={signingSectionRef} className="order-4 scroll-mt-32 space-y-5">
                 <div className="space-y-1 px-1">
                   <h3 className="text-xl font-bold text-slate-900">协议签约</h3>
                 </div>
                 <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                   <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
                     <div>
-                      <h2 className="text-base font-semibold text-slate-900">协议签约</h2>
+                      <h2 className="text-base font-semibold text-slate-900">参赛需签约</h2>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-slate-700">参赛需签约</p>
                       <p className="text-xs leading-6 text-slate-500">
                         若开启，则将在用户填写报名表时引导用户完成签约，每份报名表需单独签约。
                       </p>
@@ -9726,12 +9737,13 @@ export default function App() {
                         </div>
                       </motion.div>
                     ) : null}
-                  </AnimatePresence>
-                </div>
-              </div>
-                    </div>
-                  </div>
-                </motion.div>
+	                  </AnimatePresence>
+	                </div>
+	              </div>
+	                </>
+	              ) : null}
+	                    </div>
+	                </motion.div>
 
             ) : viewMode === 'registration-public' ? (
               <motion.div

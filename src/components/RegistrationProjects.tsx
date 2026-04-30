@@ -570,7 +570,7 @@ export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ even
                           <td className="px-6 py-4 whitespace-nowrap">
                             <button 
                               disabled={!enableTeamSetup}
-                              title={!enableTeamSetup ? '当前赛事未启用队伍，请先在「报名规则 - 队伍限制」中将”启用队伍“选择为开启。' : undefined}
+                              title={!enableTeamSetup ? '当前赛事未启用队伍，请先在「报名规则 - 报名入口设置」中将“启用队伍”选择为开启。' : undefined}
                               onClick={() => {
                                 if (!enableTeamSetup) return;
                                 setProjects(prev => prev.map(item => item.id === p.id ? { ...item, team_join: !item.team_join } : item));
@@ -1123,7 +1123,7 @@ export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ even
                                     <p className={`max-w-xl text-[10px] leading-5 ${enableTeamSetup ? 'text-slate-400' : 'text-amber-600'}`}>
                                       {enableTeamSetup
                                         ? '开启后，用户报名该项目时需先加入或创建队伍。'
-                                        : '当前赛事未启用队伍，请先在「报名规则 - 队伍限制」中将”启用队伍“选择为开启。'}
+                                        : '当前赛事未启用队伍，请先在「报名规则 - 报名入口设置」中将“启用队伍”选择为开启。'}
                                     </p>
                                   </div>
                                 </div>
