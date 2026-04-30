@@ -1877,6 +1877,7 @@ export default function App() {
       { id: 'g1', eventIds: ['e1', 'e2'], eventNames: ['A组男子单打', 'A组男子双打'] }
     ],
     enableIndividualRegistration: true,
+    enableTeamSetup: true,
     enableTeamSizeLimit: true,
     teamLimitConfig: {
       requireGroupOnTeamCreation: true,
@@ -7593,7 +7594,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <RegistrationProjects eventGroups={eventGroups} />
+                  <RegistrationProjects eventGroups={eventGroups} enableTeamSetup={config.enableTeamSetup} />
                 </motion.div>
               ) : viewMode === 'announcement' || viewMode === 'project-filing' || viewMode === 'multi-event-stats' ? (
                 <motion.div
@@ -9116,6 +9117,34 @@ export default function App() {
                 </div>
                 <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                   <div className="divide-y divide-slate-100">
+                    <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900">启用队伍</h2>
+                      </div>
+                      <div className="space-y-3">
+                        <p className="text-xs leading-6 text-slate-500">
+                          用于控制本赛事是否开放队伍相关报名能力。
+                        </p>
+                        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
+                          操作影响：关闭后，用户前台赛事详情页不显示“队伍报名”按钮，报名下单页面不显示队伍输入框，用户只能按项目要求进行非队伍维度报名。
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setConfig({ ...config, enableTeamSetup: !config.enableTeamSetup })}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                          config.enableTeamSetup ? 'bg-indigo-600' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            config.enableTeamSetup ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {config.enableTeamSetup ? (
+                      <>
                     <div className="grid gap-5 px-6 py-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
                       <div>
                         <h2 className="text-base font-semibold text-slate-900">队伍关联组别</h2>
@@ -9371,6 +9400,8 @@ export default function App() {
                         </AnimatePresence>
                       </div>
                     </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 

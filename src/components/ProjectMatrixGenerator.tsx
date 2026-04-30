@@ -20,12 +20,14 @@ interface ProjectMatrixGeneratorProps {
   onBack: () => void;
   onGenerate: (projects: Project[]) => void;
   eventGroups: EventGroupDefinition[];
+  enableTeamSetup: boolean;
 }
 
 export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
   onBack,
   onGenerate,
   eventGroups,
+  enableTeamSetup,
 }) => {
   const eventGroupCategories = useMemo(() => getEventGroupCategories(eventGroups), [eventGroups]);
   const [matrixGroupCategory, setMatrixGroupCategory] = useState<string>(eventGroupCategories[0] || '');
@@ -140,8 +142,8 @@ export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
         deposit: matrixBaseDeposit,
         max_seats: matrixMaxSeats,
         min_seats: matrixMinSeats,
-        team_join: matrixTeamJoin,
-        max_members_per_team: matrixTeamJoin ? matrixMaxMembersPerTeam : undefined,
+        team_join: enableTeamSetup && matrixTeamJoin,
+        max_members_per_team: enableTeamSetup && matrixTeamJoin ? matrixMaxMembersPerTeam : undefined,
         template: matrixTemplate,
         sort: 10,
         status: 'active',
@@ -347,25 +349,34 @@ export const ProjectMatrixGenerator: React.FC<ProjectMatrixGeneratorProps> = ({
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">报名需加入队伍</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">适用于需要先创建队伍再报名的项目。</p>
+                    <p className="text-sm font-semibold text-slate-800">报名页面队伍是否必填</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      {enableTeamSetup
+                        ? '开启后，用户报名该项目时需先加入或创建队伍。'
+                        : '当前赛事未启用队伍，请先在「报名规则 - 队伍限制」中将”启用队伍“选择为开启。'}
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setMatrixTeamJoin((prev) => !prev)}
+                    disabled={!enableTeamSetup}
+                    onClick={() => enableTeamSetup && setMatrixTeamJoin((prev) => !prev)}
                     className={`relative inline-flex h-8 w-16 items-center rounded-full px-2 text-xs font-semibold transition-all ${
-                      matrixTeamJoin ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-600'
+                      !enableTeamSetup
+                        ? 'cursor-not-allowed bg-slate-200 text-slate-400'
+                        : matrixTeamJoin
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-300 text-slate-600'
                     }`}
                   >
-                    <span>{matrixTeamJoin ? '开' : '关'}</span>
+                    <span>{enableTeamSetup && matrixTeamJoin ? '开' : '关'}</span>
                     <span
                       className={`absolute h-6 w-6 rounded-full bg-white shadow transition-all ${
-                        matrixTeamJoin ? 'right-1' : 'left-1'
+                        enableTeamSetup && matrixTeamJoin ? 'right-1' : 'left-1'
                       }`}
                     />
                   </button>
                 </div>
-                {matrixTeamJoin && (
+                {enableTeamSetup && matrixTeamJoin && (
                   <label className="mt-4 block space-y-2">
                     <span className="text-sm font-semibold text-slate-700">每队人数</span>
                     <input

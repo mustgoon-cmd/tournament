@@ -162,6 +162,7 @@ export interface RegistrationConfig {
   restrictionScope: string[]; // e.g., ['INDIVIDUAL', 'TEAM']
   mutuallyExclusiveGroups: MutuallyExclusiveGroup[];
   enableIndividualRegistration: boolean;
+  enableTeamSetup: boolean;
   enableTeamSizeLimit: boolean;
   teamLimitConfig: AdvancedTeamLimitConfig;
   ageCalculationBase: AgeCalculationBase;

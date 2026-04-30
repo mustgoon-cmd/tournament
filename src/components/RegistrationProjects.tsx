@@ -133,9 +133,10 @@ const getRestrictionHint = (field: string) => {
 
 interface RegistrationProjectsProps {
   eventGroups: EventGroupDefinition[];
+  enableTeamSetup: boolean;
 }
 
-export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ eventGroups }) => {
+export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ eventGroups, enableTeamSetup }) => {
   const [activeTab, setActiveTab] = useState<'single' | 'team'>('single');
   const [pageMode, setPageMode] = useState<'list' | 'matrix-generator'>('list');
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
@@ -302,6 +303,8 @@ export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ even
 
     return {
       ...project,
+      team_join: enableTeamSetup ? project.team_join : false,
+      max_members_per_team: enableTeamSetup && project.team_join ? project.max_members_per_team : undefined,
       team_size_min: normalizedMin,
       team_size_max: normalizedMax,
       team_size_limit: normalizedMin && normalizedMax && normalizedMin === normalizedMax ? normalizedMin : undefined,
@@ -338,6 +341,7 @@ export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ even
     return (
       <ProjectMatrixGenerator
         eventGroups={eventGroups}
+        enableTeamSetup={enableTeamSetup}
         onBack={() => setPageMode('list')}
         onGenerate={(newProjects) => {
           setProjects((prev) => [...prev, ...newProjects]);
@@ -565,12 +569,17 @@ export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ even
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <button 
+                              disabled={!enableTeamSetup}
+                              title={!enableTeamSetup ? '当前赛事未启用队伍，请先在「报名规则 - 队伍限制」中将”启用队伍“选择为开启。' : undefined}
                               onClick={() => {
+                                if (!enableTeamSetup) return;
                                 setProjects(prev => prev.map(item => item.id === p.id ? { ...item, team_join: !item.team_join } : item));
                               }}
-                              className={`w-10 h-5 rounded-full transition-all relative ${p.team_join ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                              className={`w-10 h-5 rounded-full transition-all relative ${
+                                !enableTeamSetup ? 'cursor-not-allowed bg-slate-200' : p.team_join ? 'bg-indigo-600' : 'bg-slate-300'
+                              }`}
                             >
-                              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${p.team_join ? 'right-0.5' : 'left-0.5'}`} />
+                              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${enableTeamSetup && p.team_join ? 'right-0.5' : 'left-0.5'}`} />
                             </button>
                           </td>
                         </>
@@ -1110,19 +1119,26 @@ export const RegistrationProjects: React.FC<RegistrationProjectsProps> = ({ even
                                     <Users className="w-4 h-4" />
                                   </div>
                                   <div>
-                                    <span className="text-sm font-bold text-slate-700">报名需加入队伍</span>
-                                    <p className="text-[10px] text-slate-400">开启后，则报名页面队伍为必填项</p>
+                                    <span className="text-sm font-bold text-slate-700">报名页面队伍是否必填</span>
+                                    <p className={`max-w-xl text-[10px] leading-5 ${enableTeamSetup ? 'text-slate-400' : 'text-amber-600'}`}>
+                                      {enableTeamSetup
+                                        ? '开启后，用户报名该项目时需先加入或创建队伍。'
+                                        : '当前赛事未启用队伍，请先在「报名规则 - 队伍限制」中将”启用队伍“选择为开启。'}
+                                    </p>
                                   </div>
                                 </div>
                                 <button 
                                   type="button"
-                                  onClick={() => setEditingProject({...editingProject, team_join: !editingProject.team_join})}
-                                  className={`w-12 h-6 rounded-full transition-all relative ${editingProject.team_join ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                                  disabled={!enableTeamSetup}
+                                  onClick={() => enableTeamSetup && setEditingProject({...editingProject, team_join: !editingProject.team_join})}
+                                  className={`w-12 h-6 rounded-full transition-all relative ${
+                                    !enableTeamSetup ? 'cursor-not-allowed bg-slate-200' : editingProject.team_join ? 'bg-indigo-600' : 'bg-slate-300'
+                                  }`}
                                 >
-                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${editingProject.team_join ? 'right-1' : 'left-1'}`} />
+                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${enableTeamSetup && editingProject.team_join ? 'right-1' : 'left-1'}`} />
                                 </button>
                               </div>
-                              {editingProject.team_join && (
+                              {enableTeamSetup && editingProject.team_join && (
                                 <motion.div 
                                   initial={{ opacity: 0, height: 0 }}
                                   animate={{ opacity: 1, height: 'auto' }}
