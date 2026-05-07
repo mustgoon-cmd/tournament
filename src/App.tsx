@@ -93,6 +93,14 @@ const MOCK_EVENTS = [
   { id: 'e5', name: '混合双打' },
 ];
 
+const REGISTRATION_PUBLIC_PLAYER_FIELD_OPTIONS = [
+  { id: 'name', label: '选手姓名', example: '张三' },
+  { id: 'gender', label: '性别', example: '男' },
+  { id: 'facePhoto', label: '人脸照片', example: '已上传人脸照片' },
+  { id: 'birthDate', label: '出生日期', example: '2016-05-12' },
+  { id: 'team', label: '所属队伍', example: '羽林军' },
+] as const;
+
 const POST_DEADLINE_EDIT_FIELD_OPTIONS = [
   { id: PostDeadlineEditableField.PROFILE, label: '个人资料字段（选手档案中的非证件类字段）' },
   { id: PostDeadlineEditableField.IDENTITY, label: '证件信息' },
@@ -1217,36 +1225,6 @@ const REGISTRATION_TEMPLATES: RegistrationTemplateRow[] = [
   },
 ];
 
-const EVENT_REGISTRATION_TEMPLATE_USAGES = [
-  {
-    templateId: 'TMP001',
-    projectNames: ['男子单打', '男子双打', '混合双打'],
-  },
-  {
-    templateId: 'TMP003',
-    projectNames: ['混合团体'],
-  },
-] as const;
-
-const getRegistrationPublicFieldKey = (templateId: string, field: RegistrationTemplateField) =>
-  field.source === 'profile' && field.profileKey
-    ? `${templateId}:profile:${field.profileKey}`
-    : `${templateId}:field:${field.id}`;
-
-const getRegistrationPublicFieldExample = (field: RegistrationTemplateField) => {
-  if (field.profileKey === 'player_name') return '张三';
-  if (field.profileKey === 'gender') return '男';
-  if (field.profileKey === 'birth_date') return '2016-05-12';
-  if (field.profileKey === 'id_type') return '身份证';
-  if (field.profileKey === 'id_number') return '4403********4512';
-  if (field.profileKey === 'phone') return '138****8000';
-  if (field.profileKey === 'region') return '广东深圳';
-  if (field.fieldType === 'select') return field.options[0] ?? '已选择';
-  if (field.fieldType === 'phone') return '138****8000';
-  if (field.fieldType === 'date') return '2026-04-01';
-  return field.placeholder && field.placeholder !== '请输入' ? field.placeholder : '示例内容';
-};
-
 const TARGET_LISTS: TargetListRow[] = [
   {
     id: 'TL001',
@@ -1885,12 +1863,7 @@ export default function App() {
     endTime: '2026-04-20T18:00',
     channel: RegistrationChannel.UNLIMITED,
     enableRegistrationPublicity: true,
-    publicVisiblePlayerFields: [
-      'TMP001:profile:player_name',
-      'TMP001:profile:phone',
-      'TMP003:profile:player_name',
-      'TMP003:field:TMP003-F001',
-    ],
+    publicVisiblePlayerFields: ['name', 'gender', 'facePhoto', 'birthDate', 'team'],
     listRestrictions: [],
     selectedWhitelistListIds: [],
     selectedBlacklistListIds: [],
@@ -2301,25 +2274,6 @@ export default function App() {
     .filter((field): field is RegistrationTemplateField & { profileKey: RegistrationTemplateProfileKey } => Boolean(field.profileKey))
     .map((field) => field.profileKey);
   const registrationTemplatePreviewFields = registrationTemplateDraft.fields.filter((field) => field.enabled);
-  const registrationPublicityTemplateConfigs = useMemo(() => {
-    const templateMap = new Map(registrationTemplates.map((template) => [template.id, template]));
-    return EVENT_REGISTRATION_TEMPLATE_USAGES.map((usage) => {
-      const template = templateMap.get(usage.templateId);
-      if (!template) return null;
-      return {
-        ...usage,
-        template,
-        fields: template.fields.filter((field) => field.enabled),
-      };
-    }).filter(
-      (item): item is {
-        templateId: string;
-        projectNames: readonly string[];
-        template: RegistrationTemplateRow;
-        fields: RegistrationTemplateField[];
-      } => Boolean(item)
-    );
-  }, [registrationTemplates]);
   const filteredRegistrationTemplates = useMemo(() => {
     const keyword = registrationTemplateSearchQuery.trim().toLowerCase();
     if (!keyword) return registrationTemplates;
@@ -9853,86 +9807,47 @@ export default function App() {
                             </div>
                             <div className="space-y-4">
                               <p className="text-xs leading-6 text-slate-500">
-                                仅展示当前赛事报名项目已关联的报名模板；相同模板只配置一次，前台将按项目关联模板读取对应公示字段。
+                                勾选后，报名阶段的前台公示将展示对应字段。
                               </p>
-                              {registrationPublicityTemplateConfigs.length > 0 ? (
-                                <div className="space-y-4">
-                                  {registrationPublicityTemplateConfigs.map(({ template, fields, projectNames }) => {
-                                    const selectedFields = fields.filter((field) =>
-                                      config.publicVisiblePlayerFields.includes(getRegistrationPublicFieldKey(template.id, field))
-                                    );
-
-                                    return (
-                                      <div key={template.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                          <div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                              <p className="text-sm font-bold text-slate-900">{template.name}</p>
-                                              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-500">
-                                                已选 {selectedFields.length}/{fields.length}
-                                              </span>
-                                            </div>
-                                            <p className="mt-2 text-xs leading-6 text-slate-500">
-                                              适用于：{projectNames.join('、')}
-                                            </p>
-                                          </div>
-                                          <span className="w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
-                                            按模板配置
-                                          </span>
-                                        </div>
-
-                                        <div className="mt-4 flex flex-wrap gap-2">
-                                          {fields.map((field) => {
-                                            const fieldKey = getRegistrationPublicFieldKey(template.id, field);
-                                            const selected = config.publicVisiblePlayerFields.includes(fieldKey);
-                                            return (
-                                              <button
-                                                key={fieldKey}
-                                                onClick={() =>
-                                                  setConfig((prev) => ({
-                                                    ...prev,
-                                                    publicVisiblePlayerFields: selected
-                                                      ? prev.publicVisiblePlayerFields.filter((item) => item !== fieldKey)
-                                                      : [...prev.publicVisiblePlayerFields, fieldKey],
-                                                  }))
-                                                }
-                                                className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
-                                                  selected
-                                                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-white'
-                                                }`}
-                                              >
-                                                {field.label}
-                                              </button>
-                                            );
-                                          })}
-                                        </div>
-
-                                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">前台展示示例</p>
-                                          <div className="mt-3 flex items-center justify-between gap-4">
-                                            <p className="text-sm font-semibold text-slate-900">{projectNames[0]}</p>
-                                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">已报名 32 人</span>
-                                          </div>
-                                          <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
-                                            {selectedFields.length > 0
-                                              ? selectedFields
-                                                  .map((field) => getRegistrationPublicFieldExample(field))
-                                                  .join(' · ')
-                                              : '当前模板未选择任何展示字段'}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
+                              <div className="flex flex-wrap gap-3">
+                                {REGISTRATION_PUBLIC_PLAYER_FIELD_OPTIONS.map((field) => {
+                                  const selected = config.publicVisiblePlayerFields.includes(field.id);
+                                  return (
+                                    <button
+                                      key={field.id}
+                                      onClick={() =>
+                                        setConfig((prev) => ({
+                                          ...prev,
+                                          publicVisiblePlayerFields: selected
+                                            ? prev.publicVisiblePlayerFields.filter((item) => item !== field.id)
+                                            : [...prev.publicVisiblePlayerFields, field.id],
+                                        }))
+                                      }
+                                      className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
+                                        selected
+                                          ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {field.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">前台展示示例</p>
+                                <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <p className="text-sm font-semibold text-slate-900">男子单打</p>
+                                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">已报名 32 人</span>
+                                  </div>
+                                  <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                                    {REGISTRATION_PUBLIC_PLAYER_FIELD_OPTIONS
+                                      .filter((field) => config.publicVisiblePlayerFields.includes(field.id))
+                                      .map((field) => field.example)
+                                      .join(' · ') || '当前未选择任何展示字段'}
+                                  </div>
                                 </div>
-                              ) : (
-                                <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-xs leading-6 text-amber-800">
-                                  当前赛事暂无已关联报名模板的报名项目，请先在报名项目中关联报名模板后再配置公示字段。
-                                </div>
-                              )}
-                              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-xs leading-6 text-slate-500">
-                                若后续项目更换或新增报名模板，本页面会按已关联模板更新可配置字段；已经选择的同模板字段将继续保留。
                               </div>
                             </div>
                           </div>
