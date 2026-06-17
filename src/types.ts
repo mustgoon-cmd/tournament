@@ -152,9 +152,12 @@ export interface RegistrationConfig {
   selectedWhitelistListIds: string[];
   selectedBlacklistListIds: string[];
   enableQuota: boolean;
+  enableIndividualQuota: boolean;
   individualQuota?: number;
+  individualQuotaBasis: QuotaBasis;
+  enableTeamQuota: boolean;
   teamQuota?: number;
-  quotaBasis: QuotaBasis;
+  teamQuotaBasis: QuotaBasis;
   multiEventDiscount: DiscountRule;
   // Multi-Event Restriction
   enableMultiEventRestriction: boolean;

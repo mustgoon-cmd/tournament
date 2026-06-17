@@ -47,12 +47,12 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
   type SchedulingConfigWithPhaseState = ProjectSchedulingConfig & {
     phase_statuses?: Record<string, PhaseWorkflowStatus>;
   };
-  type BatchSchedulingPreset = 'group_elimination' | 'round_robin_elimination' | 'single_elimination';
+  type BatchSchedulingPreset = 'round_robin_elimination' | 'single_elimination';
   const [establishedProjects] = useState(
     MOCK_PROJECT_SUMMARY.filter(p => p.status === 'ESTABLISHED' || p.establishment_status === '已立项')
   );
 
-  const [projectTypeTab, setProjectTypeTab] = useState<'单项项目' | '团体项目'>('单项项目');
+  const [projectTypeFilter, setProjectTypeFilter] = useState<'all' | 'single' | 'team'>('all');
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'bracket' | 'list' | 'sub_matches'>('bracket');
   const [activePhaseIndex, setActivePhaseIndex] = useState(0);
@@ -67,7 +67,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
   const [batchTemplateKeyword, setBatchTemplateKeyword] = useState('');
   const [batchSchedulingDraft, setBatchSchedulingDraft] = useState({
-    templateId: 'group_elimination' as BatchSchedulingPreset
+    templateId: 'round_robin_elimination' as BatchSchedulingPreset
   });
   const [batchTemplatePhases, setBatchTemplatePhases] = useState<PhaseConfig[]>([]);
   const [batchExpandedPhaseIds, setBatchExpandedPhaseIds] = useState<string[]>([]);
@@ -77,14 +77,9 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     failedItems: { projectName: string; reason: string }[];
   } | null>(null);
   const projectListRef = React.useRef<HTMLDivElement | null>(null);
+  const allowedPhaseTypes = [PhaseType.ROUND_ROBIN, PhaseType.ELIMINATION];
 
   const batchPlanningTemplates = [
-    {
-      id: 'group_elimination' as BatchSchedulingPreset,
-      name: '两阶段：分组循环赛 + 单淘汰',
-      description: '适用于多数常规赛事，先按组内循环赛筛选，再进入淘汰赛。',
-      defaultMatchRuleId: 'rule_bo3_standard'
-    },
     {
       id: 'round_robin_elimination' as BatchSchedulingPreset,
       name: '两阶段：单循环赛 + 单淘汰',
@@ -177,15 +172,15 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     }
 
     return [
-      basePhase(1, '第一阶段', PhaseType.GROUP_ROUND_ROBIN, {
-        participant_count: 16,
-        group_count: 4,
-        promotion_per_group: 2
+      basePhase(1, '第一阶段', PhaseType.ROUND_ROBIN, {
+        participant_count: 8,
+        group_count: 1,
+        promotion_per_group: 4
       }),
       basePhase(2, '第二阶段', PhaseType.ELIMINATION, {
-        participant_count: 8,
+        participant_count: 4,
         elimination_goal: 'ranking',
-        decide_top_n: 8
+        decide_top_n: 4
       })
     ];
   };
@@ -206,21 +201,27 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     setActivePhaseIndex(0);
   }, [selectedProject?.id]);
 
+  const batchProjectType = selectedProjectIds.some((projectId) =>
+    establishedProjects.find((project) => project.id === projectId)?.type === 'team'
+  )
+    ? 'team'
+    : 'single';
+
   React.useEffect(() => {
     setBatchTemplatePhases(createTemplatePhase(
       batchSchedulingDraft.templateId,
-      projectTypeTab === '单项项目' ? 'single' : 'team',
+      batchProjectType,
       getTemplateDefaultMatchRuleId(batchSchedulingDraft.templateId)
     ));
-  }, [batchSchedulingDraft.templateId, projectTypeTab]);
+  }, [batchSchedulingDraft.templateId, batchProjectType]);
 
   React.useEffect(() => {
     setBatchExpandedPhaseIds(batchTemplatePhases[0] ? [batchTemplatePhases[0].id] : []);
   }, [batchTemplatePhases]);
 
   const projectsByType = establishedProjects.filter((p) => {
-    if (projectTypeTab === '单项项目') return p.type === 'single';
-    return p.type === 'team';
+    if (projectTypeFilter === 'all') return true;
+    return p.type === projectTypeFilter;
   });
 
   const filteredProjects = projectsByType.filter((project) => {
@@ -437,7 +438,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
       alert('当前最后一个阶段已设置为“决出名次”，不能继续添加后续阶段。');
       return;
     }
-    const projectType = projectTypeTab === '单项项目' ? 'single' : 'team';
+    const projectType = batchProjectType;
     const defaultRule = mapMatchRuleToPhaseValue(getTemplateDefaultMatchRuleId(batchSchedulingDraft.templateId), projectType);
     setBatchTemplatePhases((prev) => [
       ...prev,
@@ -1037,7 +1038,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
       ? batchTemplatePhases
       : createTemplatePhase(
           batchSchedulingDraft.templateId,
-          projectTypeTab === '单项项目' ? 'single' : 'team',
+          project?.type === 'team' ? 'team' : 'single',
           getTemplateDefaultMatchRuleId(batchSchedulingDraft.templateId)
         );
 
@@ -1132,13 +1133,6 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     setShowBatchPlanResult(true);
   };
 
-  const getProjectScheduleSummary = (project: any) => {
-    const config = getProjectConfig(project.id);
-    if (config.phases.length === 0) return '未配置比赛阶段';
-    if (config.phases.length === 1) return `${config.phases[0].name} · ${config.phases[0].type}`;
-    return `${config.phases.length} 个阶段 · ${config.phases.map((phase) => phase.type).join(' / ')}`;
-  };
-
   const getPhaseStatusMeta = (status: PhaseWorkflowStatus) => {
     if (status === 'generated') return { label: '已生成比赛', className: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
     if (status === 'locked') return { label: '已锁定', className: 'bg-violet-50 text-violet-600 border-violet-100' };
@@ -1177,21 +1171,22 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     return { label: `待配置 ${total} 个阶段`, className: 'bg-slate-50 text-slate-500 border-slate-200' };
   };
 
-  const getProjectUpdatedText = (projectId: string) => {
+  const getProjectLatestUpdatedTime = (projectId: string) => {
     const phaseStates = getProjectPhaseStatuses(projectId);
-    const total = phaseStates.length;
-    if (total === 0) return '未开始';
+    if (phaseStates.length === 0) return '-';
+    const projectIndex = Math.max(establishedProjects.findIndex((project) => project.id === projectId), 0);
+    const minute = String(18 + (projectIndex * 7) % 40).padStart(2, '0');
+    return `2026-04-01 11:${minute}:00`;
+  };
 
-    const generatedCount = phaseStates.filter(({ status }) => status === 'generated').length;
-    const lockedCount = phaseStates.filter(({ status }) => status === 'locked').length;
-    const confirmedCount = phaseStates.filter(({ status }) => status === 'confirmed').length;
-    const draftCount = phaseStates.filter(({ status }) => status === 'draft').length;
+  const getPhaseTypeLabel = (type: PhaseType) => {
+    if (type === PhaseType.ELIMINATION) return '单淘汰';
+    return '单循环';
+  };
 
-    if (generatedCount > 0) return `${generatedCount}/${total} 阶段已生成比赛`;
-    if (lockedCount > 0) return `${lockedCount}/${total} 阶段待生成比赛`;
-    if (confirmedCount > 0) return `${confirmedCount}/${total} 阶段待锁定`;
-    if (draftCount > 0) return `${draftCount}/${total} 阶段待确认`;
-    return '待生成对阵';
+  const getPhaseTableValue = (phase?: PhaseConfig) => {
+    if (!phase) return '-';
+    return `${phase.participant_count || 0}/${getPhaseTypeLabel(phase.type)}/${calculatePhaseMatches(phase)}`;
   };
 
   const renderPhaseConfigurationEditor = ({
@@ -1324,11 +1319,11 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <select
-                    value={phase.type}
+                    value={allowedPhaseTypes.includes(phase.type) ? phase.type : PhaseType.ROUND_ROBIN}
                     onChange={(e) => onUpdatePhase(phase.id, { type: e.target.value as PhaseType })}
                     className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 uppercase tracking-wider focus:ring-0 cursor-pointer"
                   >
-                    {Object.values(PhaseType).map(t => (
+                    {allowedPhaseTypes.map(t => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
@@ -1502,17 +1497,6 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                       />
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">组内赛制</label>
-                    <select
-                      value={phase.group_match_format || '单循环'}
-                      onChange={(e) => onUpdatePhase(phase.id, { group_match_format: e.target.value as any })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="单循环">单循环</option>
-                      <option value="双循环">双循环</option>
-                    </select>
-                  </div>
                   <div className="space-y-1 col-span-2">
                     <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">分组策略</label>
                     <select
@@ -1557,71 +1541,6 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                   </div>
                 </div>
               ))}
-
-              {(!collapsible || expandedPhaseIds.includes(phase.id)) && (
-              <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Zap className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">比赛胜负规则</span>
-                </div>
-
-                {projectType === 'single' ? (
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">单场胜负规则</label>
-                    <select
-                      value={phase.match_win_loss_rule || '3局2胜'}
-                      onChange={(e) => onUpdatePhase(phase.id, { match_win_loss_rule: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="1局1胜">1局1胜</option>
-                      <option value="3局2胜">3局2胜</option>
-                      <option value="5局3胜">5局3胜</option>
-                    </select>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">团体胜负规则</label>
-                      <select
-                        value={phase.team_match_rule || '5场3胜'}
-                        onChange={(e) => onUpdatePhase(phase.id, { team_match_rule: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="3场2胜">3场2胜</option>
-                        <option value="5场3胜">5场3胜</option>
-                        <option value="7场4胜">7场4胜</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">团体单项规则配置</label>
-                      <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        {(teamEvents || []).map((te: any) => (
-                          <div key={te.id} className="flex items-center justify-between gap-4">
-                            <span className="text-xs font-bold text-slate-600 shrink-0">
-                              {te.match_format_rule?.value || '未知单项'}
-                            </span>
-                            <select
-                              value={phase.sub_match_rules?.[te.id] || '3局2胜'}
-                              onChange={(e) => {
-                                const newSubRules = { ...(phase.sub_match_rules || {}) };
-                                newSubRules[te.id] = e.target.value;
-                                onUpdatePhase(phase.id, { sub_match_rules: newSubRules });
-                              }}
-                              className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            >
-                              <option value="1局1胜">1局1胜</option>
-                              <option value="3局2胜">3局2胜</option>
-                              <option value="5局3胜">5局3胜</option>
-                            </select>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              )}
 
               {(!collapsible || expandedPhaseIds.includes(phase.id)) && hasNextPhase && (
                 <div className="pt-4 border-t border-slate-100 space-y-4">
@@ -1788,6 +1707,10 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
       selectedPhase &&
       ['draft', 'confirmed', 'locked', 'generated'].includes(selectedPhaseStatus || '') &&
       getProjectConfig(selectedProject.id).generated_framework
+  );
+  const phaseColumnCount = Math.max(
+    1,
+    ...filteredProjects.map((project) => getProjectConfig(project.id).phases.length)
   );
 
   return (
@@ -1989,40 +1912,24 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
 
                   <div ref={projectListRef} className="flex flex-col gap-4 border-b border-slate-100 px-8 py-5 xl:flex-row xl:items-center xl:justify-between">
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex w-fit flex-wrap gap-2 rounded-full bg-slate-100 p-1.5">
-                        <button
-                          onClick={() => {
-                            setProjectTypeTab('单项项目');
-                            setSelectedProject(null);
-                          }}
-                          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                            projectTypeTab === '单项项目'
-                              ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200'
-                              : 'text-slate-500 hover:bg-white hover:text-slate-700'
-                          }`}
-                        >
-                          单项项目
-                        </button>
-                        <button
-                          onClick={() => {
-                            setProjectTypeTab('团体项目');
-                            setSelectedProject(null);
-                          }}
-                          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                            projectTypeTab === '团体项目'
-                              ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200'
-                              : 'text-slate-500 hover:bg-white hover:text-slate-700'
-                          }`}
-                        >
-                          团体项目
-                        </button>
-                      </div>
                       <input
                         value={searchKeyword}
                         onChange={(event) => setSearchKeyword(event.target.value)}
                         placeholder="搜索项目名称 / 简称 / 代码"
                         className="w-72 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                       />
+                      <select
+                        value={projectTypeFilter}
+                        onChange={(event) => {
+                          setProjectTypeFilter(event.target.value as typeof projectTypeFilter);
+                          setSelectedProject(null);
+                        }}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="all">全部项目类型</option>
+                        <option value="single">单项项目</option>
+                        <option value="team">团体项目</option>
+                      </select>
                       <select
                         value={statusFilter}
                         onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
@@ -2051,7 +1958,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                   </div>
 
                   <div className="overflow-x-auto border-t border-slate-100">
-                    <table className="min-w-[1120px] w-full text-left">
+                    <table className="w-full text-left" style={{ minWidth: `${980 + phaseColumnCount * 148}px` }}>
                       <thead className="bg-slate-50/80">
                         <tr>
                           <th className="px-6 py-4">
@@ -2064,11 +1971,15 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                           </th>
                           <th className="px-6 py-4 text-xs font-semibold text-slate-400">项目名称</th>
                           <th className="px-4 py-4 text-xs font-semibold text-slate-400">项目类型</th>
-                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">报名人数</th>
-                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">编排方案摘要</th>
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">选手人数</th>
+                          {Array.from({ length: phaseColumnCount }).map((_, index) => (
+                            <th key={index} className="px-4 py-4 text-xs font-semibold text-slate-400">
+                              第{index + 1}阶段（人数/赛制/场数）
+                            </th>
+                          ))}
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">总场次</th>
                           <th className="px-4 py-4 text-xs font-semibold text-slate-400">编排状态</th>
-                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">场次</th>
-                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">最近更新</th>
+                          <th className="px-4 py-4 text-xs font-semibold text-slate-400">最新更新时间</th>
                           <th className="sticky right-0 bg-slate-50/95 px-6 py-4 text-right text-xs font-semibold text-slate-400 shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
                             操作
                           </th>
@@ -2081,11 +1992,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                           const generatedPhaseIds = getProjectPhaseStatuses(project.id)
                             .filter(({ status }) => status === 'generated')
                             .map(({ phase }) => phase.id);
-                          const generatedMatches = config.generated_framework
-                            ? config.generated_framework.rounds
-                                .filter((round) => generatedPhaseIds.includes(round.phase_id))
-                                .reduce((total, round) => total + round.matches.length, 0)
-                            : 0;
+                          const totalMatchesCount = config.phases.reduce((total, phase) => total + calculatePhaseMatches(phase), 0);
                           const hasGeneratedPhase = generatedPhaseIds.length > 0;
                           const selected = selectedProjectIds.includes(project.id);
 
@@ -2116,19 +2023,32 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                                 </div>
                               </td>
                               <td className="px-4 py-4">
-                                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 whitespace-nowrap">
                                   {project.type === 'single' ? '单项项目' : '团体项目'}
                                 </span>
                               </td>
                               <td className="px-4 py-4 text-sm font-semibold text-slate-700">{project.current_count || 0}</td>
-                              <td className="px-4 py-4 text-sm text-slate-600">{getProjectScheduleSummary(project)}</td>
+                              {Array.from({ length: phaseColumnCount }).map((_, index) => {
+                                const phase = config.phases[index];
+                                return (
+                                  <td
+                                    key={index}
+                                    className="px-4 py-4 text-sm font-semibold text-slate-700 whitespace-nowrap"
+                                    title={phase ? `${phase.name}：${getPhaseTableValue(phase)}` : undefined}
+                                  >
+                                    {getPhaseTableValue(phase)}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-4 py-4 text-sm font-semibold text-slate-700 whitespace-nowrap">
+                                {totalMatchesCount > 0 ? `${totalMatchesCount} 场` : '-'}
+                              </td>
                               <td className="px-4 py-4">
                                 <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusMeta.className}`}>
                                   {statusMeta.label}
                                 </span>
                               </td>
-                              <td className="px-4 py-4 text-sm font-semibold text-slate-700">{generatedMatches > 0 ? `${generatedMatches} 场` : '-'}</td>
-                              <td className="px-4 py-4 text-sm text-slate-500">{getProjectUpdatedText(project.id)}</td>
+                              <td className="px-4 py-4 text-sm text-slate-500 whitespace-nowrap">{getProjectLatestUpdatedTime(project.id)}</td>
                               <td className="sticky right-0 bg-white px-6 py-4 text-right shadow-[-12px_0_20px_-16px_rgba(15,23,42,0.18)]">
                                 <div className="flex justify-end gap-2 whitespace-nowrap">
                                   <button
@@ -2663,8 +2583,8 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
 
                     {renderPhaseConfigurationEditor({
                       phases: batchTemplatePhases,
-                      projectType: projectTypeTab === '单项项目' ? 'single' : 'team',
-                      teamEvents: projectTypeTab === '团体项目' ? batchPlanningTeamEvents : [],
+                      projectType: batchProjectType,
+                      teamEvents: batchProjectType === 'team' ? batchPlanningTeamEvents : [],
                       onAddPhase: addBatchTemplatePhase,
                       onUpdatePhase: updateBatchTemplatePhase,
                       onRemovePhase: removeBatchTemplatePhase,

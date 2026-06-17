@@ -73,6 +73,13 @@ interface ParticipantEntryRelation {
   entry: RegistrationEntry;
 }
 
+interface SigningDetailView {
+  agreementName: string;
+  signerName: string;
+  status: string;
+  body: string[];
+}
+
 const POST_DEADLINE_EDIT_SCOPE_LABELS: Record<PostDeadlineEditableField, string> = {
   [PostDeadlineEditableField.PROFILE]: '个人资料字段',
   [PostDeadlineEditableField.IDENTITY]: '证件信息',
@@ -175,6 +182,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
   const [selectedEntryForDetail, setSelectedEntryForDetail] = useState<RegistrationEntry | null>(null);
   const [selectedParticipantForOverview, setSelectedParticipantForOverview] = useState<ParticipantRecord | null>(null);
   const [selectedParticipantForDetail, setSelectedParticipantForDetail] = useState<RegistrationEntry | null>(null);
+  const [selectedSigningDetail, setSelectedSigningDetail] = useState<SigningDetailView | null>(null);
   const [selectedTeamForDetail, setSelectedTeamForDetail] = useState<TeamRecord | null>(null);
   const [replaceParticipantTarget, setReplaceParticipantTarget] = useState<{ entry: RegistrationEntry; participant: EntryParticipantView } | null>(null);
   const [replacementFormData, setReplacementFormData] = useState<EntryParticipantView>({
@@ -193,6 +201,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
   const [teamExitedParticipantKeys, setTeamExitedParticipantKeys] = useState<Record<string, string[]>>({});
   const [orderDetailTab, setOrderDetailTab] = useState<OrderDetailTab>('projects');
   const [entryDetailTab, setEntryDetailTab] = useState<EntryDetailTab>('order');
+  const [selectedEntryParticipantId, setSelectedEntryParticipantId] = useState<string | null>(null);
   const [isEditingParticipant, setIsEditingParticipant] = useState(false);
   const [editingParticipantData, setEditingParticipantData] = useState<RegistrationEntry | null>(null);
   
@@ -246,6 +255,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
   useEffect(() => {
     if (selectedEntryForDetail) {
       setEntryDetailTab('order');
+      setSelectedEntryParticipantId(null);
     }
   }, [selectedEntryForDetail]);
 
@@ -532,6 +542,121 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
       ...sign,
       participant_name: participant.name,
     }));
+
+  const getAgreementBody = (agreementName: string) => {
+    if (agreementName.includes('免责')) {
+      return [
+        '本人已阅读并理解赛事报名须知、竞赛规程及相关风险提示，自愿报名参加本赛事。',
+        '本人确认身体状况适合参加本次赛事，并承诺在比赛过程中遵守赛事规则、服从裁判及工作人员安排。',
+        '因本人隐瞒健康状况、违反赛事规则或个人原因造成的损失，由本人自行承担相应责任。',
+      ];
+    }
+
+    if (agreementName.includes('个人信息')) {
+      return [
+        '本人同意赛事组织方在赛事报名、资格审核、赛程安排、成绩公示及赛事服务过程中收集和使用报名信息。',
+        '赛事组织方应按照个人信息保护相关要求妥善保管报名信息，不得超出赛事服务必要范围使用。',
+        '本人知悉可根据赛事规则申请查看、更正本人报名信息。',
+      ];
+    }
+
+    return [
+      '本人已阅读并同意本协议内容，确认本次报名所填写的信息真实、准确、完整。',
+      '本人承诺遵守赛事相关管理要求，并配合赛事组织方完成必要的信息核验与现场管理。',
+    ];
+  };
+
+  const openSigningDetail = (
+    sign: NonNullable<RegistrationOrder['signing_info']>[number] & { participant_name?: string },
+    participantName: string,
+  ) => {
+    setSelectedSigningDetail({
+      agreementName: sign.agreement_name,
+      signerName: sign.participant_name || participantName,
+      status: '已签署',
+      body: getAgreementBody(sign.agreement_name),
+    });
+  };
+
+  const renderSigningAgreementButtons = (
+    signingInfo: Array<NonNullable<RegistrationOrder['signing_info']>[number] & { participant_name?: string }>,
+    participantName: string,
+    keyPrefix: string,
+  ) => {
+    if (signingInfo.length === 0) {
+      return <span className="text-slate-400">暂无签约记录</span>;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        {signingInfo.map((sign, signIndex) => (
+          <button
+            key={`${keyPrefix}-agreement-${signIndex}`}
+            type="button"
+            onClick={() => openSigningDetail(sign, participantName)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600 transition-all hover:border-emerald-200 hover:bg-emerald-100"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {sign.agreement_name}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  const getParticipantFormMeta = (
+    entry: RegistrationEntry,
+    participant: EntryParticipantView,
+    index: number,
+  ) => {
+    const fallbackProfiles = [
+      { birthDate: '1998-05-12', emergencyContact: '张建国', emergencyPhone: '138****8001' },
+      { birthDate: '1999-08-21', emergencyContact: '李明', emergencyPhone: '139****9001' },
+      { birthDate: '2000-11-03', emergencyContact: '王芳', emergencyPhone: '137****7001' },
+      { birthDate: '2001-02-18', emergencyContact: '赵敏', emergencyPhone: '136****6001' },
+    ];
+    const profile = fallbackProfiles[index % fallbackProfiles.length];
+    const formStatus =
+      participant.participantStatus === 'exited_team' || participant.participantStatus === 'replaced_old'
+        ? participant.statusText || '已退出'
+        : entry.entry_status === EntryStatus.SUCCESS
+          ? '审核通过'
+          : '待审核';
+
+    return {
+      ...profile,
+      facePhoto: '已上传',
+      qualificationProof: '已上传',
+      formStatus,
+    };
+  };
+
+  const getParticipantAuditRecords = (
+    entry: RegistrationEntry,
+    participant: EntryParticipantView,
+    index: number,
+  ) => {
+    const baseTime = entry.created_at || '2026-03-18 09:30:00';
+    if (participant.participantStatus === 'exited_team' || participant.participantStatus === 'replaced_old') {
+      return [
+        { title: '报名表提交', operator: '报名用户', time: baseTime, status: '已提交', note: '用户完成当前项目报名表填写。' },
+        { title: '资料审核', operator: '赛事管理员', time: entry.updated_at, status: '审核通过', note: '报名资料完整，允许参赛。' },
+        { title: participant.statusText || '状态变更', operator: '赛事管理员', time: entry.updated_at, status: participant.statusText || '已退出', note: participant.statusNote || '选手状态已变更。' },
+      ];
+    }
+
+    return [
+      { title: '报名表提交', operator: '报名用户', time: baseTime, status: '已提交', note: `第 ${index + 1} 位选手完成报名信息填写。` },
+      { title: '系统资料校验', operator: '系统', time: baseTime, status: '校验通过', note: '证件号码、手机号和必填字段已通过基础校验。' },
+      {
+        title: '后台审核',
+        operator: entry.entry_status === EntryStatus.SUCCESS ? '赛事管理员' : '待处理',
+        time: entry.entry_status === EntryStatus.SUCCESS ? entry.updated_at : '--',
+        status: entry.entry_status === EntryStatus.SUCCESS ? '审核通过' : '待审核',
+        note: entry.entry_status === EntryStatus.SUCCESS ? '报名表信息审核通过。' : '等待管理员审核报名表信息。',
+      },
+    ];
+  };
 
   const getEntryParticipantKey = (entry: RegistrationEntry, participant: EntryParticipantView) =>
     `${entry.id}:${participant.name}:${participant.phone}`;
@@ -1018,18 +1143,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
               <p className="text-xs font-bold text-slate-900">协议签约信息</p>
             </div>
             {participantSigningInfo.length > 0 ? (
-              <div className="space-y-2">
-                {participantSigningInfo.map((sign, signIndex) => (
-                  <div key={`${participant.id}-${signIndex}`} className="flex items-start gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mt-0.5" />
-                    <div>
-                      <p className="text-[11px] font-bold text-slate-900">{sign.agreement_name}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-500 font-mono">{sign.signed_at}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">签署人：{sign.participant_name} · IP: {sign.ip_address}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              renderSigningAgreementButtons(participantSigningInfo, participant.name, participant.id)
             ) : (
               <p className="text-[11px] text-slate-400">暂无签署记录</p>
             )}
@@ -2518,22 +2632,197 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                   )}
 
                   {entryDetailTab === 'participants' ? (
-                  <div className="rounded-3xl border border-slate-200 bg-white p-6 space-y-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-indigo-600" />
-                        <h3 className="text-sm font-bold text-slate-900">选手信息与报名表</h3>
-                      </div>
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">
-                        共 {getEntryParticipants(selectedEntryForDetail).length} 位选手
-                      </span>
-                    </div>
-                    <div className="space-y-4">
-                      {getDetailedEntryParticipants(selectedEntryForDetail).map((participant, index) =>
-                        renderParticipantSnapshotCard(selectedEntryForDetail, participant, index),
-                      )}
-                    </div>
-                  </div>
+                    (() => {
+                      const participants = getDetailedEntryParticipants(selectedEntryForDetail);
+                      const activeParticipant =
+                        participants.find((participant) => participant.id === selectedEntryParticipantId) ||
+                        participants[0];
+                      const activeParticipantIndex = Math.max(
+                        participants.findIndex((participant) => participant.id === activeParticipant?.id),
+                        0,
+                      );
+
+                      if (!activeParticipant) {
+                        return (
+                          <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
+                            <p className="text-sm font-medium text-slate-400">当前报名项目暂无选手报名表</p>
+                          </div>
+                        );
+                      }
+
+                      const formMeta = getParticipantFormMeta(selectedEntryForDetail, activeParticipant, activeParticipantIndex);
+                      const signingInfo = getParticipantSigningInfo(selectedEntryForDetail, activeParticipant);
+                      const auditRecords = getParticipantAuditRecords(selectedEntryForDetail, activeParticipant, activeParticipantIndex);
+                      const formRows: { label: string; value: React.ReactNode; mono?: boolean }[] = [
+                        { label: '选手姓名', value: activeParticipant.name },
+                        { label: '手机号', value: activeParticipant.phone, mono: true },
+                        { label: '性别', value: activeParticipant.gender },
+                        { label: '出生日期', value: formMeta.birthDate, mono: true },
+                        { label: '证件类型', value: activeParticipant.idType },
+                        { label: '证件号码', value: activeParticipant.idNumber, mono: true },
+                        {
+                          label: '人脸照片',
+                          value: (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-600">
+                              <User className="h-3.5 w-3.5" />
+                              {formMeta.facePhoto}
+                            </span>
+                          ),
+                        },
+                        { label: '紧急联系方式', value: formMeta.emergencyPhone, mono: true },
+                        {
+                          label: '运动员资格证明',
+                          value: (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-600">
+                              <FileText className="h-3.5 w-3.5" />
+                              {formMeta.qualificationProof}
+                            </span>
+                          ),
+                        },
+                        { label: '紧急联系人', value: formMeta.emergencyContact },
+                        {
+                          label: '报名表状态',
+                          value: (
+                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
+                              formMeta.formStatus === '审核通过'
+                                ? 'border border-emerald-100 bg-emerald-50 text-emerald-600'
+                                : formMeta.formStatus === '待审核'
+                                  ? 'border border-amber-100 bg-amber-50 text-amber-600'
+                                  : 'border border-rose-100 bg-rose-50 text-rose-600'
+                            }`}>
+                              {formMeta.formStatus}
+                            </span>
+                          ),
+                        },
+                        {
+                          label: '协议签约信息',
+                          value: signingInfo.length > 0 ? (
+                            renderSigningAgreementButtons(signingInfo, activeParticipant.name, activeParticipant.id)
+                          ) : (
+                            <span className="text-slate-400">暂无签约记录</span>
+                          ),
+                        },
+                      ];
+
+                      return (
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[220px_minmax(0,1fr)_300px]">
+                          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-indigo-600" />
+                                <h3 className="text-sm font-bold text-slate-900">该订单下选手</h3>
+                              </div>
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">
+                                {participants.length} 人
+                              </span>
+                            </div>
+                            <p className="mt-2 text-[11px] leading-5 text-slate-500">点击选手姓名查看对应报名表。</p>
+                            <div className="mt-4 space-y-2">
+                              {participants.map((participant, index) => {
+                                const selected = participant.id === activeParticipant.id;
+                                return (
+                                  <button
+                                    key={participant.id}
+                                    type="button"
+                                    onClick={() => setSelectedEntryParticipantId(participant.id)}
+                                    className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${
+                                      selected
+                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-100 hover:bg-indigo-50/40'
+                                    }`}
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-sm font-bold">{participant.name}</span>
+                                      <span className="mt-1 block text-[11px] font-mono text-slate-400">第 {index + 1} 位</span>
+                                    </span>
+                                    {participant.statusText && (
+                                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                        participant.participantStatus === 'replaced_new'
+                                          ? 'bg-indigo-100 text-indigo-600'
+                                          : 'bg-rose-50 text-rose-600'
+                                      }`}>
+                                        {participant.statusText}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-indigo-600" />
+                                <h3 className="text-sm font-bold text-slate-900">选手报名表</h3>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {selectedEntryForDetail.type === 'single' && activeParticipant.participantStatus !== 'replaced_old' && (
+                                  <button
+                                    onClick={() => handleReplaceParticipant(selectedEntryForDetail, activeParticipant)}
+                                    className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-600 hover:bg-amber-100 transition-all"
+                                  >
+                                    更换选手
+                                  </button>
+                                )}
+                                {selectedEntryForDetail.type === 'team' && activeParticipant.participantStatus !== 'exited_team' && (
+                                  <button
+                                    onClick={() => handleParticipantQuitTeam(selectedEntryForDetail, activeParticipant)}
+                                    className="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-100 transition-all"
+                                  >
+                                    退出队伍
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="overflow-hidden">
+                              <table className="w-full table-fixed text-sm">
+                                <tbody className="divide-y divide-slate-100">
+                                  {formRows.map((row) => (
+                                    <tr key={row.label} className="align-top">
+                                      <th className="w-36 bg-slate-50/70 px-5 py-3 text-left text-xs font-bold text-slate-500">
+                                        {row.label}
+                                      </th>
+                                      <td className={`px-5 py-3 font-semibold text-slate-800 ${row.mono ? 'font-mono' : ''}`}>
+                                        {row.value}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <div className="flex items-center gap-2">
+                              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                              <h3 className="text-sm font-bold text-slate-900">审核记录</h3>
+                            </div>
+                            <div className="mt-5 space-y-4">
+                              {auditRecords.map((record, recordIndex) => (
+                                <div key={`${activeParticipant.id}-audit-${recordIndex}`} className="relative pl-5">
+                                  <span className="absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full bg-indigo-500 ring-4 ring-indigo-50" />
+                                  {recordIndex < auditRecords.length - 1 && (
+                                    <span className="absolute left-[4px] top-5 h-[calc(100%+0.5rem)] w-px bg-slate-200" />
+                                  )}
+                                  <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="text-xs font-bold text-slate-900">{record.title}</p>
+                                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                                        {record.status}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1 text-[11px] font-mono text-slate-400">{record.time}</p>
+                                    <p className="mt-2 text-[11px] leading-5 text-slate-500">{record.note}</p>
+                                    <p className="mt-2 text-[11px] font-bold text-slate-500">操作人：{record.operator}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
                   ) : null}
 
                   {entryDetailTab === 'payments' ? (
@@ -2600,6 +2889,83 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                 </div>
                   );
                 })()}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Signing Detail Modal */}
+      <AnimatePresence>
+        {selectedSigningDetail && (
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 md:p-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedSigningDetail(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              className="relative flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+            >
+              <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-7 py-6">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                    <ShieldCheck className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">签约详情</h3>
+                    <p className="mt-1 text-xs text-slate-500">查看该协议的签署内容与签署状态</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSigningDetail(null)}
+                  className="rounded-full p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto bg-slate-50/40 p-7">
+                <div className="space-y-5">
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">协议名称</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <h4 className="text-lg font-bold text-slate-900">{selectedSigningDetail.agreementName}</h4>
+                      <span className="inline-flex items-center rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
+                        {selectedSigningDetail.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">协议正文</p>
+                    <div className="mt-4 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-600">
+                      {selectedSigningDetail.body.map((paragraph, index) => (
+                        <p key={`${selectedSigningDetail.agreementName}-body-${index}`}>
+                          {index + 1}. {paragraph}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">签名图片</p>
+                    <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-white via-slate-50 to-slate-100 p-5">
+                      <div className="flex h-32 items-center justify-center rounded-xl bg-white shadow-inner">
+                        <div className="rotate-[-4deg] text-3xl font-bold tracking-[0.4em] text-slate-700">
+                          {selectedSigningDetail.signerName}
+                        </div>
+                      </div>
+                      <p className="mt-3 text-center text-[11px] text-slate-400">签名图片占位，用于表示用户已完成电子签名</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -2810,18 +3176,7 @@ export const RegistrationRecords: React.FC<RegistrationRecordsProps> = ({
                         <p className="text-xs font-bold text-slate-900">协议签约信息</p>
                       </div>
                       {signingInfo.length > 0 ? (
-                        <div className="space-y-2">
-                          {signingInfo.map((sign, idx) => (
-                            <div key={idx} className="flex items-start gap-2">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mt-0.5" />
-                              <div>
-                                <p className="text-[11px] font-bold text-slate-900">{sign.agreement_name}</p>
-                                <p className="mt-0.5 text-[10px] text-slate-500 font-mono">{sign.signed_at}</p>
-                                <p className="mt-0.5 text-[10px] text-slate-400">签署人：{selectedParticipantForDetail.participant_name} · IP: {sign.ip_address}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                        renderSigningAgreementButtons(signingInfo, selectedParticipantForDetail.participant_name, selectedParticipantForDetail.id)
                       ) : (
                         <p className="text-[11px] text-slate-400">暂无签约记录</p>
                       )}

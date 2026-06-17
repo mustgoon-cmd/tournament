@@ -72,6 +72,7 @@ import {
 import { RegistrationRecords } from './components/RegistrationRecords';
 import { RegistrationAnnouncement } from './components/RegistrationAnnouncement';
 import { ProjectScheduling } from './components/ProjectScheduling';
+import { SchedulingSchemeDesigner } from './components/SchedulingSchemeDesigner';
 import MatchManagement from './components/MatchManagement';
 import { RegistrationProjects } from './components/RegistrationProjects';
 import { MatchCodeConfig } from './components/MatchCodeConfig';
@@ -146,6 +147,7 @@ const VIEW_TITLES = {
   records: '报名记录',
   announcement: '报名公示',
   'match-code-config': '比赛规则',
+  'scheduling-scheme-designer': '赛制方案配置',
   scheduling: '项目编排',
   projects: '项目配置',
   'match-management': '比赛管理',
@@ -176,6 +178,7 @@ const VIEW_SECTIONS = {
   'referee-officials': '技术官员管理',
   'referee-task-assignment': '技术官员管理',
   'match-code-config': '赛事编排',
+  'scheduling-scheme-designer': '赛事编排',
   scheduling: '赛事编排',
   'match-management': '赛事编排',
   'player-management': '赛事编排',
@@ -231,10 +234,11 @@ type IterationPageLink = {
     | 'projects'
     | 'records'
     | 'records-orders'
-    | 'project-filing'
-    | 'multi-event-stats'
-    | 'match-code-config'
-    | 'scheduling';
+	    | 'project-filing'
+	    | 'multi-event-stats'
+	    | 'match-code-config'
+	    | 'scheduling-scheme-designer'
+	    | 'scheduling';
   changeType: IterationChangeType;
   summary: string;
   details?: string[];
@@ -1786,9 +1790,10 @@ export default function App() {
     | 'project-filing'
     | 'multi-event-stats'
     | 'records'
-    | 'announcement'
-    | 'match-code-config'
-    | 'scheduling'
+	    | 'announcement'
+	    | 'match-code-config'
+	    | 'scheduling-scheme-designer'
+	    | 'scheduling'
     | 'projects'
     | 'match-management'
     | 'player-management'
@@ -1868,9 +1873,12 @@ export default function App() {
     selectedWhitelistListIds: [],
     selectedBlacklistListIds: [],
     enableQuota: true,
+    enableIndividualQuota: true,
     individualQuota: 100,
+    individualQuotaBasis: QuotaBasis.SEAT,
+    enableTeamQuota: false,
     teamQuota: 20,
-    quotaBasis: QuotaBasis.SEAT,
+    teamQuotaBasis: QuotaBasis.SEAT,
     multiEventDiscount: INITIAL_MULTI_EVENT_DISCOUNT,
     enableMultiEventRestriction: true,
     maxEventsPerPerson: 2,
@@ -7376,17 +7384,17 @@ export default function App() {
                   exit={{ height: 0, opacity: 0 }}
                   className="ml-4 pl-4 border-l border-slate-200 space-y-1 overflow-hidden"
                 >
-                  <button 
-                    onClick={() => setViewMode('match-code-config')}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'match-code-config' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                  >
-                    比赛规则
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('scheduling')}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'scheduling' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                  >
-                    项目编排
+	                  <button 
+	                    onClick={() => setViewMode('match-code-config')}
+	                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'match-code-config' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+	                  >
+	                    比赛规则
+	                  </button>
+	                  <button 
+	                    onClick={() => setViewMode('scheduling')}
+	                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${viewMode === 'scheduling' ? 'text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+	                  >
+	                    项目编排
                   </button>
                   <button 
                     onClick={() => setViewMode('match-management')}
@@ -7631,10 +7639,19 @@ export default function App() {
                     }
                   />
                 </motion.div>
-              ) : viewMode === 'scheduling' ? (
-                <motion.div
-                  key="scheduling-view"
-                  initial={{ opacity: 0, y: 20 }}
+	              ) : viewMode === 'scheduling-scheme-designer' ? (
+	                <motion.div
+	                  key="scheduling-scheme-designer-view"
+	                  initial={{ opacity: 0, y: 20 }}
+	                  animate={{ opacity: 1, y: 0 }}
+	                  exit={{ opacity: 0, y: -20 }}
+	                >
+	                  <SchedulingSchemeDesigner />
+	                </motion.div>
+	              ) : viewMode === 'scheduling' ? (
+	                <motion.div
+	                  key="scheduling-view"
+	                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   className="flex-1 flex flex-col"
@@ -8824,7 +8841,7 @@ export default function App() {
                     </div>
                     <div className="space-y-4">
                       <div className="space-y-1">
-                        <p className="text-sm font-medium text-slate-700">控制赛事总名额</p>
+                        <p className="text-sm font-medium text-slate-700">用于设置赛事整体报名名额上限</p>
                       </div>
 
                       <AnimatePresence initial={false}>
@@ -8836,62 +8853,107 @@ export default function App() {
                             transition={{ duration: 0.22, ease: 'easeInOut' }}
                             className="overflow-hidden"
                           >
-                            <div className="rounded-2xl bg-slate-50 px-5 py-4 space-y-5">
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <label className="space-y-2">
-                                  <span className="text-sm font-medium text-slate-700">单项赛总名额上限</span>
-                                  <div className="relative">
-                                    <input
-                                      type="number"
-                                      value={config.individualQuota}
-                                      onChange={e => setConfig({ ...config, individualQuota: parseInt(e.target.value) || 0 })}
-                                      placeholder="请输入名额数量"
-                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">个</span>
-                                  </div>
-                                </label>
-                                <label className="space-y-2">
-                                  <span className="text-sm font-medium text-slate-700">团体赛总名额上限</span>
-                                  <div className="relative">
-                                    <input
-                                      type="number"
-                                      value={config.teamQuota}
-                                      onChange={e => setConfig({ ...config, teamQuota: parseInt(e.target.value) || 0 })}
-                                      placeholder="请输入名额数量"
-                                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">队</span>
-                                  </div>
-                                </label>
-                              </div>
-
-                              <div className="space-y-3">
-                                <label className="text-sm font-medium text-slate-700">统计口径</label>
-                                <div className="flex w-fit p-1 bg-white rounded-xl border border-slate-200">
-                                  {[
-                                    { id: QuotaBasis.SEAT, label: '按席位计算' },
-                                    { id: QuotaBasis.PERSON, label: '按人头计算' }
-                                  ].map((item) => (
+                            <div className="space-y-4 rounded-2xl bg-slate-50 px-5 py-4">
+                              {[
+                                {
+                                  key: 'individual' as const,
+                                  title: '单项项目总名额上限',
+                                  description: '开启后，限制所有单项项目累计报名名额。',
+                                  enabled: config.enableIndividualQuota,
+                                  quota: config.individualQuota,
+                                  basis: config.individualQuotaBasis,
+                                  toggle: () => setConfig({ ...config, enableIndividualQuota: !config.enableIndividualQuota }),
+                                  updateQuota: (value: number) => setConfig({ ...config, individualQuota: value }),
+                                  updateBasis: (value: QuotaBasis) => setConfig({ ...config, individualQuotaBasis: value }),
+                                },
+                                {
+                                  key: 'team' as const,
+                                  title: '团体项目总名额上限',
+                                  description: '开启后，限制所有团体项目累计报名名额。',
+                                  enabled: config.enableTeamQuota,
+                                  quota: config.teamQuota,
+                                  basis: config.teamQuotaBasis,
+                                  toggle: () => setConfig({ ...config, enableTeamQuota: !config.enableTeamQuota }),
+                                  updateQuota: (value: number) => setConfig({ ...config, teamQuota: value }),
+                                  updateBasis: (value: QuotaBasis) => setConfig({ ...config, teamQuotaBasis: value }),
+                                },
+                              ].map((item) => (
+                                <div key={item.key} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                                  <div className="grid gap-5 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                                    <div className="space-y-1">
+                                      <p className="text-sm font-medium text-slate-700">{item.title}</p>
+                                      <p className="text-xs leading-6 text-slate-500">{item.description}</p>
+                                    </div>
                                     <button
-                                      key={item.id}
-                                      onClick={() => setConfig({ ...config, quotaBasis: item.id as QuotaBasis })}
-                                      className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-                                        config.quotaBasis === item.id
-                                          ? 'bg-slate-100 text-indigo-600 shadow-sm'
-                                          : 'text-slate-500 hover:text-slate-700'
+                                      onClick={item.toggle}
+                                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                                        item.enabled ? 'bg-indigo-600' : 'bg-slate-200'
                                       }`}
                                     >
-                                      {item.label}
+                                      <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                          item.enabled ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                      />
                                     </button>
-                                  ))}
+                                  </div>
+
+                                  <AnimatePresence initial={false}>
+                                    {item.enabled ? (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.22, ease: 'easeInOut' }}
+                                        className="overflow-hidden border-t border-slate-100"
+                                      >
+                                        <div className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(220px,320px)_minmax(0,1fr)]">
+                                          <label className="space-y-2">
+                                            <span className="text-xs font-semibold text-slate-500">上限数量</span>
+                                            <div className="relative">
+                                              <input
+                                                type="number"
+                                                value={item.quota}
+                                                onChange={(e) => item.updateQuota(parseInt(e.target.value) || 0)}
+                                                placeholder="请输入名额数量"
+                                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-14 text-sm text-slate-700 outline-none transition-all focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+                                              />
+                                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">名额</span>
+                                            </div>
+                                          </label>
+
+                                          <div className="space-y-2">
+                                            <span className="text-xs font-semibold text-slate-500">统计口径</span>
+                                            <div className="flex w-fit p-1 bg-slate-100 rounded-xl">
+                                              {[
+                                                { id: QuotaBasis.SEAT, label: '按席位统计' },
+                                                { id: QuotaBasis.PERSON, label: '按人头统计' }
+                                              ].map((basisItem) => (
+                                                <button
+                                                  key={basisItem.id}
+                                                  onClick={() => item.updateBasis(basisItem.id as QuotaBasis)}
+                                                  className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+                                                    item.basis === basisItem.id
+                                                      ? 'bg-white text-indigo-600 shadow-sm'
+                                                      : 'text-slate-500 hover:text-slate-700'
+                                                  }`}
+                                                >
+                                                  {basisItem.label}
+                                                </button>
+                                              ))}
+                                            </div>
+                                            <p className="text-xs leading-6 text-slate-500">
+                                              {item.basis === QuotaBasis.SEAT
+                                                ? '按席位统计：单打报名 1 人占 1 个名额；双打报名 2 人占 1 个名额；团体报名 1 队占 1 个名额。'
+                                                : '按人头统计：单打报名 1 人占 1 个名额；双打报名 2 人占 2 个名额；团体报名按队伍成员人数占用名额。'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </motion.div>
+                                    ) : null}
+                                  </AnimatePresence>
                                 </div>
-                                <p className="text-xs leading-6 text-slate-500">
-                                  {config.quotaBasis === QuotaBasis.SEAT
-                                    ? '按席位计算：团体赛每报名一个队伍算占用一个席位，双打项目一个组合算一个席位。'
-                                    : '按人头计算：例如双打项目一次报名需填写2个选手信息，即占用2个名额。'}
-                                </p>
-                              </div>
+                              ))}
                             </div>
                           </motion.div>
                         ) : null}
