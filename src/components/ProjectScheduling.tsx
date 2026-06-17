@@ -1189,6 +1189,69 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     return `${phase.participant_count || 0}/${getPhaseTypeLabel(phase.type)}/${calculatePhaseMatches(phase)}`;
   };
 
+  const getPhaseDisplayName = (index: number) => {
+    const names = ['第一阶段', '第二阶段', '第三阶段', '第四阶段', '第五阶段'];
+    return names[index] || `第${index + 1}阶段`;
+  };
+
+  const getPhasePromotionSummary = (phase?: PhaseConfig) => {
+    if (!phase) return '-';
+    if (phase.type === PhaseType.ELIMINATION) {
+      return (phase.elimination_goal || 'advance') === 'advance'
+        ? `筛选晋级 ${phase.promotion_count || 1} 人`
+        : `决出前 ${phase.decide_top_n || 1} 名`;
+    }
+
+    const groupCount = phase.group_count || 1;
+    const promotionPerGroup = phase.promotion_per_group || 1;
+    return groupCount > 1
+      ? `${groupCount} 组，每组晋级 ${promotionPerGroup} 人`
+      : `单组晋级 ${promotionPerGroup} 人`;
+  };
+
+  const getPhaseRoundBreakdown = (phase?: PhaseConfig) => {
+    if (!phase) return [];
+
+    if (phase.type === PhaseType.ELIMINATION) {
+      const participantCount = Math.max(phase.participant_count || 0, 0);
+      if (participantCount <= 1) return [];
+
+      const roundCount = Math.ceil(Math.log2(participantCount));
+      const firstRoundBase = Math.pow(2, roundCount - 1);
+      const rounds = Array.from({ length: roundCount }).map((_, index) => {
+        const matches = index === 0
+          ? Math.max(1, participantCount - firstRoundBase)
+          : Math.max(1, Math.pow(2, roundCount - index - 1));
+        return {
+          label: `第${index + 1}轮`,
+          matches
+        };
+      });
+
+      if (phase.play_third_place) {
+        rounds.push({ label: '附加赛', matches: 1 });
+      }
+
+      return rounds;
+    }
+
+    const groupCount = Math.max(phase.group_count || 1, 1);
+    const participantsPerGroup = Math.max(Math.ceil((phase.participant_count || 0) / groupCount), 1);
+    const roundCount = participantsPerGroup % 2 === 0 ? Math.max(participantsPerGroup - 1, 1) : participantsPerGroup;
+    const matchesPerRound = Math.floor(participantsPerGroup / 2) * groupCount;
+
+    return Array.from({ length: roundCount }).map((_, index) => ({
+      label: `第${index + 1}轮`,
+      matches: matchesPerRound
+    }));
+  };
+
+  const getPhaseRoundSummary = (phase?: PhaseConfig) => {
+    const rounds = getPhaseRoundBreakdown(phase);
+    if (rounds.length === 0) return '-';
+    return rounds.map((round) => `${round.label}${round.matches}场`).join(' / ');
+  };
+
   const renderPhaseConfigurationEditor = ({
     phases,
     projectType,
@@ -1712,26 +1775,50 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
     1,
     ...filteredProjects.map((project) => getProjectConfig(project.id).phases.length)
   );
+  const schedulingStatsConfigs = (Object.values(schedulingConfigs) as ProjectSchedulingConfig[])
+    .filter((config) => config.phases.length > 0);
+  const statsPhaseColumnCount = Math.max(
+    1,
+    ...schedulingStatsConfigs.map((config) => config.phases.length)
+  );
+  const statsTotalMatches = schedulingStatsConfigs.reduce(
+    (total, config) => total + config.phases.reduce((sum, phase) => sum + calculatePhaseMatches(phase), 0),
+    0
+  );
+  const unplannedProjectCount = establishedProjects.filter((project) => getProjectConfig(project.id).phases.length === 0).length;
+  const statsPhaseRoundLabels = Array.from({ length: statsPhaseColumnCount }).map((_, phaseIndex) => {
+    const phaseWithMostRounds = schedulingStatsConfigs
+      .map((config) => config.phases[phaseIndex])
+      .filter((phase): phase is PhaseConfig => Boolean(phase))
+      .sort((a, b) => getPhaseRoundBreakdown(b).length - getPhaseRoundBreakdown(a).length)[0];
+    const labels = phaseWithMostRounds
+      ? getPhaseRoundBreakdown(phaseWithMostRounds).map((round) => round.label)
+      : [];
+
+    return labels.length > 0 ? labels : ['第1轮'];
+  });
+  const statsRoundColumnCount = statsPhaseRoundLabels.reduce((total, labels) => total + labels.length, 0);
+  const statsTableMinWidth = 760 + statsPhaseColumnCount * 330 + statsRoundColumnCount * 96;
 
   return (
     <div className="flex-1 flex flex-col bg-slate-100">
       {/* 4 Columns Layout */}
       <div className="flex-1 flex overflow-x-auto overflow-y-hidden">
         {isPreviewMode ? (
-          <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
-            <div className="max-w-6xl mx-auto space-y-8">
-              <div className="flex items-center justify-between">
+          <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
+            <div className="mx-auto max-w-7xl space-y-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-900">项目编排总方案预览</h3>
-                  <p className="text-slate-500 mt-1">查看所有已配置项目的编排详情及场次统计</p>
+                  <h3 className="text-2xl font-bold text-slate-900">场次统计</h3>
+                  <p className="mt-1 text-sm text-slate-500">按项目和阶段查看选手数量、赛制、晋级规则、每轮场次与阶段总场次。</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <button 
                     onClick={() => setIsPreviewMode(false)}
                     className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600"
                   >
                     <LayoutGrid className="h-4 w-4" />
-                    退出预览
+                    返回项目编排
                   </button>
                   <button 
                     onClick={() => setShowFinalizeConfirm(true)}
@@ -1740,84 +1827,159 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                     <CheckCircle2 className="h-4 w-4" />
                     编排定稿
                   </button>
-                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                      <Trophy className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                      <Trophy className="h-5 w-5" />
                     </div>
                     <div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">已配置项目</div>
-                      <div className="text-xl font-black text-slate-900">
-                        {(Object.values(schedulingConfigs) as ProjectSchedulingConfig[]).filter(c => c.phases.length > 0).length}
-                      </div>
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-400">已配置项目</div>
+                      <div className="text-2xl font-black text-slate-900">{schedulingStatsConfigs.length}</div>
                     </div>
                   </div>
-                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                      <Hash className="w-5 h-5" />
+                </div>
+                <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                      <AlertCircle className="h-5 w-5" />
                     </div>
                     <div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">总场次</div>
-                      <div className="text-xl font-black text-slate-900">
-                        {(Object.values(schedulingConfigs) as ProjectSchedulingConfig[]).reduce((acc, c) => acc + (c.generated_framework?.total_matches || 0), 0)}
-                      </div>
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-400">未编排项目</div>
+                      <div className="text-2xl font-black text-slate-900">{unplannedProjectCount}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                      <Hash className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-400">预计总场次</div>
+                      <div className="text-2xl font-black text-slate-900">{statsTotalMatches}</div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {(Object.values(schedulingConfigs) as ProjectSchedulingConfig[]).filter(c => c.phases.length > 0).map(config => (
-                  <div key={config.project_id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                    <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-wider">
-                          {establishedProjects.find(p => p.id === config.project_id)?.type === 'single' ? '单项' : '团体'}
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-400 font-mono">{config.project_code}</span>
-                      </div>
-                      <h4 className="text-lg font-bold text-slate-900">{config.project_name}</h4>
-                    </div>
-                    <div className="p-6 flex-1 space-y-4">
-                      <div className="space-y-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">比赛阶段</div>
-                        <div className="space-y-2">
-                          {config.phases.map((phase, idx) => (
-                            <div key={phase.id} className="flex items-center justify-between text-sm">
-                              <div className="flex items-center gap-2">
-                                <div className="w-5 h-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
-                                  {idx + 1}
-                                </div>
-                                <span className="font-medium text-slate-700">{phase.name}</span>
-                              </div>
-                              <span className="text-xs text-slate-400">{phase.type}</span>
-                            </div>
+              {schedulingStatsConfigs.length > 0 ? (
+                <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left" style={{ minWidth: `${statsTableMinWidth}px` }}>
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th rowSpan={2} className="border-b border-r border-slate-200 px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500">项目名称</th>
+                          <th rowSpan={2} className="border-b border-r border-slate-200 px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500">项目类型</th>
+                          <th rowSpan={2} className="border-b border-r border-slate-200 px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500">选手数量</th>
+                          {Array.from({ length: statsPhaseColumnCount }).map((_, index) => (
+                            <th
+                              key={`phase-group-${index}`}
+                              colSpan={3 + statsPhaseRoundLabels[index].length}
+                              className="border-b border-r border-slate-200 px-5 py-4 text-center text-xs font-black uppercase tracking-wider text-slate-600"
+                            >
+                              {getPhaseDisplayName(index)}
+                            </th>
                           ))}
-                        </div>
-                      </div>
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">总场次</div>
-                          <div className="text-lg font-black text-indigo-600">{config.generated_framework?.total_matches || 0}</div>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            setSelectedProject(establishedProjects.find(p => p.id === config.project_id));
-                            setIsPreviewMode(false);
-                          }}
-                          className="text-xs font-bold text-indigo-600 hover:underline"
-                        >
-                          查看详情
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                          <th rowSpan={2} className="border-b border-r border-slate-200 px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500">项目总场次</th>
+                          <th rowSpan={2} className="border-b border-slate-200 px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500">操作</th>
+                        </tr>
+                        <tr>
+                          {Array.from({ length: statsPhaseColumnCount }).map((_, index) => (
+                            <React.Fragment key={`phase-sub-${index}`}>
+                              <th className="border-b border-r border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-400">赛制</th>
+                              <th className="border-b border-r border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-400">晋级规则</th>
+                              {statsPhaseRoundLabels[index].map((label) => (
+                                <th key={`${index}-${label}`} className="border-b border-r border-slate-200 px-4 py-3 text-center text-xs font-black uppercase tracking-wider text-slate-400">
+                                  {label}
+                                </th>
+                              ))}
+                              <th className="border-b border-r border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-400">阶段总场次</th>
+                            </React.Fragment>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {schedulingStatsConfigs.map((config) => {
+                          const project = establishedProjects.find((item) => item.id === config.project_id);
+                          const projectTotalMatches = config.phases.reduce((sum, phase) => sum + calculatePhaseMatches(phase), 0);
+                          const participantCount = project?.current_count || config.phases[0]?.participant_count || 0;
 
-              {((Object.values(schedulingConfigs) as ProjectSchedulingConfig[]).filter(c => c.phases.length > 0).length === 0) && (
+                          return (
+                            <tr key={config.project_id} className="border-b border-slate-100 transition-colors hover:bg-slate-50">
+                              <td className="whitespace-nowrap border-r border-slate-100 px-5 py-5 align-top">
+                                <div className="font-black text-slate-900">{config.project_name}</div>
+                                <div className="mt-1 text-xs font-mono font-bold text-slate-400">{config.project_code}</div>
+                              </td>
+                              <td className="whitespace-nowrap border-r border-slate-100 px-5 py-5 align-top text-sm font-bold text-slate-600">
+                                {project?.type === 'team' ? '团体项目' : '单项项目'}
+                              </td>
+                              <td className="whitespace-nowrap border-r border-slate-100 px-5 py-5 align-top text-sm font-black text-indigo-600">
+                                {participantCount} 人
+                              </td>
+                              {Array.from({ length: statsPhaseColumnCount }).map((_, index) => {
+                                const phase = config.phases[index];
+                                const phaseRoundLabels = statsPhaseRoundLabels[index];
+
+                                if (!phase) {
+                                  return (
+                                    <React.Fragment key={`${config.project_id}-empty-${index}`}>
+                                      {Array.from({ length: 3 + phaseRoundLabels.length }).map((__, emptyIndex) => (
+                                        <td key={`${config.project_id}-empty-${index}-${emptyIndex}`} className="border-r border-slate-100 px-4 py-5 align-top text-sm text-slate-300">-</td>
+                                      ))}
+                                    </React.Fragment>
+                                  );
+                                }
+
+                                const rounds = getPhaseRoundBreakdown(phase);
+
+                                return (
+                                  <React.Fragment key={`${config.project_id}-${phase.id}`}>
+                                    <td className="whitespace-nowrap border-r border-slate-100 px-4 py-5 align-top text-sm font-bold text-slate-700">
+                                      {getPhaseTypeLabel(phase.type)}
+                                    </td>
+                                    <td className="whitespace-nowrap border-r border-slate-100 px-4 py-5 align-top text-sm font-semibold text-slate-600">
+                                      {getPhasePromotionSummary(phase)}
+                                    </td>
+                                    {phaseRoundLabels.map((label, roundIndex) => (
+                                      <td key={`${phase.id}-${label}`} className="whitespace-nowrap border-r border-slate-100 px-4 py-5 text-center align-top text-sm font-black text-slate-700">
+                                        {rounds[roundIndex] ? `${rounds[roundIndex].matches} 场` : '-'}
+                                      </td>
+                                    ))}
+                                    <td className="whitespace-nowrap border-r border-slate-100 px-4 py-5 align-top text-sm font-black text-emerald-600">
+                                      {calculatePhaseMatches(phase)} 场
+                                    </td>
+                                  </React.Fragment>
+                                );
+                              })}
+                              <td className="whitespace-nowrap border-r border-slate-100 px-5 py-5 align-top text-sm font-black text-emerald-600">
+                                {projectTotalMatches} 场
+                              </td>
+                              <td className="whitespace-nowrap px-5 py-5 align-top">
+                                <button
+                                  onClick={() => {
+                                    setSelectedProject(project);
+                                    setIsPreviewMode(false);
+                                  }}
+                                  className="rounded-xl bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-600 transition-colors hover:bg-indigo-100"
+                                >
+                                  查看详情
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
                 <div className="py-20 text-center space-y-4">
                   <LayoutGrid className="w-16 h-16 text-slate-200 mx-auto" />
-                  <p className="text-slate-400 font-medium">暂无已配置的编排方案</p>
+                  <p className="text-slate-400 font-medium">暂无可统计的项目编排数据</p>
                 </div>
               )}
             </div>
@@ -1898,7 +2060,7 @@ export const ProjectScheduling: React.FC<ProjectSchedulingProps> = ({
                         className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:border-indigo-300 hover:bg-indigo-50"
                       >
                         <LayoutGrid className="h-4 w-4" />
-                        方案总览
+                        场次统计
                       </button>
                       <button 
                         onClick={() => setShowFinalizeConfirm(true)}
